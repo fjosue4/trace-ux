@@ -1,0 +1,6 @@
+/* Session rows keep durations aligned for easy scanning. */
+.table td:nth-child(n + 6) { font-variant-numeric: tabular-nums; }
+.sessions-entry { font-weight: 600; }
+
+.play-btn { width: 34px; padding: 0; }
+.play-btn svg { margin-left: 2px; }

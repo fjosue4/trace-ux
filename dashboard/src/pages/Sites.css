@@ -1,0 +1,4 @@
+/* Sites list: one row per project inside a single card.
+   No padding + overflow clip so row hover backgrounds fill the full card
+   height and stay inside the rounded corners. */
+.card.site-list { padding: 0; overflow: hidden; }

@@ -1,52 +1,57 @@
-import { useEffect, useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { api, ApiError } from './api';
+import { useEffect, useMemo, useState } from 'react';
+import { Outlet, useNavigate, useOutletContext } from 'react-router-dom';
+import { api, ApiError, CurrentUser } from './api';
+import { AuthContext } from './auth/auth';
+import Sidebar from './components/layout/Sidebar';
+import Loading from './components/ui/Loading';
+import './App.css';
 
-// App shell: checks auth once, renders the header + routed page.
+export type AppContext = { user: CurrentUser };
+
+// Pages read the logged-in user via this hook (e.g. admin-only UI).
+export function useUser(): AppContext {
+  return useOutletContext<AppContext>();
+}
+
+// App shell: checks auth once on load, renders the sidebar + routed page. The
+// login route lives under this shell, so an anonymous visitor still gets the
+// Outlet — just without the chrome. Login reports back through AuthContext so
+// the shell appears immediately after signing in, without a refresh.
 export default function App() {
-  const [authed, setAuthed] = useState<boolean | null>(null);
+  const [user, setUser] = useState<CurrentUser | null>(null);
+  const [checked, setChecked] = useState(false);
   const navigate = useNavigate();
+  const auth = useMemo(() => ({ onSignIn: (u: CurrentUser) => setUser(u) }), []);
 
   useEffect(() => {
     api
       .me()
-      .then(() => setAuthed(true))
+      .then(setUser)
       .catch((e) => {
-        if (e instanceof ApiError && e.status === 401) {
-          setAuthed(false);
-          navigate('/login');
-        } else {
-          setAuthed(false);
-        }
-      });
+        if (e instanceof ApiError && e.status === 401) navigate('/login');
+      })
+      .finally(() => setChecked(true));
   }, [navigate]);
 
-  if (authed === null) {
-    return <div className="loading">Loading…</div>;
-  }
+  const content = (() => {
+    if (!checked) return <Loading />;
+    if (!user) return <Outlet />;
+    return (
+      <div className="app">
+        <Sidebar
+          user={user}
+          onLogout={async () => {
+            await api.logout().catch(() => {});
+            setUser(null);
+            navigate('/login');
+          }}
+        />
+        <main className="app__main">
+          <Outlet context={{ user }} />
+        </main>
+      </div>
+    );
+  })();
 
-  return (
-    <div className="app">
-      <header className="topbar">
-        <NavLink to="/" className="brand">
-          <span className="brand-dot" /> Webshots
-        </NavLink>
-        <nav>
-          <NavLink to="/" end>
-            Sites
-          </NavLink>
-          <button
-            className="linkish"
-            onClick={async () => {
-              await api.logout().catch(() => {});
-              navigate('/login');
-            }}
-          >
-            Log out
-          </button>
-        </nav>
-      </header>
-      <Outlet />
-    </div>
-  );
+  return <AuthContext.Provider value={auth}>{content}</AuthContext.Provider>;
 }

@@ -1,0 +1,7 @@
+.user-row__actions { text-align: right; white-space: nowrap; }
+.user-row__actions .btn--sm { margin-left: 0.25rem; }
+
+.inline-edit { display: inline-flex; gap: 0.4rem; align-items: center; }
+.inline-edit .field-control { width: 220px; }
+
+.badge-row { margin-left: 0.5rem; }

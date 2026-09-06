@@ -1,0 +1,216 @@
+import {
+  CSSProperties,
+  InputHTMLAttributes,
+  ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import './fields.css';
+
+export function Input({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
+  return <input className={`field-control ${className}`.trim()} {...props} />;
+}
+
+export type SelectOption = { value: string; label: string };
+
+type SelectProps = {
+  value: string;
+  options: SelectOption[];
+  onChange: (value: string) => void;
+  className?: string;
+  ariaLabel?: string;
+  disabled?: boolean;
+};
+
+type MenuPos = { top?: number; left: number; minWidth: number; bottom?: number };
+
+// Fixed-position popover anchored to the trigger: escapes overflow clipping
+// from tables/cards and needs no portals. Flips upward near the viewport edge.
+function computeMenuPos(wrap: HTMLElement, optionCount: number): { pos: MenuPos; up: boolean } {
+  const rect = wrap.getBoundingClientRect();
+  const menuH = Math.min(optionCount * 36 + 12, 300);
+  const up = window.innerHeight - rect.bottom < menuH + 12 && rect.top > menuH + 12;
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - Math.max(rect.width, 240) - 8));
+  const pos: MenuPos = up
+    ? { bottom: window.innerHeight - rect.top + 6, left, minWidth: rect.width }
+    : { top: rect.bottom + 6, left, minWidth: rect.width };
+  return { pos, up };
+}
+
+// Fully custom dropdown: a trigger button plus a styled listbox popover. No
+// native popup is involved, so it looks identical on every OS and theme.
+// Keyboard: Enter/Space/ArrowDown opens, arrows navigate, Enter selects,
+// Escape/Tab/outside-click closes. Focus stays on the trigger.
+export function Select({ value, options, onChange, className = '', ariaLabel, disabled }: SelectProps) {
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
+  const [pos, setPos] = useState<MenuPos | null>(null);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const selected = options.find((o) => o.value === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: PointerEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    const reposition = () => {
+      if (wrapRef.current) setPos(computeMenuPos(wrapRef.current, options.length).pos);
+    };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+    };
+  }, [open, options.length]);
+
+  // Keep the highlighted option visible while arrowing through the list.
+  useEffect(() => {
+    if (!open) return;
+    menuRef.current?.querySelector('[data-active="true"]')?.scrollIntoView({ block: 'nearest' });
+  }, [active, open]);
+
+  function openMenu() {
+    const idx = options.findIndex((o) => o.value === value);
+    setActive(idx >= 0 ? idx : 0);
+    if (wrapRef.current) setPos(computeMenuPos(wrapRef.current, options.length).pos);
+    setOpen(true);
+  }
+
+  function commit(option?: SelectOption) {
+    if (!option) return;
+    onChange(option.value);
+    setOpen(false);
+  }
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (disabled) return;
+    if (!open) {
+      if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+        e.preventDefault();
+        openMenu();
+      }
+      return;
+    }
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setActive((a) => Math.min(a + 1, options.length - 1));
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        setActive((a) => Math.max(a - 1, 0));
+        break;
+      case 'Home':
+        e.preventDefault();
+        setActive(0);
+        break;
+      case 'End':
+        e.preventDefault();
+        setActive(options.length - 1);
+        break;
+      case 'Enter':
+      case ' ':
+        e.preventDefault();
+        commit(options[active]);
+        break;
+      case 'Tab':
+        setOpen(false);
+        break;
+    }
+  }
+
+  return (
+    <span ref={wrapRef} className={`select-wrap${open ? ' is-open' : ''} ${className}`.trim()}>
+      <button
+        type="button"
+        className="field-control select-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        disabled={disabled}
+        onClick={() => (open ? setOpen(false) : openMenu())}
+        onKeyDown={onKeyDown}
+      >
+        <span className="select-trigger__label">{selected?.label ?? value}</span>
+      </button>
+      <svg
+        className="select-wrap__chevron"
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+      {open && pos && (
+        <div
+          className="select-menu"
+          role="listbox"
+          aria-label={ariaLabel}
+          ref={menuRef}
+          style={pos as CSSProperties}
+        >
+          {options.map((o, i) => (
+            <button
+              key={o.value}
+              type="button"
+              role="option"
+              aria-selected={o.value === value}
+              data-active={i === active || undefined}
+              className={`select-menu__option${o.value === value ? ' is-selected' : ''}`}
+              onMouseEnter={() => setActive(i)}
+              onClick={() => commit(o)}
+            >
+              <span className="select-menu__label">{o.label}</span>
+              {o.value === value && <CheckIcon />}
+            </button>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
+const CheckIcon = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="3"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden
+  >
+    <path d="M20 6 9 17l-5-5" />
+  </svg>
+);
+
+type FieldProps = { label: string; hint?: string; children: ReactNode };
+
+export function Field({ label, hint, children }: FieldProps) {
+  return (
+    <label className="field">
+      <span className="field-label">{label}</span>
+      {children}
+      {hint && <span className="field-hint">{hint}</span>}
+    </label>
+  );
+}

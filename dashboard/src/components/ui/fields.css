@@ -1,0 +1,100 @@
+.field { display: flex; flex-direction: column; gap: 0.35rem; }
+.field-label { font-size: 0.8rem; font-weight: 600; color: var(--ink-2); }
+.field-hint { font-size: 0.78rem; color: var(--muted); }
+
+.field-control {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  height: 40px;
+  padding: 0 0.9rem;
+  width: 100%;
+  transition: border-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+}
+.field-control::placeholder { color: var(--muted); }
+.field-control:disabled { opacity: 0.6; }
+.field-control:hover:not(:disabled):not(:focus) { border-color: var(--line-strong); }
+.field-control:focus {
+  outline: none;
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* ---- custom select ---- */
+.select-wrap { position: relative; display: inline-flex; width: 100%; }
+
+.select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding-right: 2.3rem;
+  text-align: left;
+  cursor: pointer;
+}
+.select-trigger__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.select-wrap__chevron {
+  position: absolute;
+  right: 0.85rem;
+  top: 50%;
+  translate: 0 -50%;
+  rotate: 0deg;
+  color: var(--muted);
+  pointer-events: none;
+  transition: rotate var(--duration-fast) var(--ease-out);
+}
+.select-wrap.is-open .select-wrap__chevron { rotate: 180deg; }
+
+.select-menu {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.select-menu__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.7rem;
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  font: inherit;
+  font-size: 0.88rem;
+  color: var(--ink);
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-align: left;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+.select-menu__option:hover,
+.select-menu__option[data-active='true'] { background: var(--surface-2); }
+.select-menu__option.is-selected { color: var(--accent); font-weight: 700; }
+
+.select-menu__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

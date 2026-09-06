@@ -38,33 +38,45 @@
     <div class="hero">
       <h1>Welcome to the Webshots demo store</h1>
       <p>Click around, add items, fill the form — then watch yourself in the Webshots dashboard.</p>
-      <button onclick="alert('Added to cart!')">Add to cart</button>
+      <!-- ws-track-id: shows up as seekable activity in the replay -->
+      <button ws-track-id="hero-add-to-cart" onclick="alert('Added to cart!')">Add to cart</button>
     </div>
 
     <div class="cards">
       <div class="card"><h3>Desk lamp</h3><p>Warm, dimmable.</p><div class="price">$39</div>
-        <button onclick="alert('Added to cart!')">Buy</button></div>
-      <div class="card"><h3>Notebook</h3><p>Dotted, 200 pages.</p><div class="price">$12</div>
-        <button onclick="alert('Added to cart!')">Buy</button></div>
+        <button ws-track-id="buy-lamp" onclick="alert('Added to cart!')">Buy</button></div>
+      <div class="card"><h3>Notebook</h3><p>Dotted, 200 pages.</p><div class="price"><span ws-mask>$12</span></div>
+        <button ws-track-id="buy-notebook" onclick="alert('Added to cart!')">Buy</button></div>
       <div class="card"><h3>Headphones</h3><p>Noise cancelling.</p><div class="price">$89</div>
-        <button onclick="alert('Added to cart!')">Buy</button></div>
+        <button ws-track-id="buy-headphones" onclick="alert('Added to cart!')">Buy</button></div>
     </div>
 
     <h2>Tell us what you're looking for</h2>
     <form onsubmit="event.preventDefault(); alert('Subscribed ' + email.value)">
       <input name="email" type="email" placeholder="you@example.com" required>
       <textarea name="notes" placeholder="What are you shopping for?"></textarea>
-      <button type="submit">Subscribe</button>
+      <button type="submit" ws-track-id="subscribe">Subscribe</button>
     </form>
 
     <!-- ws-block: excluded entirely from recordings (e.g. payment fields) -->
     <div class="secret ws-block">Internal: campaign margin is 62% — must never be recorded</div>
+    <!-- ws-mask (attribute form): text is masked in the recording -->
+    <p>Secret discount code for newsletter subscribers: <span ws-mask>WSH-2026</span></p>
   </main>
 
   <footer>Demo site for the Webshots open-source session replay tool.</footer>
 
-  <!-- The Webshots snippet. Replace cd996a43bc4ec83832e43826935b6d8e with the key from your dashboard.
-       For local testing the server runs on http://localhost:8090 -->
-  <script async src="http://localhost:8090/t.js" data-site="cd996a43bc4ec83832e43826935b6d8e"></script>
+  <!-- The Webshots snippet. Replace the data-site key with the one from your dashboard.
+       For local testing the server runs on http://localhost:8090.
+       The recording toggle, feedback widget and survey questions are configured
+       per site from the dashboard (Sites → site page → Configuration).
+       data-user-id / data-client-id tag the session for visitor filtering;
+       they can also be attached later via window.Webshots.identify({...}) -->
+  <script async src="http://localhost:8090/t.js" data-site="738910233a784965256ae0249840c33b"
+          data-user-id="guest-demo"></script>
+  <script>
+    // Example: identity is usually only known after login.
+    // setTimeout(() => window.Webshots.identify({ userId: 'u-42' }), 3000);
+  </script>
 </body>
 </html>

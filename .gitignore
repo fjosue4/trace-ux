@@ -20,3 +20,6 @@ data/
 # OS / editor
 .DS_Store
 server/static/tracker.js
+
+# Compiled Go binaries
+*.exe

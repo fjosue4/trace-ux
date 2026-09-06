@@ -1,0 +1,32 @@
+.feedback-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+.feedback-card { display: flex; flex-direction: column; gap: 0.35rem; }
+.feedback-card__label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+.feedback-card__row { display: flex; align-items: baseline; gap: 0.4rem; }
+.feedback-card__num { font-size: 1.7rem; letter-spacing: -0.02em; }
+.feedback-card__avg { display: inline-flex; }
+
+.rating-stars { display: inline-flex; gap: 1px; }
+.rating-stars span { color: var(--line-strong); display: inline-flex; }
+.rating-stars span.on { color: var(--accent); }
+
+.feedback-comment { max-width: 320px; }
+.feedback-session {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.feedback-session:hover { text-decoration: underline; }

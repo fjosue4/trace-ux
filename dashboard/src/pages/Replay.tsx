@@ -1,17 +1,63 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import rrwebPlayer from 'rrweb-player';
 import type { eventWithTime } from '@rrweb/types';
 import 'rrweb-player/dist/style.css';
-import { api, Session, SessionPage, fmtDuration, fmtTime, fmtClock } from '../api';
+import { api, Session, SessionPage } from '../api';
+import PageHeader from '../components/ui/PageHeader';
+import Notice from '../components/ui/Notice';
+import Loading from '../components/ui/Loading';
+import MetaCard from '../components/replay/MetaCard';
+import PagesPanel from '../components/replay/PagesPanel';
+import { Icon } from '../components/ui/Icon';
+import './Replay.css';
+
+type Meta = {
+  session: Session;
+  pages: SessionPage[];
+  custom_events: { ts: number; name: string; track_id: string }[];
+};
+
+// The parts of the rrweb-player wrapper we need. Different builds expose
+// seeking as goto()/play() on the wrapper or only on the core replayer.
+type PlayerLike = {
+  play?: (offsetMs?: number) => void;
+  pause?: () => void;
+  goto?: (offsetMs: number, playAfter?: boolean) => void;
+  getReplayer?: () => {
+    play?: (offsetMs?: number) => void;
+    goto?: (offsetMs: number, playAfter?: boolean) => void;
+    getCurrentTime?: () => number;
+  };
+};
+
+// Player height follows the recorded viewport's aspect so the frame fills the
+// page instead of letterboxing; clamped against extreme shapes.
+function ratioFor(s?: Session): number {
+  if (s && s.viewport_w > 0 && s.viewport_h > 0) {
+    return Math.min(Math.max(s.viewport_h / s.viewport_w, 0.45), 1.1);
+  }
+  return 0.5625; // 16:9 fallback
+}
 
 export default function Replay() {
   const { sessionId } = useParams();
-  const [meta, setMeta] = useState<{ session: Session; pages: SessionPage[] } | null>(null);
+  const [params] = useSearchParams();
+  const autoplay = params.get('autoplay') === '1';
+  const [meta, setMeta] = useState<Meta | null>(null);
+  const [events, setEvents] = useState<eventWithTime[] | null>(null);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState('Loading events…');
+  const [started, setStarted] = useState(autoplay);
+  const [loaded, setLoaded] = useState(false);
+  const [hostWidth, setHostWidth] = useState(0);
   const playerHost = useRef<HTMLDivElement>(null);
+  const player = useRef<PlayerLike | null>(null);
+  const builtWidth = useRef(0);
+  const firstTs = useRef(0); // client-clock ms of the first rrweb event
+  const hasMeta = meta !== null;
 
+  // Load metadata + the full event stream, paged from the server.
   useEffect(() => {
     if (!sessionId) return;
     let cancelled = false;
@@ -22,35 +68,20 @@ export default function Replay() {
         if (cancelled) return;
         setMeta(m);
 
-        // Load the full event stream in pages, then hand it to the player.
-        const events: eventWithTime[] = [];
+        const all: eventWithTime[] = [];
         let afterSeq = -1;
         for (;;) {
           const res = await api.getEvents(sessionId, afterSeq);
-          events.push(...(res.events as eventWithTime[]));
+          all.push(...(res.events as eventWithTime[]));
           afterSeq = res.next_seq;
-          setProgress(`Loaded ${events.length} events…`);
+          setProgress(`Loaded ${all.length} events…`);
           if (!res.has_more) break;
           if (cancelled) return;
         }
-        if (cancelled || events.length === 0 || !playerHost.current) {
-          if (events.length === 0) setProgress('This session has no recorded events yet.');
-          return;
-        }
-
-        setProgress('');
-        playerHost.current.innerHTML = '';
-        new rrwebPlayer({
-          target: playerHost.current,
-          props: {
-            events,
-            width: playerHost.current.clientWidth,
-            height: Math.round((playerHost.current.clientWidth * 9) / 16),
-            autoPlay: true,
-            showController: true,
-            speedOption: [0.5, 1, 2, 4, 8],
-          },
-        });
+        firstTs.current = all[0]?.timestamp ?? 0;
+        setEvents(all);
+        setLoaded(true);
+        if (all.length === 0) setProgress('This session has no recorded events yet.');
       } catch (e) {
         if (!cancelled) setError(String(e instanceof Error ? e.message : e));
       }
@@ -58,103 +89,139 @@ export default function Replay() {
 
     return () => {
       cancelled = true;
+      player.current = null;
+      builtWidth.current = 0;
     };
   }, [sessionId]);
+
+  // Track the player host's width so the recording can fill available space.
+  useEffect(() => {
+    const el = playerHost.current;
+    if (!hasMeta || !el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = Math.round(entries[0].contentRect.width);
+      if (w > 0) setHostWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [hasMeta]);
+
+  // Mount the player once sized; rebuild only when the host changes meaningfully
+  // (window resizes), resuming at the current playback position.
+  useEffect(() => {
+    if (!loaded || !events || events.length === 0 || !playerHost.current) return;
+    if (hostWidth < 240) return;
+    if (player.current && Math.abs(hostWidth - builtWidth.current) < 60) return;
+
+    // Preserve the position across rebuilds.
+    let resumeAt = 0;
+    if (player.current) {
+      const rp = player.current.getReplayer?.();
+      const t = rp && typeof rp.getCurrentTime === 'function' ? rp.getCurrentTime() : 0;
+      if (typeof t === 'number' && t > 500) resumeAt = t;
+    }
+
+    const width = hostWidth;
+    const height = Math.round(width * ratioFor(meta?.session)) + 2;
+    builtWidth.current = width;
+    playerHost.current.innerHTML = '';
+    player.current = new rrwebPlayer({
+      target: playerHost.current,
+      props: {
+        events,
+        width,
+        height,
+        autoPlay: autoplay,
+        speed: 1, // rrweb-player otherwise starts at the first speedOption
+        showController: true,
+        speedOption: [0.5, 1, 2, 4, 8],
+      },
+    }) as unknown as PlayerLike;
+
+    if (resumeAt > 0) {
+      player.current.play?.(resumeAt);
+      setStarted(true);
+    }
+  }, [loaded, events, hostWidth, meta, autoplay]);
+
+  // Seek to an offset (ms from the first recorded event) and keep playing.
+  const seekToOffset = useCallback((offsetMs: number) => {
+    const target = Math.max(0, offsetMs);
+    const core = player.current?.getReplayer ? player.current.getReplayer() : player.current;
+    if (!core) return;
+    if (typeof core.goto === 'function') core.goto(target);
+    else core.play?.(target);
+    setStarted(true);
+  }, []);
+
+  // Pages and tracked activity are stamped with the visitor's clock; the first
+  // rrweb event shares that clock, so offsets are relative to it.
+  function seekToPage(page: SessionPage) {
+    seekToOffset(page.entered_at * 1000 - firstTs.current);
+  }
+
+  function playFromStart() {
+    player.current?.play?.(0);
+    setStarted(true);
+  }
 
   if (error) {
     return (
       <main className="page">
-        <div className="error">{error}</div>
+        <Notice tone="error">{error}</Notice>
       </main>
     );
   }
   if (!meta) {
     return (
       <main className="page">
-        <div className="loading">{progress || 'Loading…'}</div>
+        <Loading label={progress || 'Loading…'} />
       </main>
     );
   }
 
-  const { session: s, pages } = meta;
+  const { session, pages, custom_events: activity } = meta;
+  const playerReady = loaded && events !== null && events.length > 0;
 
   return (
-    <main className="page replay-layout">
-      <div className="page-head">
-        <h1>Session replay</h1>
-        <Link to={`/site/${s.site_id}`} className="muted">
-          ← All sessions
-        </Link>
-      </div>
+    <main className="page page--wide">
+      <PageHeader
+        title="Session replay"
+        actions={
+          <Link to="/sessions" className="btn btn--secondary btn--sm">
+            ← All sessions
+          </Link>
+        }
+      />
 
       <div className="replay-grid">
         <div className="replay-main">
           <div className="player-frame">
             <div ref={playerHost} className="player-host" />
-            {!progress ? null : <div className="loading overlay">{progress}</div>}
-          </div>
-          <div className="card replay-meta">
-            <div className="kv">
-              <span className="muted">Entry</span>
-              <a href={s.initial_url} target="_blank" rel="noreferrer">
-                {s.initial_url}
-              </a>
-            </div>
-            <div className="kv">
-              <span className="muted">Referrer</span>
-              {s.referrer || 'direct'}
-            </div>
-            <div className="kv-row">
-              <div className="kv">
-                <span className="muted">Device</span>
-                {s.device}
-              </div>
-              <div className="kv">
-                <span className="muted">Browser</span>
-                {s.browser}
-              </div>
-              <div className="kv">
-                <span className="muted">OS</span>
-                {s.os}
-              </div>
-              <div className="kv">
-                <span className="muted">Viewport</span>
-                {s.viewport_w}×{s.viewport_h}
-              </div>
-              <div className="kv">
-                <span className="muted">Screen</span>
-                {s.screen_w}×{s.screen_h}
-              </div>
-            </div>
-            {(s.utm_source || s.utm_medium || s.utm_campaign) && (
-              <div className="kv">
-                <span className="muted">UTM</span>
-                {[s.utm_source, s.utm_medium, s.utm_campaign].filter(Boolean).join(' / ')}
-              </div>
+            {playerReady ? (
+              !started && (
+                <button className="player-cover" onClick={playFromStart} aria-label="Play recording">
+                  <span className="player-cover__btn">
+                    <Icon name="play" size={26} />
+                  </span>
+                  <span className="player-cover__label">Play recording</span>
+                </button>
+              )
+            ) : (
+              <Loading label={progress} overlay />
             )}
           </div>
         </div>
-
-        <aside className="card replay-side">
-          <h3>{fmtDuration(s.duration_ms)} visit</h3>
-          <p className="muted small">
-            {fmtTime(s.started_at)} · {s.page_count} {s.page_count === 1 ? 'page' : 'pages'}
-          </p>
-          <h4>Pages visited</h4>
-          <ol className="pages-list">
-            {pages.map((p) => (
-              <li key={p.idx}>
-                <div className="page-url" title={p.url}>
-                  {p.url.replace(/^https?:\/\//, '')}
-                </div>
-                <div className="muted small">
-                  {p.title ? `${p.title} · ` : ''}
-                  {fmtClock(p.entered_at)}
-                  {p.left_at ? ` – ${fmtClock(p.left_at)}` : ''}
-                </div>
-              </li>
-            ))}
-          </ol>
+        <aside className="replay-side-col">
+          <PagesPanel
+            session={session}
+            pages={pages}
+            activity={activity}
+            eventsReady={loaded}
+            onSeekMs={seekToOffset}
+            firstTs={firstTs.current}
+          />
+          <MetaCard session={session} />
         </aside>
       </div>
     </main>

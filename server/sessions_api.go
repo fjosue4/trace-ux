@@ -10,16 +10,16 @@ import (
 
 func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	siteID, err := strconv.ParseInt(q.Get("site_id"), 10, 64)
-	if err != nil || siteID <= 0 {
-		writeErr(w, http.StatusBadRequest, "site_id is required")
-		return
-	}
-	f := SessionFilter{
-		Browser: q.Get("browser"),
-		OS:      q.Get("os"),
-		Device:  q.Get("device"),
-		URL:     q.Get("url"),
+	// site_id is optional: without it the list spans every site and rows carry
+	// their site name (the global Sessions page).
+	f := SessionFilter{Browser: q.Get("browser"), OS: q.Get("os"), Device: q.Get("device"), URL: q.Get("url"), Identity: q.Get("visitor")}
+	if v := q.Get("site_id"); v != "" {
+		siteID, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || siteID <= 0 {
+			writeErr(w, http.StatusBadRequest, "invalid site_id")
+			return
+		}
+		f.SiteID = siteID
 	}
 	if v := q.Get("min_duration_ms"); v != "" {
 		f.MinDurationMs, _ = strconv.ParseInt(v, 10, 64)
@@ -33,7 +33,7 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 			f.Limit = n
 		}
 	}
-	sessions, err := s.store.ListSessions(siteID, f)
+	sessions, err := s.store.ListSessions(f)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -53,7 +53,12 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"session": sess, "pages": pages})
+	activity, err := s.store.GetCustomEvents(id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"session": sess, "pages": pages, "custom_events": activity})
 }
 
 // handleSessionEvents streams decompressed rrweb events page by page.

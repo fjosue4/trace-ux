@@ -4,7 +4,7 @@ Self-hosted, open-source session replay for your websites — a lean, privacy-fi
 
 Webshots records how real visitors use your site (DOM event streams, not video), stores them on **your own server**, and plays them back in a clean dashboard. One binary, one SQLite file, one Docker container.
 
-> **Status: v0.1 — session replay core.** Working: multi-page session capture, full replay player, input masking, UTM/referrer attribution, per-site keys, retention. Roadmap: heatmaps (click data is already captured), funnels, feedback widget, multi-user auth.
+> **Status: v0.2 — session replay core + multi-user access.** Working: multi-page session capture, full replay player, input masking, UTM/referrer attribution, per-site keys, retention, user accounts with admin-managed passwords, 2-hour session cap, filter sessions by any visited path. Roadmap: heatmaps (click data is already captured), funnels, feedback widget.
 
 ## Why
 
@@ -34,7 +34,7 @@ WS_PASSWORD=change-me ./webshots
 
 Then:
 
-1. Open `http://your-server:8080`, log in with `WS_PASSWORD`.
+1. Open `http://your-server:8080` and sign in. Leave the username empty (or type `admin`) and use `WS_PASSWORD` — that's the bootstrap **admin** account.
 2. **Add site** → copy the snippet:
 
    ```html
@@ -43,15 +43,112 @@ Then:
 
 3. Paste it into the `<head>` of every page on your site. Sessions start appearing within seconds.
 
+## Install on a VPS (one script)
+
+On any Linux server with systemd, one line installs everything — the binary ships with the dashboard and tracker embedded, so there is nothing else to set up:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fjosue4/Webshots/main/install.sh | sudo bash
+```
+
+The script: downloads the prebuilt release for your architecture (checksum-verified), creates a locked-down system user, puts recordings in `/var/lib/webshots`, generates an admin password, installs a systemd service (auto-start on boot, auto-restart on crash), and adds a `webshots` control command. Re-running it upgrades in place and keeps data and users.
+
+Then manage the server with:
+
+| Command | What it does |
+| --- | --- |
+| `webshots --status` | is it running? |
+| `webshots --start` / `--stop` / `--restart` | control the service |
+| `webshots --logs` | last 100 log lines (`journalctl -u webshots -f` to follow) |
+| `webshots --password <new>` | set a new admin password (revokes old admin logins) |
+| `webshots --update` | upgrade to the latest release |
+| `webshots --uninstall` | remove it (recordings are kept) |
+| `webshots --run` | run in the foreground for debugging |
+
+Building from a git clone instead of a release: `bash install.sh --build-from-source` (needs Go ≥ 1.27 and Node ≥ 18). Releases are built automatically by [.github/workflows/release.yml](.github/workflows/release.yml) when a `v*` tag is pushed.
+
+## Minimum requirements
+
+Webshots is deliberately built for the smallest VPS you can rent:
+
+| Resource | Minimum | Comfortable |
+| --- | --- | --- |
+| CPU | 1 vCore | 2 vCores |
+| RAM | 512 MB (server idles at ~30–50 MB) | 1 GB |
+| Disk | 1 GB | 10 GB+ (recordings ≈ 60 KB per typical session; the SQLite file is the whole store) |
+| OS | Linux amd64/arm64 with systemd — Debian 11+, Ubuntu 20.04+, Rocky/Alma 9+, Fedora | any of those |
+| Network | one open TCP port (8080 by default) | + Caddy/nginx for HTTPS |
+
+No external database, no queue, no other services — SQLite lives in `/var/lib/webshots` and backups are copying that folder. Docker is the alternative route (`deploy/docker-compose.yml`) if you prefer containers; the container runs the same binary. In practice: a $4–6/mo VPS handles a handful of sites with thousands of monthly sessions.
+
 ## Configuration
 
-| Env var            | Default   | Meaning                                    |
-| ------------------ | --------- | ------------------------------------------ |
-| `WS_PASSWORD`      | `webshots`| Dashboard password (**set this**)          |
-| `WS_DATA`          | `./data`  | Data dir (SQLite db + auth secret)         |
-| `WS_ADDR`          | `:8080`   | Listen address                             |
-| `WS_RETENTION_DAYS`| `90`      | Auto-delete sessions older than this       |
-| `WS_DEV_STATIC`    | —         | Dev only: serve frontend builds from disk  |
+| Env var            | Default   | Meaning                                              |
+| ------------------ | --------- | ---------------------------------------------------- |
+| `WS_PASSWORD`      | `webshots`| Bootstrap admin password (**set this**)               |
+| `WS_RESET_ADMIN`   | —         | `1` = re-point `admin` at `WS_PASSWORD` on boot       |
+| `WS_DATA`          | `./data`  | Data dir (SQLite db, users, auth secret)              |
+| `WS_ADDR`          | `:8080`   | Listen address                                        |
+| `WS_RETENTION_DAYS`| `90`      | Auto-delete sessions older than this                  |
+| `WS_DEV_STATIC`    | —         | Dev only: serve frontend builds from disk             |
+
+## Users & access
+
+The dashboard supports real accounts; the **admin** (the `WS_PASSWORD` account) manages them alone, under **Settings → Team** (hidden from viewers):
+
+- **Roles** — `admin` can manage users; `viewer` can browse sites, sessions and replays. Both can change their own password under **Settings**.
+- **Creating users** — pick a username and a password (min 8 characters); the user signs in with it directly. No email, no invites.
+- **Revocation is immediate** — resetting a password, changing a role, or deleting a user signs that person out everywhere. Changing your own password keeps your current tab signed in.
+- **Passwords** are stored as salted PBKDF2-SHA256 hashes (210k iterations); login cookies are random tokens stored only as hashes, so a leaked DB can't be replayed.
+- **Locked out?** Restart with `WS_RESET_ADMIN=1` to re-point the `admin` account at the current `WS_PASSWORD` (all previous admin logins are revoked), then remove the flag.
+
+`WS_PASSWORD` only seeds the bootstrap admin the first time. After that, passwords live in the database and changing the env var has no effect.
+
+## Tracking visitors & events
+
+The snippet takes identity at init, and the page can attach or change it later — for example when a visitor logs in mid-recording:
+
+```html
+<script async src="https://your-server/t.js" data-site="KEY"
+        data-user-id="u-42" data-client-id="acme" data-remote-id="remote-7"></script>
+<script>
+  // any time during the session (latest non-empty value wins):
+  window.Webshots.identify({ userId: 'u-42', clientId: 'acme', remoteId: 'remote-7' });
+</script>
+```
+
+Sessions are filterable by any of the three ids with the **Visitor** filter in the dashboard, and ids show on the replay page.
+
+Mark any element to appear as seekable activity in the replay sidebar:
+
+```html
+<button ws-track-id="checkout-click">Buy now</button>
+```
+
+or programmatically: `window.Webshots.track('checkout-click')`. Clicking an activity row jumps the recording to that exact moment.
+
+Masking: all form inputs are masked by default; any element carrying `ws-mask` — as a class or as a bare attribute — has its text masked, and `ws-block` (class) removes the element from the recording entirely.
+
+## Feedback & surveys
+
+Collect feedback from visitors right on your tracked sites — each response is linked to the session recording, so you can watch the moment behind the score.
+
+**Everything is configured per site from the dashboard** (open a site from the Sites list): toggle recordings on/off, enable the widget, pick its corner, set the survey id/title, and choose the question set — built-in stars (1–5), NPS (0–10), or **fully custom questions** (rating, choice, or text; required or optional). The tracker picks the configuration up automatically from the server; the snippet carries no settings.
+
+**Or collect programmatically:**
+
+```js
+window.Webshots.feedback({ rating: 5, comment: 'Loved it', surveyId: 'checkout' });
+```
+
+Responses land in the dashboard's **Feedback** page (per-survey summaries, comments, device info, one-click jump into the replay). Each site's hub page shows the latest 5 recordings, the latest 5 feedback responses, and the overall positive-feedback percentage. Admins can delete individual responses (e.g. spam).
+
+Turning **recordings off** for a site stops the capture of visitor event streams server-side — the feedback widget and lightweight session metadata keep working.
+
+## Session behavior
+
+- **2-hour cap** — a single session never records more than 2 hours of active time. The tracker splits a marathon visit into a fresh session at the cap (shipping the final events and duration of the outgoing session), and the server independently caps the stored duration, so buggy or hostile clients can't inflate it. Time with the tab hidden doesn't count; 30 minutes of inactivity or a hidden tab also ends a session.
+- **Filter by any visited path** — the URL filter on the sessions list matches the entry URL, the exit URL, *and every page the visitor navigated through*, so searching `pricing` finds sessions that merely passed by the pricing page.
 
 ## Privacy model
 

@@ -1,11 +1,8 @@
 package main
 
 import (
-	"crypto/hmac"
+	"context"
 	"crypto/rand"
-	"crypto/sha256"
-	"crypto/subtle"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,19 +16,19 @@ import (
 )
 
 const authCookie = "ws_auth"
-const authTTL = 30 * 24 * time.Hour
 
 type Server struct {
 	store  *Store
 	cfg    *Config
-	secret []byte
+	secret []byte // HMAC salt for ip_hash (auth cookies are DB-backed now)
 	static http.Handler // SPA + assets
 }
 
 type Config struct {
 	Addr          string
 	DataDir       string
-	Password      string
+	Password      string // bootstrap admin password (WS_PASSWORD)
+	ResetAdmin    bool   // WS_RESET_ADMIN=1: re-point admin at WS_PASSWORD
 	RetentionDays int
 	DevStaticDir  string // serve dashboard/tracker from disk instead of embed (dev)
 }
@@ -41,6 +38,7 @@ func loadConfig() Config {
 		Addr:          envOr("WS_ADDR", ":8080"),
 		DataDir:       envOr("WS_DATA", "./data"),
 		Password:      os.Getenv("WS_PASSWORD"),
+		ResetAdmin:    os.Getenv("WS_RESET_ADMIN") == "1",
 		RetentionDays: 90,
 	}
 	if v := os.Getenv("WS_RETENTION_DAYS"); v != "" {
@@ -88,15 +86,30 @@ func (s *Server) routes() http.Handler {
 
 	mux.HandleFunc("POST /api/auth/login", s.handleLogin)
 	mux.HandleFunc("POST /api/auth/logout", s.handleLogout)
+	mux.HandleFunc("POST /api/auth/password", s.auth(s.handleChangePassword))
 	mux.HandleFunc("GET /api/auth/me", s.auth(s.handleMe))
+
+	// User management: admin role only.
+	mux.HandleFunc("GET /api/users", s.auth(s.requireAdmin(s.handleListUsers)))
+	mux.HandleFunc("POST /api/users", s.auth(s.requireAdmin(s.handleCreateUser)))
+	mux.HandleFunc("PATCH /api/users/{id}", s.auth(s.requireAdmin(s.handleUpdateUser)))
+	mux.HandleFunc("DELETE /api/users/{id}", s.auth(s.requireAdmin(s.handleDeleteUser)))
 
 	mux.HandleFunc("GET /api/sites", s.auth(s.handleListSites))
 	mux.HandleFunc("POST /api/sites", s.auth(s.handleCreateSite))
+	mux.HandleFunc("GET /api/sites/{id}", s.auth(s.handleGetSite))
+	mux.HandleFunc("PATCH /api/sites/{id}", s.auth(s.requireAdmin(s.handleUpdateSite)))
+	mux.HandleFunc("PUT /api/sites/{id}/settings", s.auth(s.requireAdmin(s.handlePutSiteSettings)))
 	mux.HandleFunc("DELETE /api/sites/{id}", s.auth(s.handleDeleteSite))
 
 	mux.HandleFunc("GET /api/sessions", s.auth(s.handleListSessions))
 	mux.HandleFunc("GET /api/sessions/{id}", s.auth(s.handleGetSession))
 	mux.HandleFunc("GET /api/sessions/{id}/events", s.auth(s.handleSessionEvents))
+
+	// Feedback & surveys from tracked sites.
+	mux.HandleFunc("GET /api/feedback", s.auth(s.handleListFeedback))
+	mux.HandleFunc("GET /api/feedback/summary", s.auth(s.handleFeedbackSummary))
+	mux.HandleFunc("DELETE /api/feedback/{id}", s.auth(s.requireAdmin(s.handleDeleteFeedback)))
 
 	// Public tracker-facing endpoints (permissive CORS, like all web analytics).
 	mux.HandleFunc("GET /api/config/{siteKey}", s.handleConfig)
@@ -129,30 +142,39 @@ func cors(next http.Handler) http.Handler {
 
 // ---- Auth ----
 
-func (s *Server) signAuth(expiry int64) string {
-	mac := hmac.New(sha256.New, s.secret)
-	fmt.Fprintf(mac, "%d", expiry)
-	return fmt.Sprintf("%d.%s", expiry, hex.EncodeToString(mac.Sum(nil)))
+type ctxKey int
+
+const userCtxKey ctxKey = 0
+
+// currentUser returns the authenticated user attached by s.auth, or nil.
+func currentUser(r *http.Request) *User {
+	u, _ := r.Context().Value(userCtxKey).(*User)
+	return u
 }
 
-func (s *Server) checkAuth(token string) bool {
-	expStr, _, ok := strings.Cut(token, ".")
-	if !ok {
-		return false
-	}
-	exp, err := strconv.ParseInt(expStr, 10, 64)
-	if err != nil || time.Now().Unix() > exp {
-		return false
-	}
-	expected := s.signAuth(exp)
-	return subtle.ConstantTimeCompare([]byte(expected), []byte(token)) == 1
-}
-
+// auth resolves the login cookie to a user via the auth_sessions table, so
+// password changes, role changes and user deletion revoke access immediately.
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie(authCookie)
-		if err != nil || !s.checkAuth(c.Value) {
+		if err != nil || c.Value == "" {
 			writeErr(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		u, err := s.store.UserForToken(c.Value)
+		if err != nil || u == nil {
+			writeErr(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		next(w, r.WithContext(context.WithValue(r.Context(), userCtxKey, u)))
+	}
+}
+
+// requireAdmin gates a handler to the admin role (user management).
+func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if u := currentUser(r); u == nil || u.Role != "admin" {
+			writeErr(w, http.StatusForbidden, "admin only")
 			return
 		}
 		next(w, r)
@@ -161,34 +183,273 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var body struct {
+		Username string `json:"username"`
 		Password string `json:"password"`
 	}
 	if err := readJSON(w, r, &body); err != nil {
 		return
 	}
-	if subtle.ConstantTimeCompare([]byte(body.Password), []byte(s.cfg.Password)) != 1 {
-		writeErr(w, http.StatusUnauthorized, "invalid password")
+	username := strings.TrimSpace(body.Username)
+	if username == "" {
+		username = "admin" // legacy single-password logins
+	}
+	// First boot after upgrade: seed the admin account from WS_PASSWORD.
+	if err := s.store.EnsureAdmin(s.cfg.Password); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	exp := time.Now().Add(authTTL).Unix()
+	rec, err := s.store.GetUserByUsername(username)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if rec == nil || !verifyPassword(body.Password, rec.PasswordHash) {
+		time.Sleep(200 * time.Millisecond) // blunt brute-force attempts
+		writeErr(w, http.StatusUnauthorized, "invalid username or password")
+		return
+	}
+	token, err := s.store.CreateAuthSession(rec.ID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     authCookie,
-		Value:    s.signAuth(exp),
+		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(authTTL.Seconds()),
+		MaxAge:   int(authSessionTTL.Seconds()),
 	})
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "user": rec.User})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if c, err := r.Cookie(authCookie); err == nil && c.Value != "" {
+		s.store.DeleteAuthSession(c.Value)
+	}
 	http.SetCookie(w, &http.Cookie{Name: authCookie, Value: "", Path: "/", MaxAge: -1})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]bool{"authenticated": true})
+	u := currentUser(r)
+	writeJSON(w, http.StatusOK, map[string]string{"username": u.Username, "role": u.Role})
+}
+
+// handleChangePassword lets any logged-in user rotate their own password after
+// confirming the current one. Every other login session is revoked.
+func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	u := currentUser(r)
+	var body struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := readJSON(w, r, &body); err != nil {
+		return
+	}
+	rec, err := s.store.GetUserByID(u.ID)
+	if err != nil || rec == nil {
+		writeErr(w, http.StatusInternalServerError, "user lookup failed")
+		return
+	}
+	if !verifyPassword(body.CurrentPassword, rec.PasswordHash) {
+		writeErr(w, http.StatusUnauthorized, "current password is wrong")
+		return
+	}
+	if err := setPasswordRules(body.NewPassword); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	hash, err := hashPassword(body.NewPassword)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := s.store.UpdateUserPassword(u.ID, hash); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	keep := ""
+	if c, err := r.Cookie(authCookie); err == nil {
+		keep = c.Value
+	}
+	if err := s.store.DeleteAuthSessionsForUser(u.ID, keep); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func setPasswordRules(pw string) error {
+	if len(pw) < 8 || len(pw) > 200 {
+		return errors.New("password must be 8-200 characters")
+	}
+	return nil
+}
+
+// ---- Users API (admin only) ----
+
+func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := s.store.ListUsers()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, users)
+}
+
+func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		Role     string `json:"role"`
+	}
+	if err := readJSON(w, r, &body); err != nil {
+		return
+	}
+	username := strings.TrimSpace(body.Username)
+	role := body.Role
+	if role == "" {
+		role = "viewer"
+	}
+	if !validateUsername(username) {
+		writeErr(w, http.StatusBadRequest, "username must be 1-64 characters (letters, digits, . _ -)")
+		return
+	}
+	if !validateRole(role) {
+		writeErr(w, http.StatusBadRequest, "role must be admin or viewer")
+		return
+	}
+	if err := setPasswordRules(body.Password); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	hash, err := hashPassword(body.Password)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	user, err := s.store.CreateUser(username, hash, role)
+	if err == errUserExists {
+		writeErr(w, http.StatusConflict, "username already taken")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, user)
+}
+
+// handleUpdateUser resets a password and/or changes a role. Both revoke the
+// target user's logins so the change takes effect immediately.
+func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeErr(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+	var body struct {
+		Password string `json:"password"`
+		Role     string `json:"role"`
+	}
+	if err := readJSON(w, r, &body); err != nil {
+		return
+	}
+	if body.Password == "" && body.Role == "" {
+		writeErr(w, http.StatusBadRequest, "nothing to update")
+		return
+	}
+	target, err := s.store.GetUserByID(id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if target == nil {
+		writeErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if body.Role != "" {
+		if !validateRole(body.Role) {
+			writeErr(w, http.StatusBadRequest, "role must be admin or viewer")
+			return
+		}
+		if target.Role == "admin" && body.Role != "admin" {
+			other, err := s.store.HasOtherAdmin(id)
+			if err != nil {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			if !other {
+				writeErr(w, http.StatusBadRequest, "cannot demote the last admin")
+				return
+			}
+		}
+		if err := s.store.UpdateUserRole(id, body.Role); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if body.Password != "" {
+		if err := setPasswordRules(body.Password); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		hash, err := hashPassword(body.Password)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if err := s.store.UpdateUserPassword(id, hash); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if err := s.store.DeleteAuthSessionsForUser(id, ""); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	updated, err := s.store.GetUserByID(id)
+	if err != nil || updated == nil {
+		writeErr(w, http.StatusInternalServerError, "user lookup failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, updated.User)
+}
+
+func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeErr(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+	target, err := s.store.GetUserByID(id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if target == nil {
+		writeErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if target.Role == "admin" {
+		other, err := s.store.HasOtherAdmin(id)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if !other {
+			writeErr(w, http.StatusBadRequest, "cannot delete the last admin")
+			return
+		}
+	}
+	// auth_sessions cascade; the operator must log in again (as someone else).
+	if err := s.store.DeleteUser(id); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 // ---- Sites ----
@@ -247,13 +508,23 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "unknown site key")
 		return
 	}
-	// v1: fixed config; sampling and masking knobs arrive with the dashboard.
+	// The dashboard owns these settings per site; the tracker consumes them.
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sample_rate":          1.0,
 		"checkout_interval_ms": 30000,
 		"mask_inputs":          true,
 		"flush_interval_ms":    5000,
 		"flush_batch_size":     20,
+		"recording_enabled":    site.RecordingEnabled,
+		"feedback": map[string]any{
+			"enabled":    site.Settings.FeedbackEnabled,
+			"position":   site.Settings.FeedbackPosition,
+			"survey_id":  site.Settings.SurveyID,
+			"title":      site.Settings.SurveyTitle,
+			"type":       site.Settings.SurveyType,
+			"questions":  site.Settings.Questions,
+			"appearance": site.Settings.Appearance,
+		},
 	})
 }
 

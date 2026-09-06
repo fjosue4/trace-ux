@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -12,9 +13,24 @@ import (
 	"time"
 )
 
+// version is overridden at release build time via -ldflags "-X main.version=v...".
+var version = "dev"
+
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
 	log.SetPrefix("webshots: ")
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "--version", "-v":
+			fmt.Printf("webshots %s\n", version)
+			return
+		case "--help", "-h":
+			fmt.Println("webshots — self-hosted session replay server")
+			fmt.Println("  webshots            run the server (configure via WS_* env vars)")
+			fmt.Println("  webshots --version  print the version")
+			return
+		}
+	}
 	cfg := loadConfig()
 
 	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
@@ -31,6 +47,17 @@ func main() {
 		log.Fatalf("cannot load auth secret: %v", err)
 	}
 
+	// Bootstrap the admin account from WS_PASSWORD. Once users exist the DB
+	// owns all passwords; WS_RESET_ADMIN=1 re-points admin at WS_PASSWORD.
+	if cfg.ResetAdmin {
+		if err := store.ResetAdminPassword(cfg.Password); err != nil {
+			log.Fatalf("cannot reset admin password: %v", err)
+		}
+		log.Println("admin password reset from WS_PASSWORD; previous logins revoked")
+	} else if err := store.EnsureAdmin(cfg.Password); err != nil {
+		log.Fatalf("cannot ensure admin user: %v", err)
+	}
+
 	srv := &Server{
 		store:  store,
 		cfg:    &cfg,
@@ -38,7 +65,8 @@ func main() {
 		static: newStaticHandler(cfg),
 	}
 
-	// Retention sweep at boot, then every 6 hours.
+	// Retention sweep at boot, then every 6 hours. Also prunes expired
+	// dashboard login sessions on the same cadence.
 	go func() {
 		time.Sleep(time.Minute)
 		for {
@@ -46,6 +74,11 @@ func main() {
 				log.Printf("retention: %v", err)
 			} else if n > 0 {
 				log.Printf("retention: removed %d expired sessions", n)
+			}
+			if n, err := store.DeleteExpiredAuthSessions(); err != nil {
+				log.Printf("auth gc: %v", err)
+			} else if n > 0 {
+				log.Printf("auth gc: removed %d expired logins", n)
 			}
 			time.Sleep(6 * time.Hour)
 		}
