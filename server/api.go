@@ -94,6 +94,10 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/sites", s.auth(s.handleCreateSite))
 	mux.HandleFunc("DELETE /api/sites/{id}", s.auth(s.handleDeleteSite))
 
+	mux.HandleFunc("GET /api/sessions", s.auth(s.handleListSessions))
+	mux.HandleFunc("GET /api/sessions/{id}", s.auth(s.handleGetSession))
+	mux.HandleFunc("GET /api/sessions/{id}/events", s.auth(s.handleSessionEvents))
+
 	// Public tracker-facing endpoints (permissive CORS, like all web analytics).
 	mux.HandleFunc("GET /api/config/{siteKey}", s.handleConfig)
 	mux.HandleFunc("POST /api/ingest/{siteKey}", s.handleIngest)
@@ -257,7 +261,9 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTracker(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-	w.Header().Set("Cache-Control", "public, max-age=300")
+	// Short cache: tracker updates should reach sites quickly; the file is
+	// tiny so revalidation cost is negligible.
+	w.Header().Set("Cache-Control", "public, max-age=60")
 	body, err := trackerBundle(*s.cfg)
 	if err != nil {
 		log.Printf("tracker: %v", err)

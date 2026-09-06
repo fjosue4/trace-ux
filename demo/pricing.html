@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Acme Demo Shop — Pricing</title>
+  <style>
+    body { font-family: -apple-system, system-ui, sans-serif; margin: 0; color: #1a1a2e; }
+    header { background: #16213e; color: #fff; padding: 1rem 2rem; display: flex; justify-content: space-between; }
+    header a { color: #7aa2f7; margin-left: 1rem; }
+    main { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+    .plans { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
+    .plan { border: 1px solid #ddd; border-radius: 12px; padding: 1.5rem; }
+    .plan.featured { border-color: #0f3460; border-width: 2px; }
+    .price { font-size: 2rem; font-weight: 800; color: #0f3460; }
+    button { background: #0f3460; color: #fff; border: 0; padding: .7rem 1.4rem; border-radius: 8px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Acme Demo Shop</strong>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="checkout.html">Checkout</a>
+    </nav>
+  </header>
+  <main>
+    <h1>Pricing</h1>
+    <div class="plans">
+      <div class="plan">
+        <h3>Hobby</h3><div class="price">$0</div>
+        <p>1 site, 500 sessions/mo.</p>
+        <button onclick="alert('Signup flow would start here')">Choose Hobby</button>
+      </div>
+      <div class="plan featured">
+        <h3>Pro</h3><div class="price">$19</div>
+        <p>10 sites, unlimited sessions.</p>
+        <button onclick="alert('Signup flow would start here')">Choose Pro</button>
+      </div>
+    </div>
+  </main>
+  <script async src="http://localhost:8090/t.js" data-site="cd996a43bc4ec83832e43826935b6d8e"></script>
+</body>
+</html>

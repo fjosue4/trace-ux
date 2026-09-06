@@ -137,6 +137,54 @@ func TestIngestFlow(t *testing.T) {
 	}
 }
 
+func TestMultiPageSession(t *testing.T) {
+	srv, ts := newTestServer(t)
+
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/sites", strings.NewReader(`{"name":"T"}`))
+	resp, _ := http.Post(ts.URL+"/api/auth/login", "application/json", strings.NewReader(`{"password":"pw"}`))
+	for _, c := range resp.Cookies() {
+		req.AddCookie(c)
+	}
+	resp.Body.Close()
+	siteResp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var site Site
+	json.NewDecoder(siteResp.Body).Decode(&site)
+	siteResp.Body.Close()
+
+	u := fmt.Sprintf("%s/api/ingest/%s", ts.URL, site.SiteKey)
+	// Page 1: external referrer + UTM; page 2 arrives with an internal referrer.
+	postJSON(t, u, `{"type":"hello","session_id":"mp","url":"https://x.test/?utm_source=ads","referrer":"https://google.com/","utm_source":"ads"}`, false)
+	postJSON(t, u, `{"type":"page","session_id":"mp","idx":0,"url":"https://x.test/","title":"Home","entered_at":1000}`, false)
+	postJSON(t, u, `{"type":"ping","session_id":"mp","duration_ms":30000,"page_count":1}`, false)
+	postJSON(t, u, `{"type":"hello","session_id":"mp","url":"https://x.test/pricing","referrer":"https://x.test/"}`, false)
+	postJSON(t, u, `{"type":"page","session_id":"mp","idx":1,"url":"https://x.test/pricing","title":"Pricing","entered_at":1045}`, false)
+	postJSON(t, u, `{"type":"ping","session_id":"mp","duration_ms":90000,"page_count":2}`, false)
+
+	sess, err := srv.store.GetSession("mp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess.Referrer != "https://google.com/" || sess.UTMSource != "ads" || sess.PageCount != 2 || sess.DurationMs != 90000 {
+		t.Fatalf("session attribution wrong: %+v", sess)
+	}
+	pages, err := srv.store.GetSessionPages("mp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pages) != 2 {
+		t.Fatalf("want 2 pages, got %d", len(pages))
+	}
+	if pages[0].LeftAt != 1045 {
+		t.Fatalf("page 0 should close when page 1 opens (left_at=1045), got %d", pages[0].LeftAt)
+	}
+	if pages[0].Dwell() != 45 {
+		t.Fatalf("page 0 dwell should be 45s, got %d", pages[0].Dwell())
+	}
+}
+
 func TestParseUA(t *testing.T) {
 	cases := []struct{ ua, b, o, d string }{
 		{"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36", "Chrome", "Windows", "desktop"},

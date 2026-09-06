@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Acme Demo Shop — Home</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, system-ui, sans-serif; margin: 0; color: #1a1a2e; }
+    header { background: #16213e; color: #fff; padding: 1rem 2rem; display: flex; justify-content: space-between; }
+    header a { color: #7aa2f7; margin-left: 1rem; }
+    main { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
+    .hero { background: #e8eaf6; border-radius: 12px; padding: 2.5rem; text-align: center; }
+    .hero h1 { margin: 0 0 .5rem; }
+    button { background: #0f3460; color: #fff; border: 0; padding: .7rem 1.4rem;
+             border-radius: 8px; font-size: 1rem; cursor: pointer; }
+    button:active { transform: scale(.98); }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 2rem; }
+    .card { border: 1px solid #ddd; border-radius: 10px; padding: 1rem; }
+    .card h3 { margin-top: 0; }
+    .price { font-weight: 700; color: #0f3460; }
+    form { margin-top: 2rem; display: grid; gap: .6rem; max-width: 340px; }
+    input, textarea { padding: .55rem; border: 1px solid #bbb; border-radius: 6px; font-size: 1rem; }
+    .secret { display: none; } /* should never appear in recordings */
+    footer { text-align: center; color: #888; padding: 2rem; font-size: .85rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Acme Demo Shop</strong>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="pricing.html">Pricing</a>
+      <a href="checkout.html">Checkout</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <h1>Welcome to the Webshots demo store</h1>
+      <p>Click around, add items, fill the form — then watch yourself in the Webshots dashboard.</p>
+      <button onclick="alert('Added to cart!')">Add to cart</button>
+    </div>
+
+    <div class="cards">
+      <div class="card"><h3>Desk lamp</h3><p>Warm, dimmable.</p><div class="price">$39</div>
+        <button onclick="alert('Added to cart!')">Buy</button></div>
+      <div class="card"><h3>Notebook</h3><p>Dotted, 200 pages.</p><div class="price">$12</div>
+        <button onclick="alert('Added to cart!')">Buy</button></div>
+      <div class="card"><h3>Headphones</h3><p>Noise cancelling.</p><div class="price">$89</div>
+        <button onclick="alert('Added to cart!')">Buy</button></div>
+    </div>
+
+    <h2>Tell us what you're looking for</h2>
+    <form onsubmit="event.preventDefault(); alert('Subscribed ' + email.value)">
+      <input name="email" type="email" placeholder="you@example.com" required>
+      <textarea name="notes" placeholder="What are you shopping for?"></textarea>
+      <button type="submit">Subscribe</button>
+    </form>
+
+    <!-- ws-block: excluded entirely from recordings (e.g. payment fields) -->
+    <div class="secret ws-block">Internal: campaign margin is 62% — must never be recorded</div>
+  </main>
+
+  <footer>Demo site for the Webshots open-source session replay tool.</footer>
+
+  <!-- The Webshots snippet. Replace cd996a43bc4ec83832e43826935b6d8e with the key from your dashboard.
+       For local testing the server runs on http://localhost:8090 -->
+  <script async src="http://localhost:8090/t.js" data-site="cd996a43bc4ec83832e43826935b6d8e"></script>
+</body>
+</html>

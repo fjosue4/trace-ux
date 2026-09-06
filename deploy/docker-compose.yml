@@ -1,0 +1,28 @@
+services:
+  webshots:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+    environment:
+      # Change this before exposing the dashboard publicly.
+      WS_PASSWORD: ${WS_PASSWORD:-webshots}
+      WS_RETENTION_DAYS: ${WS_RETENTION_DAYS:-90}
+    restart: unless-stopped
+
+  # Optional: automatic HTTPS in front of Webshots. Uncomment, set your
+  # domain, and point DNS at this host.
+  # caddy:
+  #   image: caddy:2-alpine
+  #   ports: ["80:80", "443:443"]
+  #   volumes:
+  #     - ./Caddyfile:/etc/caddy/Caddyfile
+  #     - caddy_data:/data
+  #   depends_on: [webshots]
+  #   restart: unless-stopped
+#
+# volumes:
+#   caddy_data:

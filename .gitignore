@@ -19,3 +19,4 @@ data/
 
 # OS / editor
 .DS_Store
+server/static/tracker.js

@@ -217,6 +217,15 @@ type SessionPage struct {
 	LeftAt    int64  `json:"left_at"`
 }
 
+// Dwell returns seconds spent on the page; LeftAt == 0 means the visit's last
+// page, still open.
+func (p SessionPage) Dwell() int64 {
+	if p.LeftAt == 0 {
+		return 0
+	}
+	return p.LeftAt - p.EnteredAt
+}
+
 const sessionCols = `id, site_id, started_at, last_seen, duration_ms, page_count, event_count,
 	initial_url, exit_url, referrer, utm_source, utm_medium, utm_campaign,
 	browser, os, device, viewport_w, viewport_h, screen_w, screen_h,

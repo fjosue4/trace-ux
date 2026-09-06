@@ -153,11 +153,12 @@ func validSessionID(id string) bool {
 	return true
 }
 
-// readBody reads the request body, transparently decoding Content-Encoding: gzip
-// (sendBeacon batches are gzipped by the tracker to stay under size limits).
+// readBody reads the request body, transparently decoding gzip. Browsers forbid
+// setting Content-Encoding on sendBeacon/fetch, so the tracker signals gzip
+// with a ?gz=1 query parameter; a real Content-Encoding header is honored too.
 func readBody(r *http.Request) ([]byte, error) {
 	var reader io.Reader = io.LimitReader(r.Body, ingestBodyLimit)
-	if strings.EqualFold(r.Header.Get("Content-Encoding"), "gzip") {
+	if r.URL.Query().Get("gz") == "1" || strings.EqualFold(r.Header.Get("Content-Encoding"), "gzip") {
 		zr, err := gzip.NewReader(reader)
 		if err != nil {
 			return nil, err
@@ -209,12 +210,28 @@ func (s *Store) SaveHello(siteID int64, sessionID, ua, ipHash string, m *ingestH
 	if _, err := s.db.Exec(ensureSession, sessionID, siteID, now, now); err != nil {
 		return err
 	}
+	// Session metadata is set-if-empty: the first page of a visit provides the
+	// attribution (referrer, UTM, initial URL); later page loads in the same
+	// session send hello again and must not overwrite it. The referrer is only
+	// accepted while initial_url is still empty, so internal navigation
+	// referrers never masquerade as the external source.
 	browser, osName, device := parseUA(ua)
 	_, err := s.db.Exec(`UPDATE sessions SET
-		initial_url = COALESCE(NULLIF(?, ''), initial_url),
-		referrer = ?, utm_source = ?, utm_medium = ?, utm_campaign = ?,
-		viewport_w = ?, viewport_h = ?, screen_w = ?, screen_h = ?,
-		browser = ?, os = ?, device = ?, user_agent = ?, ip_hash = ?, last_seen = ?
+		initial_url = COALESCE(NULLIF(initial_url, ''), ?),
+		referrer    = COALESCE(NULLIF(referrer, ''), CASE WHEN COALESCE(initial_url, '') = '' THEN ? ELSE referrer END),
+		utm_source   = COALESCE(NULLIF(utm_source, ''), ?),
+		utm_medium   = COALESCE(NULLIF(utm_medium, ''), ?),
+		utm_campaign = COALESCE(NULLIF(utm_campaign, ''), ?),
+		viewport_w = COALESCE(NULLIF(viewport_w, 0), ?),
+		viewport_h = COALESCE(NULLIF(viewport_h, 0), ?),
+		screen_w   = COALESCE(NULLIF(screen_w, 0), ?),
+		screen_h   = COALESCE(NULLIF(screen_h, 0), ?),
+		browser    = COALESCE(NULLIF(browser, ''), ?),
+		os         = COALESCE(NULLIF(os, ''), ?),
+		device     = COALESCE(NULLIF(device, ''), ?),
+		user_agent = COALESCE(NULLIF(user_agent, ''), ?),
+		ip_hash    = COALESCE(NULLIF(ip_hash, ''), ?),
+		last_seen  = ?
 		WHERE id = ?`,
 		m.URL, m.Referrer, m.UTMSource, m.UTMMedium, m.UTMCampaign,
 		m.ViewportW, m.ViewportH, m.ScreenW, m.ScreenH,
@@ -256,10 +273,16 @@ func (s *Store) SavePage(siteID int64, sessionID string, m *ingestPage) error {
 	if _, err := s.db.Exec(ensureSession, sessionID, siteID, now, now); err != nil {
 		return err
 	}
-	if _, err := s.db.Exec(`INSERT INTO pages (session_id, idx, url, title, entered_at, left_at) VALUES (?, ?, ?, ?, ?, ?)
+	// left_at starts open (0) and is closed when the next page of the same
+	// session arrives, so the pages timeline reflects real dwell times.
+	if _, err := s.db.Exec(`INSERT INTO pages (session_id, idx, url, title, entered_at, left_at) VALUES (?, ?, ?, ?, ?, 0)
 		ON CONFLICT(session_id, idx) DO UPDATE SET url = excluded.url, title = excluded.title, entered_at = excluded.entered_at`,
-		sessionID, m.Idx, m.URL, m.Title, m.EnteredAt, now); err != nil {
+		sessionID, m.Idx, m.URL, m.Title, m.EnteredAt); err != nil {
 		return err
+	}
+	if m.Idx > 0 {
+		s.db.Exec(`UPDATE pages SET left_at = ? WHERE session_id = ? AND idx = ? AND left_at = 0`,
+			m.EnteredAt, sessionID, m.Idx-1)
 	}
 	_, err := s.db.Exec(`UPDATE sessions SET
 		last_seen = ?, page_count = MAX(page_count, ?),
@@ -273,8 +296,10 @@ func (s *Store) SavePing(siteID int64, sessionID string, m *ingestPing) error {
 	if _, err := s.db.Exec(ensureSession, sessionID, siteID, now, now); err != nil {
 		return err
 	}
+	// Cap duration defensively: buggy or hostile clients must not inflate it
+	// beyond 24h of visible time.
 	_, err := s.db.Exec(`UPDATE sessions SET
-		last_seen = ?, duration_ms = MAX(duration_ms, ?),
+		last_seen = ?, duration_ms = MIN(MAX(duration_ms, ?), 86400000),
 		page_count = MAX(page_count, ?),
 		exit_url = COALESCE(NULLIF(?, ''), exit_url)
 		WHERE id = ?`, now, m.DurationMs, m.PageCount, m.ExitURL, sessionID)
