@@ -38,6 +38,7 @@ type FeedbackCfg = {
     radius?: number;
     spacing?: number;
   };
+  trigger?: { mode?: string; pages?: string[]; actions?: string[] };
 };
 
 type WsConfig = {
@@ -250,6 +251,11 @@ interface StorageLike {
   function onRouteChange() {
     flush();
     trackPage();
+    try {
+      mountFeedbackIfConfigured();
+    } catch {
+      /* widget must never break the host page */
+    }
   }
 
   const origPushState = history.pushState.bind(history);
@@ -322,6 +328,11 @@ interface StorageLike {
     },
     track(name, trackId) {
       sendCustom(name || 'event', trackId || '');
+      try {
+        mountFeedbackIfConfigured(name || 'event');
+      } catch {
+        /* widget must never break the host page */
+      }
     },
     feedback(input) {
       sendFeedback(input);
@@ -334,7 +345,15 @@ interface StorageLike {
     'click',
     (e) => {
       const el = (e.target as Element | null)?.closest?.('[ws-track-id]');
-      if (el) sendCustom('click', el.getAttribute('ws-track-id') || '');
+      if (el) {
+        const trackId = el.getAttribute('ws-track-id') || '';
+        sendCustom('click', trackId);
+        try {
+          mountFeedbackIfConfigured(trackId);
+        } catch {
+          /* widget must never break the host page */
+        }
+      }
     },
     { capture: true, passive: true },
   );
@@ -343,7 +362,7 @@ interface StorageLike {
   // Enabled and fully configured per site from the Webshots dashboard (served
   // via /api/config/{key}). Rendered inside a shadow root so host-page CSS
   // cannot break it, and its own neutral look works on any site.
-  function mountFeedbackWidget(fb: FeedbackCfg) {
+  function mountFeedbackWidget(fb: FeedbackCfg, autoOpen = false): { open: () => void } {
     const side = fb.position === 'left' ? 'left:20px' : 'right:20px';
     const origin = fb.position === 'left' ? 'bottom left' : 'bottom right';
     const surveyId = fb.survey_id || 'default';
@@ -412,11 +431,11 @@ interface StorageLike {
         .q-label { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
         .q.invalid .q-label { color: #d0453e; }
         .q.invalid textarea, .q.invalid .choices { border-color: #d0453e; }
-        .stars { display: flex; gap: 4px; }
+        .stars { display: flex; gap: 6px; }
         .stars button {
-          border: 0; background: none; cursor: pointer; font-size: 26px;
+          flex: 1; border: 0; background: none; cursor: pointer; font-size: 30px;
           color: color-mix(in srgb, var(--fb-panel-text) 18%, transparent);
-          padding: 2px; line-height: 1;
+          padding: 2px 0; line-height: 1;
           transition: transform .12s ease, color .12s ease;
         }
         .stars button:hover { transform: scale(1.25); }
@@ -589,14 +608,44 @@ interface StorageLike {
     });
 
     document.body.appendChild(host);
+    if (autoOpen) open();
+    return { open };
   }
 
-  if (cfg.feedback && cfg.feedback.enabled) {
-    try {
-      mountFeedbackWidget(cfg.feedback);
-    } catch {
-      /* widget must never break the host page */
+  // Trigger configuration (from the dashboard): 'always' mounts immediately,
+  // 'page' waits for a matching URL pattern, 'action' waits for a matching
+  // tracked action (ws-track-id click or window.Webshots.track).
+  let feedbackWidget: { open: () => void } | null = null;
+  function matchesPages(patterns: string[]): boolean {
+    const path = location.pathname;
+    const href = location.href;
+    return patterns.some((p) => {
+      const re = new RegExp('^' + p.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+      return re.test(path) || re.test(href);
+    });
+  }
+  function mountFeedbackIfConfigured(triggerAction?: string) {
+    if (feedbackWidget) {
+      if (triggerAction) feedbackWidget.open();
+      return;
     }
+    if (!cfg.feedback || !cfg.feedback.enabled) return;
+    const trigger = cfg.feedback.trigger;
+    const mode = trigger?.mode || 'always';
+    if (mode === 'action') {
+      if (triggerAction && (trigger?.actions || []).includes(triggerAction)) {
+        feedbackWidget = mountFeedbackWidget(cfg.feedback, true);
+      }
+      return;
+    }
+    if (mode === 'page' && !matchesPages(trigger?.pages || [])) return;
+    feedbackWidget = mountFeedbackWidget(cfg.feedback, false);
+  }
+
+  try {
+    mountFeedbackIfConfigured();
+  } catch {
+    /* widget must never break the host page */
   }
 
   sendHello();

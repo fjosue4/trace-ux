@@ -105,6 +105,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/sessions", s.auth(s.handleListSessions))
 	mux.HandleFunc("GET /api/sessions/{id}", s.auth(s.handleGetSession))
 	mux.HandleFunc("GET /api/sessions/{id}/events", s.auth(s.handleSessionEvents))
+	mux.HandleFunc("DELETE /api/sessions/{id}", s.auth(s.requireAdmin(s.handleDeleteSession)))
 
 	// Feedback & surveys from tracked sites.
 	mux.HandleFunc("GET /api/feedback", s.auth(s.handleListFeedback))
@@ -524,6 +525,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 			"type":       site.Settings.SurveyType,
 			"questions":  site.Settings.Questions,
 			"appearance": site.Settings.Appearance,
+			"trigger":    site.Settings.FeedbackTrigger,
 		},
 	})
 }

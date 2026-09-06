@@ -132,6 +132,18 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	if env.Type == "events" {
+		ok, err := s.store.CanStartRecording(site.ID, env.SessionID, site.Settings.MaxConcurrentSessions)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if !ok {
+			// Per-site cap on simultaneous recordings reached.
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+	}
 
 	switch env.Type {
 	case "hello":

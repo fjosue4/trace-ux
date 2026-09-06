@@ -5,10 +5,15 @@ import Button from '../ui/Button';
 import { Icon } from '../ui/Icon';
 import './SnippetCard.css';
 
-type Props = { site: Site; origin: string; onDismiss: () => void };
+type Props = {
+  site: Site;
+  origin: string;
+  title?: string;
+  /** When provided, the card can be dismissed (transient banners). */
+  onDismiss?: () => void;
+};
 
-// Shown right after a site is created — the one thing the user must copy.
-export default function SnippetCard({ site, origin, onDismiss }: Props) {
+export default function SnippetCard({ site, origin, title, onDismiss }: Props) {
   const [copied, setCopied] = useState(false);
   const snippet = `<script async src="${origin}/t.js" data-site="${site.site_key}"></script>`;
 
@@ -21,12 +26,12 @@ export default function SnippetCard({ site, origin, onDismiss }: Props) {
   return (
     <Card className="snippet-card">
       <div className="row row--between">
-        <h3>
-          {site.name} is ready
-        </h3>
-        <Button variant="ghost" size="sm" onClick={onDismiss}>
-          Dismiss
-        </Button>
+        <h3>{title ?? `${site.name} is ready`}</h3>
+        {onDismiss && (
+          <Button variant="ghost" size="sm" onClick={onDismiss}>
+            Dismiss
+          </Button>
+        )}
       </div>
       <p className="muted small">
         Paste this snippet into the <code>{'<head>'}</code> of every page on your site:

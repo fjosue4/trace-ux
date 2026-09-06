@@ -34,6 +34,13 @@ export type SiteAppearance = {
   spacing?: number;
 };
 
+// When does the feedback widget show up for a visitor?
+export type FeedbackTrigger = {
+  mode: 'always' | 'page' | 'action';
+  pages?: string[]; // URL patterns with * wildcards
+  actions?: string[]; // ws-track-id names / window.Webshots.track names
+};
+
 export type SiteSettings = {
   feedback_enabled: boolean;
   feedback_position: string; // right | left
@@ -42,6 +49,7 @@ export type SiteSettings = {
   survey_type: string; // stars | nps | custom
   questions?: SurveyQuestion[];
   appearance?: SiteAppearance;
+  feedback_trigger?: FeedbackTrigger;
 };
 
 export type SiteStats = {

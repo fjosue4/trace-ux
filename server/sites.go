@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 // Per-site configuration, managed from the dashboard and served to the
@@ -49,24 +50,37 @@ func DefaultSiteAppearance() *SiteAppearance {
 	}
 }
 
+// FeedbackTrigger controls when the widget shows up for a visitor.
+type FeedbackTrigger struct {
+	Mode    string   `json:"mode"` // always | page | action
+	Pages   []string `json:"pages,omitempty"`   // URL patterns with * wildcards
+	Actions []string `json:"actions,omitempty"` // ws-track-id names / track() names
+}
+
 type SiteSettings struct {
-	FeedbackEnabled  bool             `json:"feedback_enabled"`
-	FeedbackPosition string           `json:"feedback_position"` // right | left
-	SurveyID         string           `json:"survey_id"`
-	SurveyTitle      string           `json:"survey_title"`
-	SurveyType       string           `json:"survey_type"` // stars | nps | custom
-	Questions        []SurveyQuestion `json:"questions,omitempty"`
-	Appearance       *SiteAppearance  `json:"appearance,omitempty"`
+	FeedbackEnabled       bool             `json:"feedback_enabled"`
+	FeedbackPosition      string           `json:"feedback_position"` // right | left
+	SurveyID              string           `json:"survey_id"`
+	SurveyTitle           string           `json:"survey_title"`
+	SurveyType            string           `json:"survey_type"` // stars | nps | custom
+	Questions             []SurveyQuestion `json:"questions,omitempty"`
+	Appearance            *SiteAppearance  `json:"appearance,omitempty"`
+	MaxConcurrentSessions int              `json:"max_concurrent_sessions,omitempty"` // 0 = unlimited
+	RetentionSessionsDays int              `json:"retention_sessions_days,omitempty"` // 0 = server default
+	RetentionFeedbackDays int              `json:"retention_feedback_days,omitempty"` // 0 = server default
+	AllowDeleteRecordings bool             `json:"allow_delete_recordings"`
+	FeedbackTrigger       *FeedbackTrigger `json:"feedback_trigger,omitempty"`
 }
 
 func DefaultSiteSettings() SiteSettings {
 	return SiteSettings{
-		FeedbackEnabled:  true,
-		FeedbackPosition: "right",
-		SurveyID:         "default",
-		SurveyTitle:      "How was your experience?",
-		SurveyType:       "stars",
-		Appearance:       DefaultSiteAppearance(),
+		FeedbackEnabled:       true,
+		FeedbackPosition:      "right",
+		SurveyID:              "default",
+		SurveyTitle:           "How was your experience?",
+		SurveyType:            "stars",
+		AllowDeleteRecordings: true,
+		FeedbackTrigger:       &FeedbackTrigger{Mode: "always"},
 	}
 }
 
@@ -106,6 +120,15 @@ func ValidateSiteSettings(s SiteSettings) error {
 	if len(s.SurveyTitle) > 200 {
 		return fmt.Errorf("survey_title too long")
 	}
+	if s.MaxConcurrentSessions < 0 || s.MaxConcurrentSessions > 100000 {
+		return fmt.Errorf("max_concurrent_sessions must be 0-100000")
+	}
+	if s.RetentionSessionsDays < 0 || s.RetentionSessionsDays > 3650 {
+		return fmt.Errorf("retention_sessions_days must be 0-3650")
+	}
+	if s.RetentionFeedbackDays < 0 || s.RetentionFeedbackDays > 3650 {
+		return fmt.Errorf("retention_feedback_days must be 0-3650")
+	}
 
 	// Appearance applies to every survey type: colors must be hex, geometry
 	// bounded, label short.
@@ -140,6 +163,29 @@ func ValidateSiteSettings(s SiteSettings) error {
 		}
 		if len(a.ButtonLabel) > 40 {
 			return fmt.Errorf("appearance.button_label too long")
+		}
+	}
+
+	// Feedback trigger targeting applies to every survey type.
+	if t := s.FeedbackTrigger; t != nil {
+		if t.Mode != "always" && t.Mode != "page" && t.Mode != "action" {
+			return fmt.Errorf("feedback_trigger.mode must be always, page or action")
+		}
+		if len(t.Pages) > 10 {
+			return fmt.Errorf("feedback_trigger.pages: max 10 patterns")
+		}
+		for _, p := range t.Pages {
+			if p == "" || len(p) > 200 {
+				return fmt.Errorf("feedback_trigger.pages: patterns must be 1-200 chars")
+			}
+		}
+		if len(t.Actions) > 10 {
+			return fmt.Errorf("feedback_trigger.actions: max 10 names")
+		}
+		for _, a := range t.Actions {
+			if a == "" || len(a) > 100 {
+				return fmt.Errorf("feedback_trigger.actions: names must be 1-100 chars")
+			}
 		}
 	}
 
@@ -183,8 +229,74 @@ func ValidateSiteSettings(s SiteSettings) error {
 	}
 	return nil
 }
-
 // ---- store operations ----
+
+// CanStartRecording enforces the per-site cap on simultaneous recordings.
+// Sessions that are already recording (hold events, seen < 30 min ago) always
+// continue; a new session is admitted only while fewer than max sessions are
+// actively recording. max <= 0 means unlimited.
+func (s *Store) CanStartRecording(siteID int64, sessionID string, maxConcurrent int) (bool, error) {
+	if maxConcurrent <= 0 {
+		return true, nil
+	}
+	var alreadyRecording int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE id = ? AND event_count > 0 AND last_seen > ?`,
+		sessionID, time.Now().Add(-30*time.Minute).Unix()).Scan(&alreadyRecording); err != nil {
+		return false, err
+	}
+	if alreadyRecording > 0 {
+		return true, nil
+	}
+	cutoff := time.Now().Add(-30 * time.Minute).Unix()
+	var activeOthers int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE site_id = ? AND last_seen > ? AND event_count > 0 AND id != ?`,
+		siteID, cutoff, sessionID).Scan(&activeOthers); err != nil {
+		return false, err
+	}
+	return activeOthers < maxConcurrent, nil
+}
+
+// RetentionSweep applies each site's retention windows: sessions (recordings)
+// and feedback are deleted independently. Sites without an explicit window
+// fall back to the server default.
+func (s *Store) RetentionSweep(defaultDays int) (int64, error) {
+	sites, err := s.ListSites()
+	if err != nil {
+		return 0, err
+	}
+	var total int64
+	for _, st := range sites {
+		days := st.Settings.RetentionSessionsDays
+		if days <= 0 {
+			days = defaultDays
+		}
+		cutoff := time.Now().AddDate(0, 0, -days).Unix()
+		res, err := s.db.Exec(`DELETE FROM sessions WHERE site_id = ? AND last_seen < ?`, st.ID, cutoff)
+		if err != nil {
+			return total, err
+		}
+		n, _ := res.RowsAffected()
+		total += n
+
+		fdays := st.Settings.RetentionFeedbackDays
+		if fdays <= 0 {
+			fdays = defaultDays
+		}
+		fcutoff := time.Now().AddDate(0, 0, -fdays).Unix()
+		res, err = s.db.Exec(`DELETE FROM feedback WHERE site_id = ? AND created_at < ?`, st.ID, fcutoff)
+		if err != nil {
+			return total, err
+		}
+		n, _ = res.RowsAffected()
+		total += n
+	}
+	return total, nil
+}
+
+func (s *Store) DeleteSession(id string) error {
+	_, err := s.db.Exec(`DELETE FROM sessions WHERE id = ?`, id)
+	return err
+}
 
 func (s *Store) UpdateSiteRecording(siteID int64, enabled bool) error {
 	_, err := s.db.Exec(`UPDATE sites SET recording_enabled = ? WHERE id = ?`, boolToInt(enabled), siteID)

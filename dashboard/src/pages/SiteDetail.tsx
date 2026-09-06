@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, SiteAppearance, SiteDetail, SiteSettings, SurveyQuestion } from '../api';
+import { api, FeedbackTrigger, SiteAppearance, SiteDetail, SiteSettings, SurveyQuestion } from '../api';
 import { fmtDuration, fmtTime, stripProto, truncate } from '../lib/format';
 import { useUser } from '../App';
 import PageHeader from '../components/ui/PageHeader';
@@ -89,6 +89,21 @@ export default function SiteDetail() {
     setDraft((d) => (d ? { ...d, appearance: { ...d.appearance, ...patch } } : d));
   }
 
+  function patchTrigger(patch: Partial<FeedbackTrigger>) {
+    setDraft((d) =>
+      d
+        ? {
+            ...d,
+            feedback_trigger: {
+              mode: 'always',
+              ...(d.feedback_trigger ?? {}),
+              ...patch,
+            } as FeedbackTrigger,
+          }
+        : d,
+    );
+  }
+
   if (error) {
     return (
       <main className="page">
@@ -106,6 +121,7 @@ export default function SiteDetail() {
 
   const { site, sessions, feedback, stats } = detail;
   const recordingOn = site.recording_enabled ?? true;
+  const trigger = draft?.feedback_trigger ?? { mode: 'always' as const };
 
   return (
     <main className="page">
@@ -264,7 +280,45 @@ export default function SiteDetail() {
                     ]}
                   />
                 </Field>
+                <Field label="Show widget">
+                  <Select
+                    value={trigger.mode}
+                    onChange={(v) => patchTrigger({ mode: v as FeedbackTrigger['mode'] })}
+                    options={[
+                      { value: 'always', label: 'Always' },
+                      { value: 'page', label: 'On specific pages' },
+                      { value: 'action', label: 'After a tracked action' },
+                    ]}
+                  />
+                </Field>
               </div>
+
+              {trigger.mode === 'page' && (
+                <Field
+                  label="Page patterns"
+                  hint="Comma separated, * wildcards — e.g. /checkout*, /pricing. The widget appears only on matching pages."
+                >
+                  <Input
+                    value={(trigger.pages ?? []).join(', ')}
+                    onChange={(e) =>
+                      patchTrigger({ pages: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })
+                    }
+                  />
+                </Field>
+              )}
+              {trigger.mode === 'action' && (
+                <Field
+                  label="Tracked actions"
+                  hint="Comma separated ws-track-id names — the widget opens when the visitor clicks one."
+                >
+                  <Input
+                    value={(trigger.actions ?? []).join(', ')}
+                    onChange={(e) =>
+                      patchTrigger({ actions: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })
+                    }
+                  />
+                </Field>
+              )}
 
               {draft.survey_type === 'custom' && (
                 <div className="hub-questions">
@@ -450,7 +504,7 @@ export default function SiteDetail() {
         </Card>
       )}
 
-      <SnippetCard site={site} origin={location.origin} onDismiss={() => {}} />
+      <SnippetCard site={site} origin={location.origin} title="Installation snippet" />
     </main>
   );
 }

@@ -120,3 +120,28 @@ func (s *Server) handleSessionEvents(w http.ResponseWriter, r *http.Request) {
 		"events":   events,
 	})
 }
+
+// handleDeleteSession removes a recording permanently. Allowed only when the
+// owning site enables manual deletion, and only for admins (route gated).
+func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	sess, err := s.store.GetSession(id)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "session not found")
+		return
+	}
+	site, _, _, _, err := s.store.GetSiteDetail(sess.SiteID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if site == nil || !site.Settings.AllowDeleteRecordings {
+		writeErr(w, http.StatusForbidden, "manual recording deletion is disabled for this site")
+		return
+	}
+	if err := s.store.DeleteSession(id); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}

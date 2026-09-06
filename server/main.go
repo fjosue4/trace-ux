@@ -70,10 +70,10 @@ func main() {
 	go func() {
 		time.Sleep(time.Minute)
 		for {
-			if n, err := store.DeleteOldSessions(cfg.RetentionDays); err != nil {
+			if n, err := store.RetentionSweep(cfg.RetentionDays); err != nil {
 				log.Printf("retention: %v", err)
 			} else if n > 0 {
-				log.Printf("retention: removed %d expired sessions", n)
+				log.Printf("retention: removed %d expired items", n)
 			}
 			if n, err := store.DeleteExpiredAuthSessions(); err != nil {
 				log.Printf("auth gc: %v", err)

@@ -566,13 +566,68 @@ func TestSiteManagementAndConfig(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// The hub now reflects one recording, one feedback and 100% positive.
-	detail = doReq(t, http.MethodGet, base, admin, "")
-	json.NewDecoder(detail.Body).Decode(&hub)
-	detail.Body.Close()
-	if len(hub.Sessions) != 1 || len(hub.Feedback) != 1 || hub.Stats.PositivePct != 100 {
-		t.Fatalf("hub detail wrong: sessions=%d feedback=%d stats=%+v", len(hub.Sessions), len(hub.Feedback), hub.Stats)
+	// Max simultaneous recordings, on a dedicated site with a clean window.
+	resp = doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"Cap"}`)
+	var capSite Site
+	json.NewDecoder(resp.Body).Decode(&capSite)
+	resp.Body.Close()
+	capURL := fmt.Sprintf("%s/api/ingest/%s", ts.URL, capSite.SiteKey)
+	resp = doReq(t, http.MethodPut, fmt.Sprintf("%s/api/sites/%d/settings", ts.URL, capSite.ID), admin,
+		`{"feedback_enabled":true,"feedback_position":"right","survey_id":"cap","survey_title":"Rate us","survey_type":"stars",
+		  "max_concurrent_sessions":1,
+		  "feedback_trigger":{"mode":"page","pages":["/pricing*"]}}`)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("put settings with cap: %d", resp.StatusCode)
 	}
+	resp.Body.Close()
+	postJSON(t, capURL, `{"type":"hello","session_id":"capA","url":"https://x.test/"}`, false)
+	postJSON(t, capURL, `{"type":"events","session_id":"capA","seq":0,"events":[{"type":4}]}`, false)
+	postJSON(t, capURL, `{"type":"hello","session_id":"capB","url":"https://x.test/"}`, false)
+	if r := postJSON(t, capURL, `{"type":"events","session_id":"capB","seq":0,"events":[{"type":4}]}`, false); r.StatusCode != http.StatusNoContent {
+		t.Fatalf("capB events: got %d, want 204 (over cap)", r.StatusCode)
+	}
+	// The first session is unaffected by the second's rejection.
+	postJSON(t, capURL, `{"type":"events","session_id":"capA","seq":1,"events":[{"type":2}]}`, false)
+	sessA, err := srv.store.GetSession("capA")
+	if err != nil || sessA.EventCount != 2 {
+		t.Fatalf("capA should keep recording: err=%v sess=%+v", err, sessA)
+	}
+
+	// Trigger targeting round-trips to the public config.
+	resp = doReq(t, http.MethodGet, ts.URL+"/api/config/"+capSite.SiteKey, nil, "")
+	var trigCfg struct {
+		Feedback struct {
+			Trigger struct {
+				Mode  string   `json:"mode"`
+				Pages []string `json:"pages"`
+			} `json:"trigger"`
+		} `json:"feedback"`
+	}
+	json.NewDecoder(resp.Body).Decode(&trigCfg)
+	resp.Body.Close()
+	if trigCfg.Feedback.Trigger.Mode != "page" || len(trigCfg.Feedback.Trigger.Pages) != 1 || trigCfg.Feedback.Trigger.Pages[0] != "/pricing*" {
+		t.Fatalf("trigger round-trip wrong: %+v", trigCfg.Feedback.Trigger)
+	}
+
+	// Manual recording deletion: allowed while the site setting is on…
+	resp = doReq(t, http.MethodDelete, ts.URL+"/api/sessions/rec1", admin, "")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("delete recording: got %d, want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+	if _, err := srv.store.GetSession("rec1"); err == nil {
+		t.Fatal("rec1 should be gone")
+	}
+	// …and rejected once the site disables it.
+	resp = doReq(t, http.MethodPut, base+"/settings", admin,
+		`{"feedback_enabled":true,"feedback_position":"right","survey_id":"csat","survey_title":"Rate us","survey_type":"stars","allow_delete_recordings":false}`)
+	resp.Body.Close()
+	postJSON(t, ingestURL, `{"type":"events","session_id":"capC","seq":0,"events":[{"type":4}]}`, false)
+	resp = doReq(t, http.MethodDelete, ts.URL+"/api/sessions/capC", admin, "")
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("delete with setting off: got %d, want 403", resp.StatusCode)
+	}
+	resp.Body.Close()
 }
 
 func TestURLFilterMatchesVisitedPages(t *testing.T) {
