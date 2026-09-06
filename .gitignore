@@ -1,0 +1,21 @@
+# Go
+/server/webshots
+/dist/
+*.test
+
+# Node
+node_modules/
+dashboard/dist/
+tracker/dist/
+
+# Runtime data (SQLite db, secrets)
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Env
+.env
+
+# OS / editor
+.DS_Store
