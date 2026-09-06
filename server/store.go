@@ -152,6 +152,12 @@ var migrations = []string{
 	ALTER TABLE sites ADD COLUMN recording_enabled INTEGER NOT NULL DEFAULT 1;
 	ALTER TABLE sites ADD COLUMN config TEXT NOT NULL DEFAULT '';
 	`,
+	// v7: the site's own URL — the CORS allowlist for the public tracker
+	// endpoints is derived from it, so cross-origin recording only works for
+	// sites an admin actually added.
+	`
+	ALTER TABLE sites ADD COLUMN url TEXT NOT NULL DEFAULT '';
+	`,
 }
 
 func (s *Store) migrate() error {
@@ -177,13 +183,14 @@ func (s *Store) migrate() error {
 // ---- Sites ----
 
 type Site struct {
-	ID           int64        `json:"id"`
-	Name         string       `json:"name"`
-	SiteKey      string       `json:"site_key"`
-	CreatedAt    int64        `json:"created_at"`
-	SessionCount int64        `json:"session_count"`
-	RecordingEnabled bool     `json:"recording_enabled"`
-	Settings     SiteSettings `json:"settings"`
+	ID               int64        `json:"id"`
+	Name             string       `json:"name"`
+	URL              string       `json:"url"`
+	SiteKey          string       `json:"site_key"`
+	CreatedAt        int64        `json:"created_at"`
+	SessionCount     int64        `json:"session_count"`
+	RecordingEnabled bool         `json:"recording_enabled"`
+	Settings         SiteSettings `json:"settings"`
 }
 
 func newKey(n int) string {
@@ -194,25 +201,25 @@ func newKey(n int) string {
 	return hex.EncodeToString(b)
 }
 
-func (s *Store) CreateSite(name string) (Site, error) {
+func (s *Store) CreateSite(name, url string) (Site, error) {
 	now := time.Now().Unix()
 	key := newKey(16)
-	res, err := s.db.Exec(`INSERT INTO sites (name, site_key, created_at) VALUES (?, ?, ?)`, name, key, now)
+	res, err := s.db.Exec(`INSERT INTO sites (name, url, site_key, created_at) VALUES (?, ?, ?, ?)`, name, url, key, now)
 	if err != nil {
 		return Site{}, err
 	}
 	id, _ := res.LastInsertId()
-	return Site{ID: id, Name: name, SiteKey: key, CreatedAt: now, RecordingEnabled: true, Settings: DefaultSiteSettings()}, nil
+	return Site{ID: id, Name: name, URL: url, SiteKey: key, CreatedAt: now, RecordingEnabled: true, Settings: DefaultSiteSettings()}, nil
 }
 
-const siteCols = `s.id, s.name, s.site_key, s.created_at, s.recording_enabled, s.config,
+const siteCols = `s.id, s.name, s.url, s.site_key, s.created_at, s.recording_enabled, s.config,
 	(SELECT COUNT(*) FROM sessions se WHERE se.site_id = s.id) AS session_count`
 
 func scanSite(row interface{ Scan(...any) error }) (*Site, error) {
 	var st Site
 	var recording int
 	var config string
-	if err := row.Scan(&st.ID, &st.Name, &st.SiteKey, &st.CreatedAt, &recording, &config, &st.SessionCount); err != nil {
+	if err := row.Scan(&st.ID, &st.Name, &st.URL, &st.SiteKey, &st.CreatedAt, &recording, &config, &st.SessionCount); err != nil {
 		return nil, err
 	}
 	st.RecordingEnabled = recording != 0

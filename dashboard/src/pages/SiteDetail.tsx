@@ -27,6 +27,8 @@ export default function SiteDetail() {
   const [draft, setDraft] = useState<SiteSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [urlDraft, setUrlDraft] = useState<string | null>(null);
+  const [urlSaving, setUrlSaving] = useState(false);
 
   const id = Number(siteId);
 
@@ -50,6 +52,20 @@ export default function SiteDetail() {
       load();
     } catch {
       setError('Could not change the recording setting.');
+    }
+  }
+
+  async function saveURL() {
+    if (urlDraft === null) return;
+    setUrlSaving(true);
+    try {
+      await api.updateSiteURL(id, urlDraft.trim());
+      setUrlDraft(null);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not update the site URL.');
+    } finally {
+      setUrlSaving(false);
     }
   }
 
@@ -152,6 +168,45 @@ export default function SiteDetail() {
         </Notice>
       )}
 
+      <Card className="site-url">
+        <form
+          className="row row--between"
+          onSubmit={(e) => {
+            e.preventDefault();
+            saveURL();
+          }}
+        >
+          <div className="site-url__info">
+            <strong>
+              <Icon name="globe" size={13} /> Website URL
+            </strong>
+            <span className="muted small">
+              Recordings are only accepted from this origin — update it if the site moves.
+            </span>
+          </div>
+          {isAdmin ? (
+            <div className="row">
+              <Input
+                value={urlDraft ?? site.url}
+                onChange={(e) => setUrlDraft(e.target.value)}
+                placeholder="https://your-site.com"
+                inputMode="url"
+              />
+              <Button
+                type="submit"
+                variant="secondary"
+                size="sm"
+                disabled={urlSaving || (urlDraft ?? site.url).trim() === site.url}
+              >
+                {urlSaving ? 'Saving…' : 'Save URL'}
+              </Button>
+            </div>
+          ) : (
+            <span className="small">{site.url || '—'}</span>
+          )}
+        </form>
+      </Card>
+
       <div className="hub-stats">
         <Card className="hub-stat">
           <span className="hub-stat__label">Recordings</span>
@@ -239,6 +294,45 @@ export default function SiteDetail() {
             Served to the tracker automatically — the snippet never carries these settings.
           </p>
 
+          <div className="hub-config__title">Recordings</div>
+          <div className="hub-config__grid">
+            <Field label="Max simultaneous recordings" hint="0 = no limit">
+              <Input
+                type="number"
+                min={0}
+                max={100000}
+                value={draft.max_concurrent_sessions ?? 0}
+                onChange={(e) => patchDraft({ max_concurrent_sessions: Number(e.target.value) || 0 })}
+              />
+            </Field>
+            <Field label="Keep recordings for (days)" hint="0 = server default">
+              <Input
+                type="number"
+                min={0}
+                max={3650}
+                value={draft.retention_sessions_days ?? 0}
+                onChange={(e) => patchDraft({ retention_sessions_days: Number(e.target.value) || 0 })}
+              />
+            </Field>
+            <Field label="Keep feedback for (days)" hint="0 = server default">
+              <Input
+                type="number"
+                min={0}
+                max={3650}
+                value={draft.retention_feedback_days ?? 0}
+                onChange={(e) => patchDraft({ retention_feedback_days: Number(e.target.value) || 0 })}
+              />
+            </Field>
+          </div>
+          <div className="hub-config__row">
+            <Switch
+              checked={draft.allow_delete_recordings ?? true}
+              onChange={(v) => patchDraft({ allow_delete_recordings: v })}
+              label="Allow deleting recordings manually"
+            />
+          </div>
+
+          <div className="hub-config__title">Feedback widget</div>
           <div className="hub-config__row">
             <Switch
               checked={draft.feedback_enabled}

@@ -249,7 +249,7 @@ func TestPingDurationCappedAtTwoHours(t *testing.T) {
 	srv, ts := newTestServer(t)
 	admin := login(t, ts.URL, "admin", "pw")
 
-	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"T"}`)
+	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"T","url":"https://t.example"}`)
 	var site Site
 	json.NewDecoder(resp.Body).Decode(&site)
 	resp.Body.Close()
@@ -276,7 +276,7 @@ func TestListSessionsAcrossSites(t *testing.T) {
 	admin := login(t, ts.URL, "admin", "pw")
 
 	mkSite := func(name string) Site {
-		resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"`+name+`"}`)
+		resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"`+name+`","url":"https://`+name+`.example.com"}`)
 		var s Site
 		json.NewDecoder(resp.Body).Decode(&s)
 		resp.Body.Close()
@@ -318,7 +318,7 @@ func TestVisitorIdentityAndCustomEvents(t *testing.T) {
 	srv, ts := newTestServer(t)
 	admin := login(t, ts.URL, "admin", "pw")
 
-	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"T"}`)
+	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"T","url":"https://t.example"}`)
 	var site Site
 	json.NewDecoder(resp.Body).Decode(&site)
 	resp.Body.Close()
@@ -381,7 +381,7 @@ func TestFeedbackFlow(t *testing.T) {
 	srv, ts := newTestServer(t)
 	admin := login(t, ts.URL, "admin", "pw")
 
-	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"T"}`)
+	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"T","url":"https://t.example"}`)
 	var site Site
 	json.NewDecoder(resp.Body).Decode(&site)
 	resp.Body.Close()
@@ -444,7 +444,7 @@ func TestSiteManagementAndConfig(t *testing.T) {
 	srv, ts := newTestServer(t)
 	admin := login(t, ts.URL, "admin", "pw")
 
-	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"Hub"}`)
+	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"Hub","url":"https://hub.example"}`)
 	var site Site
 	json.NewDecoder(resp.Body).Decode(&site)
 	resp.Body.Close()
@@ -567,7 +567,7 @@ func TestSiteManagementAndConfig(t *testing.T) {
 	resp.Body.Close()
 
 	// Max simultaneous recordings, on a dedicated site with a clean window.
-	resp = doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"Cap"}`)
+	resp = doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"Cap","url":"https://cap.example"}`)
 	var capSite Site
 	json.NewDecoder(resp.Body).Decode(&capSite)
 	resp.Body.Close()
@@ -634,7 +634,7 @@ func TestURLFilterMatchesVisitedPages(t *testing.T) {
 	srv, ts := newTestServer(t)
 	admin := login(t, ts.URL, "admin", "pw")
 
-	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"T"}`)
+	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"T","url":"https://t.example"}`)
 	var site Site
 	json.NewDecoder(resp.Body).Decode(&site)
 	resp.Body.Close()
@@ -667,5 +667,121 @@ func TestURLFilterMatchesVisitedPages(t *testing.T) {
 	}
 	if got := get("&url=pricing&device=mobile"); len(got) != 0 {
 		t.Fatalf("combined filters should exclude, got %d", len(got))
+	}
+}
+
+func TestCORSLockedToRegisteredSiteOrigin(t *testing.T) {
+	_, ts := newTestServer(t)
+	admin := login(t, ts.URL, "admin", "pw")
+
+	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin,
+		`{"name":"CORS","url":"https://shop.example"}`)
+	var site Site
+	json.NewDecoder(resp.Body).Decode(&site)
+	resp.Body.Close()
+
+	preflight := func(origin string) *http.Response {
+		req, _ := http.NewRequest(http.MethodOptions, ts.URL+"/api/ingest/"+site.SiteKey, nil)
+		req.Header.Set("Origin", origin)
+		req.Header.Set("Access-Control-Request-Method", "POST")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		return res
+	}
+
+	// The registered origin is granted.
+	res := preflight("https://shop.example")
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("preflight from registered origin = %d, want 204", res.StatusCode)
+	}
+	if got := res.Header.Get("Access-Control-Allow-Origin"); got != "https://shop.example" {
+		t.Fatalf("preflight ACAO = %q, want the echoed origin", got)
+	}
+
+	// Any other origin is refused.
+	res = preflight("https://evil.example")
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("preflight from unknown origin = %d, want 403", res.StatusCode)
+	}
+	if got := res.Header.Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("refused preflight must not carry ACAO, got %q", got)
+	}
+
+	// Config GET from the registered origin gets the grant echoed.
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/config/"+site.SiteKey, nil)
+	req.Header.Set("Origin", "https://shop.example")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("config from registered origin = %d, want 200", res.StatusCode)
+	}
+	if got := res.Header.Get("Access-Control-Allow-Origin"); got != "https://shop.example" {
+		t.Fatalf("config ACAO = %q, want the echoed origin", got)
+	}
+
+	// Without an Origin (server-to-server) the endpoint still answers, grant-free.
+	res, err = http.Get(ts.URL + "/api/config/" + site.SiteKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("config without Origin = %d, want 200", res.StatusCode)
+	}
+	if got := res.Header.Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("no-Origin response must not carry ACAO, got %q", got)
+	}
+
+	// Editing the site URL moves the grant with it.
+	resp = doReq(t, http.MethodPatch, ts.URL+"/api/sites/"+fmt.Sprint(site.ID), admin, `{"url":"https://other.example"}`)
+	resp.Body.Close()
+	if res := preflight("https://shop.example"); res.StatusCode != http.StatusForbidden {
+		t.Fatalf("old origin after URL change = %d, want 403", res.StatusCode)
+	}
+	if res := preflight("https://other.example"); res.StatusCode != http.StatusNoContent {
+		t.Fatalf("new origin after URL change = %d, want 204", res.StatusCode)
+	}
+}
+
+func TestSystemHealth(t *testing.T) {
+	_, ts := newTestServer(t)
+	admin := login(t, ts.URL, "admin", "pw")
+
+	// A viewer must not see host metrics.
+	resp := doReq(t, http.MethodPost, ts.URL+"/api/users", admin,
+		`{"username":"jane","password":"jane-pass-123","role":"viewer"}`)
+	resp.Body.Close()
+	viewer := login(t, ts.URL, "jane", "jane-pass-123")
+	resp = doReq(t, http.MethodGet, ts.URL+"/api/system/health", viewer, "")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("viewer system health = %d, want 403", resp.StatusCode)
+	}
+
+	resp = doReq(t, http.MethodGet, ts.URL+"/api/system/health", admin, "")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("admin system health = %d, want 200", resp.StatusCode)
+	}
+	var health struct {
+		Ram   map[string]any `json:"ram"`
+		Cpu   map[string]any `json:"cpu"`
+		Disk  map[string]any `json:"disk"`
+		Store map[string]any `json:"store"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&health); err != nil {
+		t.Fatalf("decode health: %v", err)
+	}
+	for _, section := range []string{"ram", "cpu", "disk", "store"} {
+		m := map[string]map[string]any{"ram": health.Ram, "cpu": health.Cpu, "disk": health.Disk, "store": health.Store}[section]
+		if m == nil {
+			t.Fatalf("health section %q missing", section)
+		}
 	}
 }

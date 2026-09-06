@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // ---- Site management endpoints ----
@@ -33,7 +34,8 @@ func (s *Server) handleGetSite(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// PATCH /api/sites/{id} — toggle recording on/off.
+// PATCH /api/sites/{id} — toggle recording on/off and/or update the site URL
+// (the origin the tracker is allowed to record from).
 func (s *Server) handleUpdateSite(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id <= 0 {
@@ -41,12 +43,13 @@ func (s *Server) handleUpdateSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		RecordingEnabled *bool `json:"recording_enabled"`
+		RecordingEnabled *bool   `json:"recording_enabled"`
+		URL              *string `json:"url"`
 	}
 	if err := readJSON(w, r, &body); err != nil {
 		return
 	}
-	if body.RecordingEnabled == nil {
+	if body.RecordingEnabled == nil && body.URL == nil {
 		writeErr(w, http.StatusBadRequest, "nothing to update")
 		return
 	}
@@ -59,11 +62,31 @@ func (s *Server) handleUpdateSite(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "site not found")
 		return
 	}
-	if err := s.store.UpdateSiteRecording(id, *body.RecordingEnabled); err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
+	if body.URL != nil {
+		siteURL, err := normalizeSiteURL(*body.URL)
+		if err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		if err := s.store.UpdateSiteURL(id, siteURL); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true, "recording_enabled": *body.RecordingEnabled})
+	if body.RecordingEnabled != nil {
+		if err := s.store.UpdateSiteRecording(id, *body.RecordingEnabled); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	resp := map[string]any{"ok": true}
+	if body.RecordingEnabled != nil {
+		resp["recording_enabled"] = *body.RecordingEnabled
+	}
+	if body.URL != nil {
+		resp["url"] = strings.TrimSpace(*body.URL)
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // PUT /api/sites/{id}/settings — the feedback widget + survey configuration.

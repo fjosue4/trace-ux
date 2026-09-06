@@ -35,13 +35,16 @@ WS_PASSWORD=change-me ./webshots
 Then:
 
 1. Open `http://your-server:8080` and sign in. Leave the username empty (or type `admin`) and use `WS_PASSWORD` — that's the bootstrap **admin** account.
-2. **Add site** → copy the snippet:
+2. **Add site** → copy the snippet (the card has a **Manual** and a **Google Tag Manager** tab):
 
    ```html
    <script async src="http://your-server:8080/t.js" data-site="YOUR_SITE_KEY"></script>
    ```
 
-3. Paste it into the `<head>` of every page on your site. Sessions start appearing within seconds.
+3. **Manual:** paste it into the `<head>` of every page on your site.
+   **Google Tag Manager:** create a *Custom HTML* tag with the snippet from the GTM tab (it sets `data-site` via `setAttribute`, because GTM's script injection drops the attribute), trigger it on *All Pages* and publish.
+
+   Sessions start appearing within seconds.
 
 ## Install on a VPS (one script)
 

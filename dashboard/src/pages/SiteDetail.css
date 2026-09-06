@@ -98,3 +98,17 @@ a.hub-row:hover { background: var(--surface-2); text-decoration: none; }
   background: var(--surface);
   cursor: pointer;
 }
+
+.site-url { margin-bottom: 1.2rem; }
+.site-url .row { flex-wrap: wrap; gap: 0.7rem; }
+.site-url__info { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.site-url__info strong { display: inline-flex; align-items: center; gap: 0.35rem; }
+
+.hub-config__title {
+  margin: 1.2rem 0 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}

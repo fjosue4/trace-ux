@@ -303,6 +303,11 @@ func (s *Store) UpdateSiteRecording(siteID int64, enabled bool) error {
 	return err
 }
 
+func (s *Store) UpdateSiteURL(siteID int64, url string) error {
+	_, err := s.db.Exec(`UPDATE sites SET url = ? WHERE id = ?`, url, siteID)
+	return err
+}
+
 func (s *Store) UpdateSiteSettings(siteID int64, settings SiteSettings) error {
 	b, err := json.Marshal(settings)
 	if err != nil {

@@ -3,6 +3,7 @@
 export type Site = {
   id: number;
   name: string;
+  url: string;
   site_key: string;
   created_at: number;
   session_count: number;
@@ -47,6 +48,11 @@ export type SiteSettings = {
   survey_id: string;
   survey_title: string;
   survey_type: string; // stars | nps | custom
+  // Recordings (server-enforced):
+  max_concurrent_sessions: number; // 0 = no limit
+  retention_sessions_days: number; // 0 = server default
+  retention_feedback_days: number; // 0 = server default
+  allow_delete_recordings: boolean;
   questions?: SurveyQuestion[];
   appearance?: SiteAppearance;
   feedback_trigger?: FeedbackTrigger;
@@ -56,6 +62,34 @@ export type SiteStats = {
   feedback_count: number;
   avg_rating: number;
   positive_pct: number;
+};
+
+// Server resource report (admin only, /api/system/health). OS-level figures
+// come from /proc and statfs on the VPS; webshots_* fields are the process's
+// own share.
+export type SystemHealth = {
+  ram: {
+    total_bytes: number;
+    used_bytes: number;
+    available_bytes: number;
+    webshots_bytes: number;
+    mem_limit_bytes: number; // GOMEMLIMIT soft cap, 0 = unset
+  };
+  cpu: {
+    cores: number;
+    load1: number;
+    load5: number;
+    load15: number;
+    webshots_pct: number;
+    uptime_seconds: number;
+  };
+  disk: {
+    total_bytes: number;
+    free_bytes: number;
+    webshots_bytes: number;
+    data_dir: string;
+  };
+  store: { sites: number; sessions: number; feedback: number };
 };
 
 export type SiteDetail = {
@@ -198,8 +232,8 @@ export const api = {
   deleteUser: (id: number) => request<{ ok: boolean }>(`/api/users/${id}`, { method: 'DELETE' }),
 
   listSites: () => request<Site[]>('/api/sites'),
-  createSite: (name: string) =>
-    request<Site>('/api/sites', { method: 'POST', body: JSON.stringify({ name }) }),
+  createSite: (name: string, url: string) =>
+    request<Site>('/api/sites', { method: 'POST', body: JSON.stringify({ name, url }) }),
   deleteSite: (id: number) => request<{ ok: boolean }>(`/api/sites/${id}`, { method: 'DELETE' }),
 
   // siteId === null lists sessions across all sites (rows carry site_name).
@@ -232,11 +266,19 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ recording_enabled: enabled }),
     }),
+  updateSiteURL: (id: number, url: string) =>
+    request<{ ok: boolean; url: string }>(`/api/sites/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ url }),
+    }),
   updateSiteSettings: (id: number, settings: SiteSettings) =>
     request<SiteSettings>(`/api/sites/${id}/settings`, {
       method: 'PUT',
       body: JSON.stringify(settings),
     }),
+
+  // Server health (admin only).
+  getSystemHealth: () => request<SystemHealth>('/api/system/health'),
 
   // Feedback & surveys.
   listFeedback: (siteId: number | null, surveyId: string) => {

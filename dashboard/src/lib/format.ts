@@ -37,3 +37,16 @@ export function truncate(s: string, n: number): string {
 export function stripProto(url: string): string {
   return url.replace(/^https?:\/\//, '');
 }
+
+export function fmtBytes(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 MB';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let v = bytes;
+  let u = 0;
+  while (v >= 1024 && u < units.length - 1) {
+    v /= 1024;
+    u++;
+  }
+  const precision = v >= 100 || u === 0 ? 0 : 1;
+  return `${v.toFixed(precision)} ${units[u]}`;
+}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -95,6 +96,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("PATCH /api/users/{id}", s.auth(s.requireAdmin(s.handleUpdateUser)))
 	mux.HandleFunc("DELETE /api/users/{id}", s.auth(s.requireAdmin(s.handleDeleteUser)))
 
+	// Server resource usage (admin only).
+	mux.HandleFunc("GET /api/system/health", s.auth(s.requireAdmin(s.handleSystemHealth)))
+
 	mux.HandleFunc("GET /api/sites", s.auth(s.handleListSites))
 	mux.HandleFunc("POST /api/sites", s.auth(s.handleCreateSite))
 	mux.HandleFunc("GET /api/sites/{id}", s.auth(s.handleGetSite))
@@ -112,7 +116,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/feedback/summary", s.auth(s.handleFeedbackSummary))
 	mux.HandleFunc("DELETE /api/feedback/{id}", s.auth(s.requireAdmin(s.handleDeleteFeedback)))
 
-	// Public tracker-facing endpoints (permissive CORS, like all web analytics).
+	// Public tracker-facing endpoints. Cross-origin access is granted per
+	// site via the URL the admin registers (see cors below).
 	mux.HandleFunc("GET /api/config/{siteKey}", s.handleConfig)
 	mux.HandleFunc("POST /api/ingest/{siteKey}", s.handleIngest)
 
@@ -120,25 +125,94 @@ func (s *Server) routes() http.Handler {
 
 	mux.Handle("/", s.static)
 
-	return cors(mux)
+	return s.cors(mux)
 }
 
-// cors applies permissive CORS to public endpoints only; dashboard API is same-origin.
-func cors(next http.Handler) http.Handler {
+// cors restricts cross-origin tracker traffic to the origins of sites
+// registered in Webshots. Each site declares its URL when an admin adds it;
+// the public endpoints (/api/config/{key}, /api/ingest/{key}) only grant
+// CORS to that origin. The dashboard API is same-origin and needs no grant.
+func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		isPublic := strings.HasPrefix(r.URL.Path, "/api/ingest/") || strings.HasPrefix(r.URL.Path, "/api/config/")
-		if isPublic {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Encoding")
-			w.Header().Set("Access-Control-Max-Age", "86400")
+		if !isPublic {
+			next.ServeHTTP(w, r)
+			return
+		}
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			// Same-origin embedding or a non-browser client: nothing to grant.
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
+			next.ServeHTTP(w, r)
+			return
+		}
+		if !s.originAllowed(r.URL.Path, origin) {
+			if r.Method == http.MethodOptions {
+				writeErr(w, http.StatusForbidden, "origin not registered for this site")
+			} else {
+				// No grant header: the browser blocks reading the response.
+				next.ServeHTTP(w, r)
+			}
+			return
+		}
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Vary", "Origin")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Encoding")
+		w.Header().Set("Access-Control-Max-Age", "86400")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// originAllowed reports whether origin matches the URL registered for the
+// site addressed by the path (/api/config/{siteKey}, /api/ingest/{siteKey}).
+func (s *Server) originAllowed(path, origin string) bool {
+	var key string
+	if after, ok := strings.CutPrefix(path, "/api/config/"); ok {
+		key, _, _ = strings.Cut(after, "/")
+	} else if after, ok := strings.CutPrefix(path, "/api/ingest/"); ok {
+		key, _, _ = strings.Cut(after, "/")
+	}
+	if key == "" {
+		return false
+	}
+	site, err := s.store.GetSiteByKey(key)
+	if err != nil || site.ID == 0 || site.URL == "" {
+		return false
+	}
+	return sameOrigin(site.URL, origin)
+}
+
+// sameOrigin compares scheme and host (with port) of a registered site URL
+// and a request Origin header.
+func sameOrigin(registered, origin string) bool {
+	u, err := url.Parse(registered)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	o, err := url.Parse(origin)
+	if err != nil || o.Host == "" {
+		return false
+	}
+	return strings.EqualFold(u.Scheme, o.Scheme) && strings.EqualFold(u.Host, o.Host)
+}
+
+// normalizeSiteURL validates the URL an admin registers for a site: it must
+// be absolute http(s) so the origin used for CORS is well-defined.
+func normalizeSiteURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return "", errors.New("url must be an absolute http(s) URL, e.g. https://example.com")
+	}
+	return raw, nil
 }
 
 // ---- Auth ----
@@ -467,6 +541,7 @@ func (s *Server) handleListSites(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name string `json:"name"`
+		URL  string `json:"url"`
 	}
 	if err := readJSON(w, r, &body); err != nil {
 		return
@@ -476,7 +551,12 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "name must be 1-100 characters")
 		return
 	}
-	site, err := s.store.CreateSite(name)
+	siteURL, err := normalizeSiteURL(body.URL)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	site, err := s.store.CreateSite(name, siteURL)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return

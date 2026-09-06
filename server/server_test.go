@@ -76,7 +76,7 @@ func TestAuthAndSites(t *testing.T) {
 		t.Fatal("no session cookie set")
 	}
 
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/sites", strings.NewReader(`{"name":"Test"}`))
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/sites", strings.NewReader(`{"name":"Test","url":"https://test.example"}`))
 	req.AddCookie(cookies[0])
 	resp2, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -93,7 +93,7 @@ func TestAuthAndSites(t *testing.T) {
 func TestIngestFlow(t *testing.T) {
 	srv, ts := newTestServer(t)
 
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/sites", strings.NewReader(`{"name":"T"}`))
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/sites", strings.NewReader(`{"name":"T","url":"https://t.example"}`))
 	resp, _ := http.Post(ts.URL+"/api/auth/login", "application/json", strings.NewReader(`{"password":"pw"}`))
 	for _, c := range resp.Cookies() {
 		req.AddCookie(c)
@@ -140,7 +140,7 @@ func TestIngestFlow(t *testing.T) {
 func TestMultiPageSession(t *testing.T) {
 	srv, ts := newTestServer(t)
 
-	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/sites", strings.NewReader(`{"name":"T"}`))
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/sites", strings.NewReader(`{"name":"T","url":"https://t.example"}`))
 	resp, _ := http.Post(ts.URL+"/api/auth/login", "application/json", strings.NewReader(`{"password":"pw"}`))
 	for _, c := range resp.Cookies() {
 		req.AddCookie(c)

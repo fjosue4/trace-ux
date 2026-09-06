@@ -18,6 +18,7 @@ export default function Sites() {
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
   const [justCreated, setJustCreated] = useState<Site | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Site | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -35,15 +36,16 @@ export default function Sites() {
 
   async function create(e: FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || !url.trim()) return;
     try {
-      const site = await api.createSite(name.trim());
+      const site = await api.createSite(name.trim(), url.trim());
       setJustCreated(site);
       setName('');
+      setUrl('');
       setAdding(false);
       load();
-    } catch {
-      setError('Could not create site.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create site.');
     }
   }
 
@@ -84,14 +86,26 @@ export default function Sites() {
 
       {adding && (
         <Card className="add-site">
-          <form onSubmit={create} className="row">
-            <Input
-              placeholder="Site name (e.g. Acme Shop)"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoFocus
-            />
-            <Button type="submit">Create</Button>
+          <form onSubmit={create} className="stack">
+            <div className="row">
+              <Input
+                placeholder="Site name (e.g. Acme Shop)"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoFocus
+              />
+              <Input
+                placeholder="https://your-site.com"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                inputMode="url"
+              />
+              <Button type="submit">Create</Button>
+            </div>
+            <p className="muted small">
+              The URL is the address where you'll paste the snippet — recordings are only accepted
+              from that origin.
+            </p>
           </form>
         </Card>
       )}

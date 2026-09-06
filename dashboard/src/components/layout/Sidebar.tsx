@@ -49,6 +49,12 @@ export default function Sidebar({ user, onLogout }: Props) {
           <Icon name="message" size={15} />
           Feedback
         </NavLink>
+        {user.role === 'admin' && (
+          <NavLink to="/system-health" className={navLink}>
+            <Icon name="bolt" size={15} />
+            System health
+          </NavLink>
+        )}
         <NavLink to="/settings" className={navLink}>
           <Icon name="settings" size={15} />
           Settings

@@ -19,6 +19,7 @@ import Sessions from './pages/Sessions';
 import Replay from './pages/Replay';
 import Feedback from './pages/Feedback';
 import Settings from './pages/Settings';
+import SystemHealth from './pages/SystemHealth';
 
 const router = createBrowserRouter([
   {
@@ -32,6 +33,7 @@ const router = createBrowserRouter([
       { path: 'feedback', element: <Feedback /> },
       { path: 'replay/:sessionId', element: <Replay /> },
       { path: 'settings', element: <Settings /> },
+      { path: 'system-health', element: <SystemHealth /> },
     ],
   },
 ]);
