@@ -73,7 +73,7 @@ pre {
 .icon-btn.is-success { color: var(--success); }
 
 /* ---- layout primitives ---- */
-.page { width: 100%; max-width: 1440px; margin: 0 auto; padding: 2rem clamp(1rem, 2.5vw, 2.5rem) 4rem; }
+.page { width: 100%; margin: 0; padding: 2rem clamp(1rem, 2.5vw, 2.5rem) 4rem; }
 
 .center { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; }
 
