@@ -19,22 +19,10 @@
 .sidebar__brand {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-weight: 800;
-  font-size: 1.1rem;
-  letter-spacing: -0.02em;
   color: var(--ink);
-  padding: 0.2rem 0.6rem 1.1rem;
+  padding: 0.2rem 0.6rem var(--logo-clear-space, 0.85rem);
 }
-.sidebar__brand-accent { color: var(--accent); }
-
-.sidebar__dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 5px var(--accent-soft);
-}
+.sidebar__logo { width: 112px; height: auto; }
 
 .sidebar__nav { display: flex; flex-direction: column; gap: 0.25rem; }
 
@@ -103,6 +91,7 @@
     margin: 8px 8px 0;
   }
   .sidebar__brand { padding: 0; }
+  .sidebar__logo { width: 104px; }
   .sidebar__nav { flex-direction: row; }
   .sidebar__nav > div { flex: none; }
   .sidebar__link { padding: 0.55rem 0.7rem; }

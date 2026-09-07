@@ -6,6 +6,7 @@ import Card from '../components/ui/Card';
 import Button from '../components/ui/Button';
 import Notice from '../components/ui/Notice';
 import { Field, Input } from '../components/ui/fields';
+import Logo from '../components/ui/Logo';
 import './Login.css';
 
 export default function Login() {
@@ -35,7 +36,7 @@ export default function Login() {
     <main className="center">
       <Card className="login-card">
         <div className="login-brand">
-          <span className="login-brand__dot" aria-hidden /> TraceUX
+          <Logo className="login-logo" title="TraceUX" />
         </div>
         <p className="muted login-sub">Self-hosted session replay</p>
         <form onSubmit={submit} className="stack">

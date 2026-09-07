@@ -6,6 +6,7 @@ import { useTheme } from '../../hooks/useTheme';
 import Badge from '../ui/Badge';
 import Button from '../ui/Button';
 import { Icon } from '../ui/Icon';
+import Logo from '../ui/Logo';
 import './Sidebar.css';
 
 type Props = {
@@ -49,9 +50,8 @@ export default function Sidebar({ user, onLogout }: Props) {
   return (
     <motion.aside className="sidebar" initial={{ opacity: 0, x: -18 }} animate={{ opacity: 1, x: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 26 }}>
       <motion.div whileHover={{ x: 2 }} transition={spring}>
-        <NavLink to="/" className="sidebar__brand">
-          <motion.span className="sidebar__dot" aria-hidden animate={{ scale: [1, 1.18, 1] }} transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }} />
-          <span>Trace<span className="sidebar__brand-accent">UX</span></span>
+        <NavLink to="/" className="sidebar__brand" aria-label="TraceUX home">
+          <Logo className="sidebar__logo" />
         </NavLink>
       </motion.div>
 
