@@ -20,7 +20,7 @@
   display: flex;
   align-items: center;
   color: var(--ink);
-  padding: 0.2rem 0.6rem 1.1rem;
+  padding: 0.2rem 0.6rem var(--logo-clear-space, 0.85rem);
 }
 .sidebar__logo { width: 112px; height: auto; }
 
