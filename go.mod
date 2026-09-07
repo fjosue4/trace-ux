@@ -1,4 +1,4 @@
-module webshots
+module trace-ux
 
 go 1.27
 

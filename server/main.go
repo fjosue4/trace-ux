@@ -18,16 +18,16 @@ var version = "dev"
 
 func main() {
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
-	log.SetPrefix("webshots: ")
+	log.SetPrefix("trace-ux: ")
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "--version", "-v":
-			fmt.Printf("webshots %s\n", version)
+					   fmt.Printf("trace-ux %s\n", version)
 			return
 		case "--help", "-h":
-			fmt.Println("webshots — self-hosted session replay server")
-			fmt.Println("  webshots            run the server (configure via WS_* env vars)")
-			fmt.Println("  webshots --version  print the version")
+					   fmt.Println("trace-ux — self-hosted session replay server")
+					   fmt.Println("  trace-ux            run the server (configure via TRACE_UX_* env vars)")
+					   fmt.Println("  trace-ux --version  print the version")
 			return
 		}
 	}
@@ -36,7 +36,7 @@ func main() {
 	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
 		log.Fatalf("cannot create data dir %s: %v", cfg.DataDir, err)
 	}
-	store, err := OpenStore(filepath.Join(cfg.DataDir, "webshots.db"))
+	store, err := OpenStore(filepath.Join(cfg.DataDir, "trace_ux.db"))
 	if err != nil {
 		log.Fatalf("cannot open database: %v", err)
 	}
@@ -47,13 +47,13 @@ func main() {
 		log.Fatalf("cannot load auth secret: %v", err)
 	}
 
-	// Bootstrap the admin account from WS_PASSWORD. Once users exist the DB
-	// owns all passwords; WS_RESET_ADMIN=1 re-points admin at WS_PASSWORD.
+	// Bootstrap the admin account from TRACE_UX_PASSWORD. Once users exist the DB
+	// owns all passwords; TRACE_UX_RESET_ADMIN=1 re-points admin at TRACE_UX_PASSWORD.
 	if cfg.ResetAdmin {
 		if err := store.ResetAdminPassword(cfg.Password); err != nil {
 			log.Fatalf("cannot reset admin password: %v", err)
 		}
-		log.Println("admin password reset from WS_PASSWORD; previous logins revoked")
+			   log.Println("admin password reset from TRACE_UX_PASSWORD; previous logins revoked")
 	} else if err := store.EnsureAdmin(cfg.Password); err != nil {
 		log.Fatalf("cannot ensure admin user: %v", err)
 	}

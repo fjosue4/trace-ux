@@ -6,7 +6,7 @@ import (
 )
 
 // Visitor feedback and survey responses, collected in-app on tracked sites
-// via the tracker widget or window.Webshots.feedback(). Surveys are fully
+// via the tracker widget or window.TraceUX.feedback(). Surveys are fully
 // custom: the widget collects any list of questions, stored as JSON answers.
 
 type FeedbackAnswer struct {

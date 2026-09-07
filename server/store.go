@@ -113,7 +113,7 @@ var migrations = []string{
 	CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry  ON auth_sessions(expires_at);
 	CREATE INDEX IF NOT EXISTS idx_pages_url             ON pages(url);
 	`,
-	// v3: visitor identity + tracked custom events ("ws-track-id" clicks).
+	// v3: visitor identity + tracked custom events ("trux-track-id" clicks).
 	`
 	ALTER TABLE sessions ADD COLUMN user_id   TEXT NOT NULL DEFAULT '';
 	ALTER TABLE sessions ADD COLUMN client_id TEXT NOT NULL DEFAULT '';
@@ -506,7 +506,7 @@ func (s *Store) GetSessionChunkSeqs(sessionID string) ([]int, error) {
 	return seqs, rows.Err()
 }
 
-// ---- Tracked custom events (ws-track-id clicks, window.Webshots.track) ----
+// ---- Tracked custom events (trux-track-id clicks, window.TraceUX.track) ----
 
 type CustomEvent struct {
 	TS      int64  `json:"ts"` // unix millis, visitor's clock

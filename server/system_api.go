@@ -12,15 +12,15 @@ import (
 
 // ---- System health endpoint (admin only) ----
 //
-// Webshots is frugal, but on a small VPS it shares the box with other
+// TraceUX is frugal, but on a small VPS it shares the box with other
 // services. This endpoint gives the dashboard a live view of RAM, CPU and
-// disk — and, for each, the share that Webshots itself accounts for.
+// disk — and, for each, the share that TraceUX itself accounts for.
 
 type ramHealth struct {
 	TotalBytes     uint64 `json:"total_bytes"`
 	UsedBytes      uint64 `json:"used_bytes"`
 	AvailableBytes uint64 `json:"available_bytes"`
-	WebshotsBytes  uint64 `json:"webshots_bytes"` // process RSS
+	TraceUXBytes   uint64 `json:"trace_ux_bytes"` // process RSS
 	MemLimitBytes  int64  `json:"mem_limit_bytes"`
 }
 
@@ -29,14 +29,14 @@ type cpuHealth struct {
 	Load1         float64 `json:"load1"`
 	Load5         float64 `json:"load5"`
 	Load15        float64 `json:"load15"`
-	WebshotsPct   float64 `json:"webshots_pct"`
+	TraceUXPct    float64 `json:"trace_ux_pct"`
 	UptimeSeconds float64 `json:"uptime_seconds"`
 }
 
 type diskHealth struct {
 	TotalBytes    uint64 `json:"total_bytes"`
 	FreeBytes     uint64 `json:"free_bytes"`
-	WebshotsBytes uint64 `json:"webshots_bytes"` // size of the data dir (SQLite + keys)
+	TraceUXBytes  uint64 `json:"trace_ux_bytes"` // size of the data dir (SQLite + keys)
 	DataDir       string `json:"data_dir"`
 }
 
@@ -48,7 +48,7 @@ type storeCounts struct {
 
 var procStart = time.Now()
 
-// Webshots CPU% is measured between consecutive polls so the dashboard's
+// TraceUX CPU% is measured between consecutive polls so the dashboard's
 // periodic refresh shows near-instantaneous usage; the first poll reports
 // the average since process start.
 var lastCPUSample struct {
@@ -57,7 +57,7 @@ var lastCPUSample struct {
 	cpu float64
 }
 
-func webshotsCPUPercent(cpuSeconds float64) float64 {
+func traceUXCPUPercent(cpuSeconds float64) float64 {
 	now := time.Now()
 	lastCPUSample.Lock()
 	defer lastCPUSample.Unlock()
@@ -105,7 +105,7 @@ func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
 	ram := ramHealth{
 		TotalBytes:     total,
 		AvailableBytes: available,
-		WebshotsBytes:  rss,
+			   TraceUXBytes:   rss,
 	}
 	if total >= available {
 		ram.UsedBytes = total - available
@@ -116,14 +116,14 @@ func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
 
 	cpu := cpuHealth{
 		Cores:         runtime.NumCPU(),
-		WebshotsPct:   webshotsCPUPercent(cpuSecs),
+			   TraceUXPct:    traceUXCPUPercent(cpuSecs),
 		UptimeSeconds: time.Since(procStart).Seconds(),
 	}
 	cpu.Load1, cpu.Load5, cpu.Load15 = readLoadAvg()
 
 	disk := diskHealth{
-		WebshotsBytes: uint64(dirSize(s.cfg.DataDir)),
-		DataDir:       s.cfg.DataDir,
+			   TraceUXBytes: uint64(dirSize(s.cfg.DataDir)),
+		DataDir:      s.cfg.DataDir,
 	}
 	disk.TotalBytes, disk.FreeBytes = diskUsage(s.cfg.DataDir)
 

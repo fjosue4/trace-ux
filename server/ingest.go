@@ -334,7 +334,7 @@ func (s *Store) SaveHello(siteID int64, sessionID, ua, ipHash string, m *ingestH
 	// attribution (referrer, UTM, initial URL); later page loads in the same
 	// session send hello again and must not overwrite it. Visitor identity is
 	// the opposite: a non-empty id always wins, so a mid-visit
-	// window.Webshots.identify() sticks for the rest of the session.
+	// window.TraceUX.identify() sticks for the rest of the session.
 	browser, osName, device := parseUA(ua)
 	_, err := s.db.Exec(`UPDATE sessions SET
 		initial_url = COALESCE(NULLIF(initial_url, ''), ?),

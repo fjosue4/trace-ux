@@ -33,7 +33,7 @@ export default function Sidebar({ user, onLogout }: Props) {
   return (
     <aside className="sidebar">
       <NavLink to="/" className="sidebar__brand">
-        <span className="sidebar__dot" aria-hidden /> Webshots
+        <span className="sidebar__dot" aria-hidden /> TraceUX
       </NavLink>
 
       <nav className="sidebar__nav">

@@ -35,7 +35,7 @@ export default function Login() {
     <main className="center">
       <Card className="login-card">
         <div className="login-brand">
-          <span className="login-brand__dot" aria-hidden /> Webshots
+          <span className="login-brand__dot" aria-hidden /> TraceUX
         </div>
         <p className="muted login-sub">Self-hosted session replay</p>
         <form onSubmit={submit} className="stack">

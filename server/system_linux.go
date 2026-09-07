@@ -69,7 +69,7 @@ func diskUsage(path string) (total, free uint64) {
 	return total, free
 }
 
-// procRuntime returns the webshots process RSS in bytes and the CPU seconds
+// procRuntime returns the trace-ux process RSS in bytes and the CPU seconds
 // it has consumed since start (from /proc/self/stat).
 func procRuntime() (rssBytes uint64, cpuSeconds float64) {
 	b, err := os.ReadFile("/proc/self/stat")

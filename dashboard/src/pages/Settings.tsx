@@ -68,7 +68,7 @@ export default function Settings() {
 
       <Card>
         <h3>Appearance</h3>
-        <p className="muted small">Choose how Webshots looks on this device.</p>
+        <p className="muted small">Choose how TraceUX looks on this device.</p>
         <div className="seg" role="group" aria-label="Theme">
           {(['light', 'dark'] as Theme[]).map((t) => (
             <button

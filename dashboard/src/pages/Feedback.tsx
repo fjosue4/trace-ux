@@ -30,7 +30,7 @@ function Stars({ rating }: { rating: number }) {
 }
 
 // In-app feedback & survey responses collected by the tracker widget and
-// window.Webshots.feedback(). Rows link straight to the session replay.
+// window.TraceUX.feedback(). Rows link straight to the session replay.
 export default function Feedback() {
   const { user } = useUser();
   const [sites, setSites] = useState<Site[] | null>(null);
@@ -144,7 +144,7 @@ export default function Feedback() {
       ) : items.length === 0 ? (
         <EmptyState
           title="No feedback yet"
-          description='Enable the in-app widget by adding data-feedback="1" to the snippet, or call window.Webshots.feedback({ rating: 5 }).'
+          description='Enable the in-app widget by adding data-feedback="1" to the snippet, or call window.TraceUX.feedback({ rating: 5 }).'
         />
       ) : (
         <Table

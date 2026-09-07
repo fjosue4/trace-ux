@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const authCookie = "ws_auth"
+const authCookie = "trux_auth"
 
 type Server struct {
 	store  *Store
@@ -28,29 +28,29 @@ type Server struct {
 type Config struct {
 	Addr          string
 	DataDir       string
-	Password      string // bootstrap admin password (WS_PASSWORD)
-	ResetAdmin    bool   // WS_RESET_ADMIN=1: re-point admin at WS_PASSWORD
+	Password      string // bootstrap admin password (TRACE_UX_PASSWORD)
+	ResetAdmin    bool   // TRACE_UX_RESET_ADMIN=1: re-point admin at TRACE_UX_PASSWORD
 	RetentionDays int
 	DevStaticDir  string // serve dashboard/tracker from disk instead of embed (dev)
 }
 
 func loadConfig() Config {
 	cfg := Config{
-		Addr:          envOr("WS_ADDR", ":8080"),
-		DataDir:       envOr("WS_DATA", "./data"),
-		Password:      os.Getenv("WS_PASSWORD"),
-		ResetAdmin:    os.Getenv("WS_RESET_ADMIN") == "1",
+			   Addr:          envOr("TRACE_UX_ADDR", ":8080"),
+			   DataDir:       envOr("TRACE_UX_DATA", "./data"),
+			   Password:      os.Getenv("TRACE_UX_PASSWORD"),
+			   ResetAdmin:    os.Getenv("TRACE_UX_RESET_ADMIN") == "1",
 		RetentionDays: 90,
 	}
-	if v := os.Getenv("WS_RETENTION_DAYS"); v != "" {
+	if v := os.Getenv("TRACE_UX_RETENTION_DAYS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.RetentionDays = n
 		}
 	}
-	cfg.DevStaticDir = os.Getenv("WS_DEV_STATIC")
+	cfg.DevStaticDir = os.Getenv("TRACE_UX_DEV_STATIC")
 	if cfg.Password == "" {
-		log.Println("WARNING: WS_PASSWORD not set, using default password 'webshots'. Set WS_PASSWORD in production.")
-		cfg.Password = "webshots"
+			   log.Println("WARNING: TRACE_UX_PASSWORD not set, using default password 'trace-ux'. Set TRACE_UX_PASSWORD in production.")
+			   cfg.Password = "trace-ux"
 	}
 	return cfg
 }
@@ -130,7 +130,7 @@ func (s *Server) routes() http.Handler {
 }
 
 // cors restricts cross-origin tracker traffic to the origins of sites
-// registered in Webshots. Each site declares its URL when an admin adds it;
+// registered in TraceUX. Each site declares its URL when an admin adds it;
 // the public endpoints (/api/config/{key}, /api/ingest/{key}) only grant
 // CORS to that origin. The dashboard API is same-origin and needs no grant.
 func (s *Server) cors(next http.Handler) http.Handler {
@@ -269,7 +269,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	if username == "" {
 		username = "admin" // legacy single-password logins
 	}
-	// First boot after upgrade: seed the admin account from WS_PASSWORD.
+	// First boot after upgrade: seed the admin account from TRACE_UX_PASSWORD.
 	if err := s.store.EnsureAdmin(s.cfg.Password); err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return

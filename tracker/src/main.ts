@@ -1,11 +1,11 @@
 /**
- * Webshots tracker: records DOM event streams with rrweb and ships them in
- * compressed batches to a Webshots server. Loaded as:
+ * TraceUX tracker: records DOM event streams with rrweb and ships them in
+ * compressed batches to a TraceUX server. Loaded as:
  *   <script async src="https://your-server/t.js" data-site="SITE_KEY"></script>
  *
- * Privacy: all form inputs are masked, elements with class `ws-block` are
- * removed from the recording, `ws-mask` masks their text, and Do Not Track /
- * localStorage.ws_optout=1 disables tracking entirely.
+ * Privacy: all form inputs are masked, elements with class `trux-block` are
+ * removed from the recording, `trux-mask` masks their text, and Do Not Track /
+ * localStorage.trux_optout=1 disables tracking entirely.
  */
 import { record } from '@rrweb/record';
 import type { eventWithTime } from '@rrweb/types';
@@ -41,7 +41,7 @@ type FeedbackCfg = {
   trigger?: { mode?: string; pages?: string[]; actions?: string[] };
 };
 
-type WsConfig = {
+type TruxConfig = {
   sample_rate: number;
   checkout_interval_ms: number;
   mask_inputs: boolean;
@@ -51,30 +51,30 @@ type WsConfig = {
   feedback?: FeedbackCfg;
 };
 
-// Public API on window.Webshots for the host page.
-interface WebshotsFeedbackInput {
+// Public API on window.TraceUX for the host page.
+interface TraceUXFeedbackInput {
   rating?: number; // 1-5 (stars) or 0-10 (NPS); derived from answers when omitted
   comment?: string;
   surveyId?: string;
   answers?: { id: string; label?: string; value: string }[];
 }
 
-interface WebshotsApi {
+interface TraceUXApi {
   /** Attach/replace visitor identity mid-session (e.g. right after login). */
   identify: (fields: { userId?: string; clientId?: string; remoteId?: string }) => void;
   /** Emit a named custom event, visible as seekable activity in the replay. */
   track: (name: string, trackId?: string) => void;
   /** Submit in-app feedback/survey response, linked to the current session. */
-  feedback: (input: WebshotsFeedbackInput) => void;
+  feedback: (input: TraceUXFeedbackInput) => void;
 }
 
 declare global {
   interface Window {
-    Webshots?: WebshotsApi;
+    TraceUX?: TraceUXApi;
   }
 }
 
-const DEFAULTS: WsConfig = {
+const DEFAULTS: TruxConfig = {
   sample_rate: 1,
   checkout_interval_ms: 30_000,
   mask_inputs: true,
@@ -101,7 +101,7 @@ interface StorageLike {
   if (!siteKey) return;
 
   try {
-    if (navigator.doNotTrack === '1' || localStorage.getItem('ws_optout') === '1') return;
+    if (navigator.doNotTrack === '1' || localStorage.getItem('trux_optout') === '1') return;
   } catch {
     /* storage blocked: proceed anyway; tracking still honors the server config */
   }
@@ -110,7 +110,7 @@ interface StorageLike {
   const ingestURL = `${origin}/api/ingest/${encodeURIComponent(siteKey)}`;
 
   // Visitor identity: snippet attributes (data-user-id etc.) at init, later
-  // replaced/augmented via window.Webshots.identify() (e.g. after login).
+  // replaced/augmented via window.TraceUX.identify() (e.g. after login).
   const identity = {
     user_id: script.dataset.userId || '',
     client_id: script.dataset.clientId || '',
@@ -124,13 +124,13 @@ interface StorageLike {
   // pageIdx and activeMs live in sessionStorage so a multi-page visit is one
   // continuous session even though every page load restarts the script.
   const store = sessionStorageSafe();
-  let sessionId = store.get('ws_sid');
-  let seq = Number(store.get('ws_seq') || '0');
-  let pageIdx = Number(store.get('ws_page') || '-1');
-  let activeMs = Number(store.get('ws_active') || '0');
+  let sessionId = store.get('trux_sid');
+  let seq = Number(store.get('trux_seq') || '0');
+  let pageIdx = Number(store.get('trux_page') || '-1');
+  let activeMs = Number(store.get('trux_active') || '0');
   let startedAt = Date.now();
   const stale =
-    !sessionId || startedAt - Number(store.get('ws_sid_ts') || '0') > SESSION_TTL_MS;
+    !sessionId || startedAt - Number(store.get('trux_sid_ts') || '0') > SESSION_TTL_MS;
   // A session that already hit the 2h cap must not swallow this page load:
   // start a fresh one right away instead of recording into the old session
   // until the first tick notices.
@@ -176,7 +176,7 @@ interface StorageLike {
   function flush(useBeacon = false) {
     if (buffer.length === 0) return;
     const batch = { type: 'events', session_id: sessionId, seq: seq++, events: buffer };
-    store.set('ws_seq', String(seq));
+    store.set('trux_seq', String(seq));
     buffer = [];
     send(batch, useBeacon);
   }
@@ -210,7 +210,7 @@ interface StorageLike {
     );
   }
 
-  function sendFeedback(input: WebshotsFeedbackInput) {
+  function sendFeedback(input: TraceUXFeedbackInput) {
     const rating = Math.round(Number(input && input.rating)) || 0;
     if (rating < 0 || rating > 10) return;
     const answers = (input.answers || []).slice(0, 20).map((a) => ({
@@ -234,7 +234,7 @@ interface StorageLike {
   // ---- page tracking (works for MPAs and SPA route changes) ----
   function trackPage() {
     pageIdx++;
-    store.set('ws_page', String(pageIdx));
+    store.set('trux_page', String(pageIdx));
     send(
       {
         type: 'page',
@@ -268,7 +268,7 @@ interface StorageLike {
 
   // ---- recording ----
   function startRecording() {
-    // Recording is toggled per site from the Webshots dashboard; the feedback
+    // Recording is toggled per site from the TraceUX dashboard; the feedback
     // channel and lightweight batches keep working while it is off.
     if (cfg.recording_enabled === false) return;
     try {
@@ -281,12 +281,12 @@ interface StorageLike {
           },
           checkoutEveryNms: cfg.checkout_interval_ms,
           maskAllInputs: cfg.mask_inputs,
-          // Elements carrying ws-mask as a class OR a bare attribute have their
+          // Elements carrying trux-mask as a class OR a bare attribute have their
           // text masked, wherever they appear in the page.
-          maskTextClass: 'ws-mask',
-          maskTextSelector: '.ws-mask,[ws-mask],[data-ws-mask]',
-          blockClass: 'ws-block',
-          ignoreClass: 'ws-ignore',
+          maskTextClass: 'trux-mask',
+          maskTextSelector: '.trux-mask,[trux-mask],[data-trux-mask]',
+          blockClass: 'trux-block',
+          ignoreClass: 'trux-ignore',
         }) ?? undefined;
     } catch {
       /* recording unsupported in this browser */
@@ -319,7 +319,7 @@ interface StorageLike {
   }
 
   // ---- host-page API ----
-  window.Webshots = {
+  window.TraceUX = {
     identify(fields) {
       if (fields.userId) identity.user_id = fields.userId;
       if (fields.clientId) identity.client_id = fields.clientId;

@@ -39,7 +39,7 @@ export type SiteAppearance = {
 export type FeedbackTrigger = {
   mode: 'always' | 'page' | 'action';
   pages?: string[]; // URL patterns with * wildcards
-  actions?: string[]; // ws-track-id names / window.Webshots.track names
+  actions?: string[]; // ws-track-id names / window.TraceUX.track names
 };
 
 export type SiteSettings = {
@@ -65,14 +65,14 @@ export type SiteStats = {
 };
 
 // Server resource report (admin only, /api/system/health). OS-level figures
-// come from /proc and statfs on the VPS; webshots_* fields are the process's
+  // come from /proc and statfs on the VPS; trace_ux_* fields are the process's
 // own share.
 export type SystemHealth = {
   ram: {
     total_bytes: number;
     used_bytes: number;
     available_bytes: number;
-    webshots_bytes: number;
+    trace_ux_bytes: number;
     mem_limit_bytes: number; // GOMEMLIMIT soft cap, 0 = unset
   };
   cpu: {
@@ -80,13 +80,13 @@ export type SystemHealth = {
     load1: number;
     load5: number;
     load15: number;
-    webshots_pct: number;
+    trace_ux_pct: number;
     uptime_seconds: number;
   };
   disk: {
     total_bytes: number;
     free_bytes: number;
-    webshots_bytes: number;
+    trace_ux_bytes: number;
     data_dir: string;
   };
   store: { sites: number; sessions: number; feedback: number };
@@ -127,7 +127,7 @@ export type Session = {
   remote_id?: string;
 };
 
-// A tracked activity moment (ws-track-id click or window.Webshots.track()).
+// A tracked activity moment (ws-track-id click or window.TraceUX.track()).
 export type CustomEvent = {
   ts: number; // unix millis, visitor's clock
   name: string;

@@ -15,7 +15,7 @@ import (
 )
 
 // Users, roles and revocable dashboard login sessions. The bootstrap "admin"
-// account is created from WS_PASSWORD; the admin role is the only one allowed
+// account is created from TRACE_UX_PASSWORD; the admin role is the only one allowed
 // to manage users.
 
 // ---- Password hashing: PBKDF2-HMAC-SHA256 (stdlib only, no CGO deps) ----
@@ -136,8 +136,8 @@ func scanUser(row interface{ Scan(...any) error }) (*userRecord, error) {
 }
 
 // EnsureAdmin creates the bootstrap admin account if the users table is empty.
-// WS_PASSWORD is its password; once users exist, passwords live only in the DB
-// and changing the env var has no effect (see WS_RESET_ADMIN in main.go).
+// TRACE_UX_PASSWORD is its password; once users exist, passwords live only in the DB
+// and changing the env var has no effect (see TRACE_UX_RESET_ADMIN in main.go).
 func (s *Store) EnsureAdmin(password string) error {
 	var n int
 	if err := s.db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&n); err != nil {
@@ -156,7 +156,7 @@ func (s *Store) EnsureAdmin(password string) error {
 }
 
 // ResetAdminPassword re-points the admin account at the env password. Used by
-// WS_RESET_ADMIN=1 as a lockout escape hatch.
+// TRACE_UX_RESET_ADMIN=1 as a lockout escape hatch.
 func (s *Store) ResetAdminPassword(password string) error {
 	hash, err := hashPassword(password)
 	if err != nil {
