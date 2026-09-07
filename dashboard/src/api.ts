@@ -105,6 +105,7 @@ export type Session = {
   site_name?: string; // present when listing across all sites
   started_at: number;
   last_seen: number;
+  active?: boolean; // in-progress (seen in the last 30 minutes)
   duration_ms: number;
   page_count: number;
   event_count: number;
@@ -253,6 +254,15 @@ export const api = {
     request<{ session: Session; pages: SessionPage[]; custom_events: CustomEvent[] }>(
       `/api/sessions/${id}`,
     ),
+
+  // In-progress vs completed counts (optional per-site scope).
+  sessionStats: (siteId: number | null) =>
+    request<{ active: number; completed: number }>(
+      `/api/sessions/stats${siteId ? `?site_id=${siteId}` : ''}`,
+    ),
+
+  deleteSession: (id: string) =>
+    request<{ ok: boolean }>(`/api/sessions/${id}`, { method: 'DELETE' }),
 
   getEvents: (id: string, afterSeq: number) =>
     request<{ next_seq: number; has_more: boolean; events: unknown[] }>(

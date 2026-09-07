@@ -1,6 +1,7 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { Session } from '../../api';
 import Card from '../ui/Card';
+import { Icon } from '../ui/Icon';
 import './replay.css';
 
 // Attribute/device facts about the session being replayed, as a label/value grid.
@@ -12,11 +13,21 @@ export default function MetaCard({ session }: { session: Session }) {
     <Card className="replay-meta">
       <div className="meta-grid">
         <MetaBlock label="Entry" wide>
-          <a href={s.initial_url} target="_blank" rel="noreferrer">
-            {s.initial_url}
-          </a>
+          <span className="meta-value-row">
+            <a className="meta-clamp2" href={s.initial_url} target="_blank" rel="noreferrer">
+              {s.initial_url}
+            </a>
+            <CopyButton text={s.initial_url} />
+          </span>
         </MetaBlock>
-        <MetaBlock label="Referrer">{s.referrer || 'direct'}</MetaBlock>
+        <MetaBlock label="Referrer" wide>
+          <span className="meta-value-row">
+            <span className="meta-oneline" title={s.referrer || 'direct'}>
+              {s.referrer || 'direct'}
+            </span>
+            {s.referrer && <CopyButton text={s.referrer} />}
+          </span>
+        </MetaBlock>
         <MetaBlock label="Device">{s.device}</MetaBlock>
         <MetaBlock label="Browser">{s.browser}</MetaBlock>
         <MetaBlock label="OS">{s.os}</MetaBlock>
@@ -32,6 +43,29 @@ export default function MetaCard({ session }: { session: Session }) {
         {s.remote_id && <MetaBlock label="Remote">{s.remote_id}</MetaBlock>}
       </div>
     </Card>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className={`icon-btn meta-copy${copied ? ' is-success' : ''}`}
+      aria-label={copied ? 'Copied' : 'Copy value'}
+      title={copied ? 'Copied' : 'Copy'}
+      onClick={() => {
+        navigator.clipboard
+          .writeText(text)
+          .then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          })
+          .catch(() => {});
+      }}
+    >
+      <Icon name={copied ? 'check' : 'copy'} size={12} />
+    </button>
   );
 }
 

@@ -99,7 +99,7 @@ export default function UserManager() {
       {users === null ? (
         <Notice tone="info">Loading users…</Notice>
       ) : (
-        <Table headers={['User', 'Role', 'Created', '']}>
+        <Table fixed widths={['34%', '26%', '26%', '14%']} headers={['User', 'Role', 'Created', '']}>
           {users.map((u) => (
             <UserRow key={u.id} user={u} onEvent={onEvent} onChanged={load} />
           ))}

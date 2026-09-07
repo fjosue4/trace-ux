@@ -272,6 +272,7 @@ type Session struct {
 	SiteName    string `json:"site_name,omitempty"`
 	StartedAt   int64  `json:"started_at"`
 	LastSeen    int64  `json:"last_seen"`
+	Active      bool   `json:"active"` // in-progress: seen in the last 30 minutes
 	DurationMs  int64  `json:"duration_ms"`
 	PageCount   int    `json:"page_count"`
 	EventCount  int    `json:"event_count"`
@@ -313,40 +314,51 @@ func (p SessionPage) Dwell() int64 {
 	return p.LeftAt - p.EnteredAt
 }
 
+// A session counts as in-progress while it was seen within the same 30-minute
+// window the concurrency gate uses; anything older is completed.
+const sessionActiveExpr = `CASE WHEN last_seen > CAST(strftime('%s','now') AS INTEGER) - 1800 THEN 1 ELSE 0 END`
+const sessionActiveExprQualified = `CASE WHEN s.last_seen > CAST(strftime('%s','now') AS INTEGER) - 1800 THEN 1 ELSE 0 END`
+
 const sessionCols = `id, site_id, started_at, last_seen, duration_ms, page_count, event_count,
 	initial_url, exit_url, referrer, utm_source, utm_medium, utm_campaign,
 	browser, os, device, viewport_w, viewport_h, screen_w, screen_h,
-	ip_hash, country, user_agent, user_id, client_id, remote_id`
+	ip_hash, country, user_agent, user_id, client_id, remote_id,
+	` + sessionActiveExpr
 
 // sessionColsQualified is sessionCols for queries that join other tables
 // sharing column names (sites also has created_at).
 const sessionColsQualified = `s.id, s.site_id, s.started_at, s.last_seen, s.duration_ms, s.page_count, s.event_count,
 	s.initial_url, s.exit_url, s.referrer, s.utm_source, s.utm_medium, s.utm_campaign,
 	s.browser, s.os, s.device, s.viewport_w, s.viewport_h, s.screen_w, s.screen_h,
-	s.ip_hash, s.country, s.user_agent, s.user_id, s.client_id, s.remote_id`
+	s.ip_hash, s.country, s.user_agent, s.user_id, s.client_id, s.remote_id,
+	` + sessionActiveExprQualified
 
 func scanSession(row interface{ Scan(...any) error }) (*Session, error) {
 	var s Session
+	var active int
 	err := row.Scan(&s.ID, &s.SiteID, &s.StartedAt, &s.LastSeen, &s.DurationMs, &s.PageCount, &s.EventCount,
 		&s.InitialURL, &s.ExitURL, &s.Referrer, &s.UTMSource, &s.UTMMedium, &s.UTMCampaign,
 		&s.Browser, &s.OS, &s.Device, &s.ViewportW, &s.ViewportH, &s.ScreenW, &s.ScreenH,
-		&s.IPHash, &s.Country, &s.UserAgent, &s.UserID, &s.ClientID, &s.RemoteID)
+		&s.IPHash, &s.Country, &s.UserAgent, &s.UserID, &s.ClientID, &s.RemoteID, &active)
 	if err != nil {
 		return nil, err
 	}
+	s.Active = active != 0
 	return &s, nil
 }
 
 // scanSessionNamed scans sessionCols plus the joined sites.name.
 func scanSessionNamed(row interface{ Scan(...any) error }) (*Session, error) {
 	var s Session
+	var active int
 	err := row.Scan(&s.ID, &s.SiteID, &s.StartedAt, &s.LastSeen, &s.DurationMs, &s.PageCount, &s.EventCount,
 		&s.InitialURL, &s.ExitURL, &s.Referrer, &s.UTMSource, &s.UTMMedium, &s.UTMCampaign,
 		&s.Browser, &s.OS, &s.Device, &s.ViewportW, &s.ViewportH, &s.ScreenW, &s.ScreenH,
-		&s.IPHash, &s.Country, &s.UserAgent, &s.UserID, &s.ClientID, &s.RemoteID, &s.SiteName)
+		&s.IPHash, &s.Country, &s.UserAgent, &s.UserID, &s.ClientID, &s.RemoteID, &active, &s.SiteName)
 	if err != nil {
 		return nil, err
 	}
+	s.Active = active != 0
 	return &s, nil
 }
 

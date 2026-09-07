@@ -785,3 +785,53 @@ func TestSystemHealth(t *testing.T) {
 		}
 	}
 }
+
+func TestSessionStatsAndActiveFlag(t *testing.T) {
+	srv, ts := newTestServer(t)
+	admin := login(t, ts.URL, "admin", "pw")
+
+	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin,
+		`{"name":"Stats","url":"https://stats.example"}`)
+	var site Site
+	json.NewDecoder(resp.Body).Decode(&site)
+	resp.Body.Close()
+
+	srv.store.SaveHello(site.ID, "sa", "UA", "h", &ingestHello{URL: "https://stats.example/"})
+	srv.store.SaveHello(site.ID, "sb", "UA", "h", &ingestHello{URL: "https://stats.example/x"})
+	// Age one session past the 30-minute activity window.
+	if _, err := srv.store.db.Exec(`UPDATE sessions SET last_seen = last_seen - 4000 WHERE id = 'sb'`); err != nil {
+		t.Fatal(err)
+	}
+
+	getStats := func(q string) map[string]int64 {
+		resp := doReq(t, http.MethodGet, ts.URL+"/api/sessions/stats"+q, admin, "")
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("stats = %d, want 200", resp.StatusCode)
+		}
+		var out map[string]int64
+		json.NewDecoder(resp.Body).Decode(&out)
+		return out
+	}
+	all := getStats("")
+	if all["active"] != 1 || all["completed"] != 1 {
+		t.Fatalf("stats = %v, want active 1 completed 1", all)
+	}
+	scoped := getStats("?site_id=" + fmt.Sprint(site.ID))
+	if scoped["active"] != 1 || scoped["completed"] != 1 {
+		t.Fatalf("site-scoped stats = %v, want active 1 completed 1", scoped)
+	}
+
+	// The list marks the fresh session in-progress and the aged one completed.
+	resp = doReq(t, http.MethodGet, ts.URL+"/api/sessions?site_id="+fmt.Sprint(site.ID), admin, "")
+	var sessions []Session
+	json.NewDecoder(resp.Body).Decode(&sessions)
+	resp.Body.Close()
+	activeByID := map[string]bool{}
+	for _, s := range sessions {
+		activeByID[s.ID] = s.Active
+	}
+	if !activeByID["sa"] || activeByID["sb"] {
+		t.Fatalf("active flags wrong: %v", activeByID)
+	}
+}

@@ -7,6 +7,24 @@
 }
 
 .table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+
+/* fixed layout: columns obey widths, cells clip with an ellipsis instead of
+   pushing the table wider than the page */
+.table--fixed { table-layout: fixed; }
+.table--fixed th,
+.table--fixed td { padding-left: 0.8rem; padding-right: 0.8rem; }
+.table--fixed td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* trailing action cells (play/delete) need room for the button inside the
+   fixed column — slim the padding instead of widening the column */
+.table--fixed th:last-child,
+.table--fixed td:last-child {
+  padding-left: 0.3rem;
+  padding-right: 0.6rem;
+}
 .table th {
   text-align: left;
   padding: 0.85rem 1.1rem;

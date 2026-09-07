@@ -107,6 +107,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/sites/{id}", s.auth(s.handleDeleteSite))
 
 	mux.HandleFunc("GET /api/sessions", s.auth(s.handleListSessions))
+	mux.HandleFunc("GET /api/sessions/stats", s.auth(s.handleSessionStats))
 	mux.HandleFunc("GET /api/sessions/{id}", s.auth(s.handleGetSession))
 	mux.HandleFunc("GET /api/sessions/{id}/events", s.auth(s.handleSessionEvents))
 	mux.HandleFunc("DELETE /api/sessions/{id}", s.auth(s.requireAdmin(s.handleDeleteSession)))

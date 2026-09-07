@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import rrwebPlayer from 'rrweb-player';
 import type { eventWithTime } from '@rrweb/types';
 import 'rrweb-player/dist/style.css';
 import { api, Session, SessionPage } from '../api';
+import { useUser } from '../App';
 import PageHeader from '../components/ui/PageHeader';
 import Notice from '../components/ui/Notice';
 import Loading from '../components/ui/Loading';
+import Button from '../components/ui/Button';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 import MetaCard from '../components/replay/MetaCard';
 import PagesPanel from '../components/replay/PagesPanel';
 import { Icon } from '../components/ui/Icon';
@@ -42,6 +45,9 @@ function ratioFor(s?: Session): number {
 
 export default function Replay() {
   const { sessionId } = useParams();
+  const navigate = useNavigate();
+  const { user } = useUser();
+  const isAdmin = user.role === 'admin';
   const [params] = useSearchParams();
   const autoplay = params.get('autoplay') === '1';
   const [meta, setMeta] = useState<Meta | null>(null);
@@ -50,6 +56,9 @@ export default function Replay() {
   const [progress, setProgress] = useState('Loading events…');
   const [started, setStarted] = useState(autoplay);
   const [loaded, setLoaded] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const [hostWidth, setHostWidth] = useState(0);
   const playerHost = useRef<HTMLDivElement>(null);
   const player = useRef<PlayerLike | null>(null);
@@ -165,6 +174,20 @@ export default function Replay() {
     setStarted(true);
   }
 
+  async function removeSession() {
+    if (!sessionId) return;
+    setDeleting(true);
+    try {
+      await api.deleteSession(sessionId);
+      navigate('/sessions');
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : 'Could not delete the recording.');
+    } finally {
+      setDeleting(false);
+      setConfirmingDelete(false);
+    }
+  }
+
   if (error) {
     return (
       <main className="page">
@@ -188,10 +211,40 @@ export default function Replay() {
       <PageHeader
         title="Session replay"
         actions={
-          <Link to="/sessions" className="btn btn--secondary btn--sm">
-            ← All sessions
-          </Link>
+          <>
+            {isAdmin && (
+              <Button
+                variant="danger"
+                size="sm"
+                disabled={!!session.active}
+                title={
+                  session.active
+                    ? 'Recording is in progress — it can be deleted once completed'
+                    : 'Delete recording'
+                }
+                onClick={() => setConfirmingDelete(true)}
+              >
+                <Icon name="trash" size={13} />
+                Delete
+              </Button>
+            )}
+            <Link to="/sessions" className="btn btn--secondary btn--sm">
+              ← All sessions
+            </Link>
+          </>
         }
+      />
+
+      {deleteError && <Notice tone="error">{deleteError}</Notice>}
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title="Delete this recording?"
+        description="This permanently removes the recording and all of its events. This cannot be undone."
+        confirmLabel="Delete recording"
+        busy={deleting}
+        onConfirm={removeSession}
+        onClose={() => setConfirmingDelete(false)}
       />
 
       <div className="replay-grid">

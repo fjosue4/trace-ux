@@ -171,3 +171,16 @@
   background: var(--accent);
 }
 :root[data-theme='dark'] .player-frame .switch .label { color: var(--ink-2); }
+
+/* long URL values: entry clamps to two lines, referrer stays on one; both get a copy button */
+.meta-value-row { display: flex; align-items: center; gap: 0.3rem; min-width: 0; }
+.meta-clamp2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+  min-width: 0;
+}
+.meta-oneline { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.meta-copy { width: 22px; height: 22px; flex: none; }

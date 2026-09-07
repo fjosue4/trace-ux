@@ -3,18 +3,24 @@ import './Table.css';
 
 type Props = {
   headers: ReactNode[];
+  /** Optional per-column widths (any CSS width); pairs with fixed layout. */
+  widths?: string[];
+  /** Fixed layout: columns obey widths and cells ellipsize instead of stretching the table. */
+  fixed?: boolean;
   children: ReactNode;
   className?: string;
 };
 
-export default function Table({ headers, children, className = '' }: Props) {
+export default function Table({ headers, widths, fixed, children, className = '' }: Props) {
   return (
     <div className={`table-wrap ${className}`.trim()}>
-      <table className="table">
+      <table className={`table${fixed ? ' table--fixed' : ''}`}>
         <thead>
           <tr>
             {headers.map((h, i) => (
-              <th key={i}>{h}</th>
+              <th key={i} style={widths?.[i] ? { width: widths[i] } : undefined}>
+                {h}
+              </th>
             ))}
           </tr>
         </thead>

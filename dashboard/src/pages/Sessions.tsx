@@ -7,6 +7,8 @@ import Table from '../components/ui/Table';
 import Notice from '../components/ui/Notice';
 import Loading from '../components/ui/Loading';
 import EmptyState from '../components/ui/EmptyState';
+import Card from '../components/ui/Card';
+import Badge from '../components/ui/Badge';
 import FiltersBar from '../components/sessions/FiltersBar';
 import { Icon } from '../components/ui/Icon';
 import { Input, Select } from '../components/ui/fields';
@@ -26,6 +28,7 @@ export default function Sessions() {
     params.get('site') ? Number(params.get('site')) : 'all',
   );
   const [filter, setFilter] = useState<SessionFilter>({});
+  const [stats, setStats] = useState<{ active: number; completed: number } | null>(null);
 
   useEffect(() => {
     api
@@ -54,6 +57,13 @@ export default function Sessions() {
     };
   }, [selected, filter]);
 
+  useEffect(() => {
+    api
+      .sessionStats(selected === 'all' ? null : selected)
+      .then(setStats)
+      .catch(() => setStats(null));
+  }, [selected]);
+
   const set = (patch: Partial<SessionFilter>) => setFilter((f) => ({ ...f, ...patch }));
   const showSite = selected === 'all';
   const visitorOf = (s: Session) => s.user_id || s.remote_id || s.client_id || '';
@@ -61,6 +71,23 @@ export default function Sessions() {
   return (
     <main className="page">
       <PageHeader title="Sessions" />
+
+      <div className="session-stats">
+        <Card className="session-stat">
+          <span className="session-stat__label">
+            <span className="session-stat__dot session-stat__dot--live" aria-hidden />
+            Active sessions
+          </span>
+          <strong className="session-stat__num">{stats ? stats.active : '…'}</strong>
+        </Card>
+        <Card className="session-stat">
+          <span className="session-stat__label">
+            <span className="session-stat__dot session-stat__dot--done" aria-hidden />
+            Completed sessions
+          </span>
+          <strong className="session-stat__num">{stats ? stats.completed : '…'}</strong>
+        </Card>
+      </div>
 
       <FiltersBar
         filter={filter}
@@ -100,23 +127,31 @@ export default function Sessions() {
         />
       ) : (
         <Table
+          fixed
+          widths={
+            showSite
+              ? ['11%', '11%', '12%', '10%', '8%', '9%', '8%', '9%', '7%', '8%', '64px']
+              : ['12%', '11%', '11%', '8%', '9%', '8%', '9%', '7%', '8%', '64px']
+          }
           headers={
             showSite
-              ? ['Started', 'Site', 'Visitor', 'Entry page', 'Referrer', 'Browser', 'OS', 'Device', 'Pages', 'Length', '']
-              : ['Started', 'Visitor', 'Entry page', 'Referrer', 'Browser', 'OS', 'Device', 'Pages', 'Length', '']
+              ? ['Started', 'Status', 'Site', 'Visitor', 'Referrer', 'Browser', 'OS', 'Device', 'Pages', 'Length', '']
+              : ['Started', 'Status', 'Visitor', 'Referrer', 'Browser', 'OS', 'Device', 'Pages', 'Length', '']
           }
         >
           {sessions.map((s) => (
             <tr key={s.id} className="is-clickable" onClick={() => navigate(`/replay/${s.id}`)}>
               <td className="muted">{fmtTime(s.started_at)}</td>
+              <td>
+                <Badge tone={s.active ? 'accent' : 'neutral'}>
+                  {s.active ? 'in-progress' : 'completed'}
+                </Badge>
+              </td>
               {showSite && <td>{s.site_name ?? '—'}</td>}
               <td className="mono small muted" title={visitorOf(s)}>
                 {truncate(visitorOf(s) || 'anonymous', 22)}
               </td>
-              <td title={s.initial_url} className="sessions-entry">
-                {truncate(stripProto(s.initial_url), 42)}
-              </td>
-              <td title={s.referrer} className="muted">
+              <td title={s.referrer} className="muted small">
                 {s.referrer ? truncate(stripProto(s.referrer), 26) : '—'}
               </td>
               <td>{s.browser}</td>

@@ -298,6 +298,23 @@ func (s *Store) DeleteSession(id string) error {
 	return err
 }
 
+// SessionActivityCounts splits stored sessions into in-progress and completed
+// using the same 30-minute window as the list's active flag.
+func (s *Store) SessionActivityCounts(siteID int64) (active, completed int64, err error) {
+	cutoff := time.Now().Add(-30 * time.Minute).Unix()
+	q := `SELECT
+		COALESCE(SUM(CASE WHEN last_seen > ? THEN 1 ELSE 0 END), 0),
+		COALESCE(SUM(CASE WHEN last_seen <= ? THEN 1 ELSE 0 END), 0)
+		FROM sessions`
+	args := []any{cutoff, cutoff}
+	if siteID > 0 {
+		q += ` WHERE site_id = ?`
+		args = append(args, siteID)
+	}
+	err = s.db.QueryRow(q, args...).Scan(&active, &completed)
+	return
+}
+
 func (s *Store) UpdateSiteRecording(siteID int64, enabled bool) error {
 	_, err := s.db.Exec(`UPDATE sites SET recording_enabled = ? WHERE id = ?`, boolToInt(enabled), siteID)
 	return err

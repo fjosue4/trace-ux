@@ -41,6 +41,25 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sessions)
 }
 
+// GET /api/sessions/stats?site_id=N — in-progress vs completed session counts.
+func (s *Server) handleSessionStats(w http.ResponseWriter, r *http.Request) {
+	var siteID int64
+	if v := r.URL.Query().Get("site_id"); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id <= 0 {
+			writeErr(w, http.StatusBadRequest, "invalid site_id")
+			return
+		}
+		siteID = id
+	}
+	active, completed, err := s.store.SessionActivityCounts(siteID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int64{"active": active, "completed": completed})
+}
+
 func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	sess, err := s.store.GetSession(id)

@@ -148,6 +148,8 @@ export default function Feedback() {
         />
       ) : (
         <Table
+          fixed
+          widths={['13%', '11%', '32%', '10%', '14%', '13%', '52px']}
           headers={['Rating', 'Survey', 'Comment', 'Session', 'Device', 'Received', ...(user.role === 'admin' ? [''] : [])]}
         >
           {items.map((f) => (
