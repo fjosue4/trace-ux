@@ -771,10 +771,14 @@ interface StorageLike {
 
   // ---- helpers ----
   function newId(): string {
-    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
-    if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+    const cryptoAPI =
+      typeof globalThis.crypto !== 'undefined'
+        ? (globalThis.crypto as Crypto & { randomUUID?: () => string })
+        : undefined;
+    if (typeof cryptoAPI?.randomUUID === 'function') return cryptoAPI.randomUUID();
+    if (cryptoAPI && typeof cryptoAPI.getRandomValues === 'function') {
       const bytes = new Uint8Array(16);
-      crypto.getRandomValues(bytes);
+      cryptoAPI.getRandomValues(bytes);
       bytes[6] = (bytes[6] & 0x0f) | 0x40;
       bytes[8] = (bytes[8] & 0x3f) | 0x80;
       const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');

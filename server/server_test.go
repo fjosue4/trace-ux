@@ -137,6 +137,46 @@ func TestIngestFlow(t *testing.T) {
 	}
 }
 
+func TestIngestSessionIDsAreScopedToSite(t *testing.T) {
+	srv, ts := newTestServer(t)
+	admin := login(t, ts.URL, "admin", "pw")
+
+	createSite := func(name, url string) Site {
+		resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin,
+			fmt.Sprintf(`{"name":%q,"url":%q}`, name, url))
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusCreated {
+			t.Fatalf("create site %s: got %d", name, resp.StatusCode)
+		}
+		var site Site
+		if err := json.NewDecoder(resp.Body).Decode(&site); err != nil {
+			t.Fatal(err)
+		}
+		return site
+	}
+
+	a := createSite("A", "https://a.example")
+	b := createSite("B", "https://b.example")
+	postJSON(t, fmt.Sprintf("%s/api/ingest/%s", ts.URL, a.SiteKey),
+		`{"type":"hello","session_id":"same-id","url":"https://a.example/"}`, false)
+
+	// Reusing a session id with another site's public key must not mutate or
+	// attach data to the first site's recording.
+	resp := postJSON(t, fmt.Sprintf("%s/api/ingest/%s", ts.URL, b.SiteKey),
+		`{"type":"page","session_id":"same-id","idx":0,"url":"https://b.example/"}`, false)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("cross-site session mutation: got %d, want 400", resp.StatusCode)
+	}
+
+	sess, err := srv.store.GetSession("same-id")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sess.SiteID != a.ID || sess.InitialURL != "https://a.example/" || sess.PageCount != 0 {
+		t.Fatalf("cross-site request changed session: %+v", sess)
+	}
+}
+
 func TestMultiPageSession(t *testing.T) {
 	srv, ts := newTestServer(t)
 
