@@ -1,0 +1,13 @@
+.trace-logo {
+  display: block;
+  width: auto;
+  height: 100%;
+  color: var(--ink);
+  --logo-accent: var(--accent);
+}
+
+.trace-logo--on-green {
+  color: #fff;
+  --logo-accent: currentColor;
+}
+

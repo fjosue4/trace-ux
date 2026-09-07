@@ -6,18 +6,8 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 0.5rem;
-  font-weight: 800;
-  font-size: 1.35rem;
-  letter-spacing: -0.02em;
 }
-.login-brand__dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-soft);
-}
+.login-logo { width: 154px; height: auto; }
 .login-sub { margin: 0.2rem 0 1.5rem; }
 .login-hint { margin-top: 1.3rem; }
 .login-card .stack { margin-top: 0.4rem; text-align: left; }
