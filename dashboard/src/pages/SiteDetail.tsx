@@ -403,7 +403,7 @@ export default function SiteDetail() {
               {trigger.mode === 'action' && (
                 <Field
                   label="Tracked actions"
-                  hint="Comma separated ws-track-id names — the widget opens when the visitor clicks one."
+                  hint="Comma separated trace-ux-track-id names — the widget opens when the visitor clicks one."
                 >
                   <Input
                     value={(trigger.actions ?? []).join(', ')}

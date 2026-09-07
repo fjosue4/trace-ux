@@ -6,6 +6,6 @@ dashboard/dist
 server/static/assets
 server/static/index.html
 server/static/tracker.js
-server/webshots
+server/trace-ux
 *.md
 .DS_Store

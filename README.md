@@ -1,40 +1,40 @@
-# Webshots
+# TraceUX
 
 Self-hosted, open-source session replay for your websites — a lean, privacy-first Hotjar alternative.
 
-Webshots records how real visitors use your site (DOM event streams, not video), stores them on **your own server**, and plays them back in a clean dashboard. One binary, one SQLite file, one Docker container.
+TraceUX records how real visitors use your site (DOM event streams, not video), stores them on **your own server**, and plays them back in a clean dashboard. One binary, one SQLite file, one Docker container.
 
 > **Status: v0.2 — session replay core + multi-user access.** Working: multi-page session capture, full replay player, input masking, UTM/referrer attribution, per-site keys, retention, user accounts with admin-managed passwords, 2-hour session cap, filter sessions by any visited path. Roadmap: heatmaps (click data is already captured), funnels, feedback widget.
 
 ## Why
 
-Existing self-hosted options are heavy: full analytics suites that need 8 GB+ RAM, multi-service Docker stacks, or paid plugins. Webshots is built for **a tiny VPS**: a single static binary (~20 MB, ~30 MB RAM) with SQLite and the dashboard embedded. Backups are copying one folder.
+Existing self-hosted options are heavy: full analytics suites that need 8 GB+ RAM, multi-service Docker stacks, or paid plugins. TraceUX is built for **a tiny VPS**: a single static binary (~20 MB, ~30 MB RAM) with SQLite and the dashboard embedded. Backups are copying one folder.
 
 ## Quickstart
 
 **Docker** (recommended):
 
 ```bash
-mkdir webshots && cd webshots
-docker run -d --name webshots -p 8080:8080 -v "$PWD/data:/data" \
-  -e WS_PASSWORD=change-me ghcr.io/webshots/webshots:latest
+mkdir trace-ux && cd trace-ux
+docker run -d --name trace-ux -p 8080:8080 -v "$PWD/data:/data" \
+  -e TRACE_UX_PASSWORD=change-me ghcr.io/fjosue4/trace-ux:latest
 ```
 
 Or with docker-compose (optional Caddy TLS included):
 
 ```bash
-cd deploy && WS_PASSWORD=change-me docker compose up -d
+cd deploy && TRACE_UX_PASSWORD=change-me docker compose up -d
 ```
 
 **Single binary** (any Linux/macOS, amd64/arm64):
 
 ```bash
-WS_PASSWORD=change-me ./webshots
+TRACE_UX_PASSWORD=change-me ./trace-ux
 ```
 
 Then:
 
-1. Open `http://your-server:8080` and sign in. Leave the username empty (or type `admin`) and use `WS_PASSWORD` — that's the bootstrap **admin** account.
+1. Open `http://your-server:8080` and sign in. Leave the username empty (or type `admin`) and use `TRACE_UX_PASSWORD` — that's the bootstrap **admin** account.
 2. **Add site** → copy the snippet (the card has a **Manual** and a **Google Tag Manager** tab):
 
    ```html
@@ -51,28 +51,28 @@ Then:
 On any Linux server with systemd, one line installs everything — the binary ships with the dashboard and tracker embedded, so there is nothing else to set up:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fjosue4/Webshots/main/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/fjosue4/trace-ux/main/install.sh | sudo bash
 ```
 
-The script: downloads the prebuilt release for your architecture (checksum-verified), creates a locked-down system user, puts recordings in `/var/lib/webshots`, generates an admin password, installs a systemd service (auto-start on boot, auto-restart on crash), and adds a `webshots` control command. Re-running it upgrades in place and keeps data and users.
+The script: downloads the prebuilt release for your architecture (checksum-verified), creates a locked-down system user, puts recordings in `/var/lib/trace-ux`, generates an admin password, installs a systemd service (auto-start on boot, auto-restart on crash), and adds a `trace-ux` control command. Re-running it upgrades in place and keeps data and users.
 
 Then manage the server with:
 
 | Command | What it does |
 | --- | --- |
-| `webshots --status` | is it running? |
-| `webshots --start` / `--stop` / `--restart` | control the service |
-| `webshots --logs` | last 100 log lines (`journalctl -u webshots -f` to follow) |
-| `webshots --password <new>` | set a new admin password (revokes old admin logins) |
-| `webshots --update` | upgrade to the latest release |
-| `webshots --uninstall` | remove it (recordings are kept) |
-| `webshots --run` | run in the foreground for debugging |
+| `trace-ux --status` | is it running? |
+| `trace-ux --start` / `--stop` / `--restart` | control the service |
+| `trace-ux --logs` | last 100 log lines (`journalctl -u trace-ux -f` to follow) |
+| `trace-ux --password <new>` | set a new admin password (revokes old admin logins) |
+| `trace-ux --update` | upgrade to the latest release |
+| `trace-ux --uninstall` | remove it (recordings are kept) |
+| `trace-ux --run` | run in the foreground for debugging |
 
 Building from a git clone instead of a release: `bash install.sh --build-from-source` (needs Go ≥ 1.27 and Node ≥ 18). Releases are built automatically by [.github/workflows/release.yml](.github/workflows/release.yml) when a `v*` tag is pushed.
 
 ## Minimum requirements
 
-Webshots is deliberately built for the smallest VPS you can rent:
+TraceUX is deliberately built for the smallest VPS you can rent:
 
 | Resource | Minimum | Comfortable |
 | --- | --- | --- |
@@ -82,30 +82,30 @@ Webshots is deliberately built for the smallest VPS you can rent:
 | OS | Linux amd64/arm64 with systemd — Debian 11+, Ubuntu 20.04+, Rocky/Alma 9+, Fedora | any of those |
 | Network | one open TCP port (8080 by default) | + Caddy/nginx for HTTPS |
 
-No external database, no queue, no other services — SQLite lives in `/var/lib/webshots` and backups are copying that folder. Docker is the alternative route (`deploy/docker-compose.yml`) if you prefer containers; the container runs the same binary. In practice: a $4–6/mo VPS handles a handful of sites with thousands of monthly sessions.
+No external database, no queue, no other services — SQLite lives in `/var/lib/trace-ux` and backups are copying that folder. Docker is the alternative route (`deploy/docker-compose.yml`) if you prefer containers; the container runs the same binary. In practice: a $4–6/mo VPS handles a handful of sites with thousands of monthly sessions.
 
 ## Configuration
 
 | Env var            | Default   | Meaning                                              |
 | ------------------ | --------- | ---------------------------------------------------- |
-| `WS_PASSWORD`      | `webshots`| Bootstrap admin password (**set this**)               |
-| `WS_RESET_ADMIN`   | —         | `1` = re-point `admin` at `WS_PASSWORD` on boot       |
-| `WS_DATA`          | `./data`  | Data dir (SQLite db, users, auth secret)              |
-| `WS_ADDR`          | `:8080`   | Listen address                                        |
-| `WS_RETENTION_DAYS`| `90`      | Auto-delete sessions older than this                  |
-| `WS_DEV_STATIC`    | —         | Dev only: serve frontend builds from disk             |
+| `TRACE_UX_PASSWORD`      | `trace-ux`| Bootstrap admin password (**set this**)               |
+| `TRACE_UX_RESET_ADMIN`   | —         | `1` = re-point `admin` at `TRACE_UX_PASSWORD` on boot |
+| `TRACE_UX_DATA`          | `./data`  | Data dir (SQLite db, users, auth secret)              |
+| `TRACE_UX_ADDR`          | `:8080`   | Listen address                                        |
+| `TRACE_UX_RETENTION_DAYS`| `90`      | Auto-delete sessions older than this                  |
+| `TRACE_UX_DEV_STATIC`    | —         | Dev only: serve frontend builds from disk             |
 
 ## Users & access
 
-The dashboard supports real accounts; the **admin** (the `WS_PASSWORD` account) manages them alone, under **Settings → Team** (hidden from viewers):
+The dashboard supports real accounts; the **admin** (the `TRACE_UX_PASSWORD` account) manages them alone, under **Settings → Team** (hidden from viewers):
 
 - **Roles** — `admin` can manage users; `viewer` can browse sites, sessions and replays. Both can change their own password under **Settings**.
 - **Creating users** — pick a username and a password (min 8 characters); the user signs in with it directly. No email, no invites.
 - **Revocation is immediate** — resetting a password, changing a role, or deleting a user signs that person out everywhere. Changing your own password keeps your current tab signed in.
 - **Passwords** are stored as salted PBKDF2-SHA256 hashes (210k iterations); login cookies are random tokens stored only as hashes, so a leaked DB can't be replayed.
-- **Locked out?** Restart with `WS_RESET_ADMIN=1` to re-point the `admin` account at the current `WS_PASSWORD` (all previous admin logins are revoked), then remove the flag.
+- **Locked out?** Restart with `TRACE_UX_RESET_ADMIN=1` to re-point the `admin` account at the current `TRACE_UX_PASSWORD` (all previous admin logins are revoked), then remove the flag.
 
-`WS_PASSWORD` only seeds the bootstrap admin the first time. After that, passwords live in the database and changing the env var has no effect.
+`TRACE_UX_PASSWORD` only seeds the bootstrap admin the first time. After that, passwords live in the database and changing the env var has no effect.
 
 ## Tracking visitors & events
 
@@ -116,7 +116,7 @@ The snippet takes identity at init, and the page can attach or change it later �
         data-user-id="u-42" data-client-id="acme" data-remote-id="remote-7"></script>
 <script>
   // any time during the session (latest non-empty value wins):
-  window.Webshots.identify({ userId: 'u-42', clientId: 'acme', remoteId: 'remote-7' });
+  window.TraceUX.identify({ userId: 'u-42', clientId: 'acme', remoteId: 'remote-7' });
 </script>
 ```
 
@@ -125,12 +125,12 @@ Sessions are filterable by any of the three ids with the **Visitor** filter in t
 Mark any element to appear as seekable activity in the replay sidebar:
 
 ```html
-<button ws-track-id="checkout-click">Buy now</button>
+<button trace-ux-track-id="checkout-click">Buy now</button>
 ```
 
-or programmatically: `window.Webshots.track('checkout-click')`. Clicking an activity row jumps the recording to that exact moment.
+or programmatically: `window.TraceUX.track('checkout-click')`. Clicking an activity row jumps the recording to that exact moment.
 
-Masking: all form inputs are masked by default; any element carrying `ws-mask` — as a class or as a bare attribute — has its text masked, and `ws-block` (class) removes the element from the recording entirely.
+Masking: all form inputs are masked by default; any element carrying `trace-ux-mask` — as a class or as a bare attribute — has its text masked, and `trace-ux-block` (class) removes the element from the recording entirely.
 
 ## Feedback & surveys
 
@@ -141,7 +141,7 @@ Collect feedback from visitors right on your tracked sites — each response is 
 **Or collect programmatically:**
 
 ```js
-window.Webshots.feedback({ rating: 5, comment: 'Loved it', surveyId: 'checkout' });
+window.TraceUX.feedback({ rating: 5, comment: 'Loved it', surveyId: 'checkout' });
 ```
 
 Responses land in the dashboard's **Feedback** page (per-survey summaries, comments, device info, one-click jump into the replay). Each site's hub page shows the latest 5 recordings, the latest 5 feedback responses, and the overall positive-feedback percentage. Admins can delete individual responses (e.g. spam).
@@ -156,8 +156,8 @@ Turning **recordings off** for a site stops the capture of visitor event streams
 ## Privacy model
 
 - All form inputs are **masked by default** in recordings.
-- Add `class="ws-block"` to remove an element from recording entirely; `ws-mask` masks its text.
-- Visitors with Do Not Track enabled, or `localStorage.ws_optout = '1'`, are never recorded.
+- Add `class="trace-ux-block"` to remove an element from recording entirely; `trace-ux-mask` masks its text.
+- Visitors with Do Not Track enabled, or `localStorage.trace_ux_optout = '1'`, are never recorded.
 - Raw IPs are never stored — only a salted, truncated hash for dedupe.
 - Everything lives on your server. Nothing leaves it.
 
@@ -188,7 +188,7 @@ Capacity design point: 30 concurrent sessions ≈ 6–10 tiny requests/sec (a fe
 make dev          # Go server on :8090 serving live frontend builds
 make serve-demo   # demo site on :8081 (edit demo/*.html, set your site key)
 make test         # Go tests (ingest flow, auth, UA parsing, multi-page sessions)
-make build        # production binary: server/webshots
+make build        # production binary: server/trace-ux
 ```
 
 Frontend work: `cd dashboard && npm run dev` (Vite on :5173, proxied to :8090). Tracker work: `cd tracker && npm run build`, then reload any page with the snippet.
@@ -196,7 +196,7 @@ Frontend work: `cd dashboard && npm run dev` (Vite on :5173, proxied to :8090). 
 ## Building the release artifact
 
 ```bash
-docker build -f deploy/Dockerfile -t webshots .
+docker build -f deploy/Dockerfile -t trace-ux .
 ```
 
 Multi-stage: frontend bundles built with esbuild/Vite, then a `CGO_ENABLED=0` Go build embeds them (`go:embed`) into one distroless image.

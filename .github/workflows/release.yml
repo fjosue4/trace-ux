@@ -2,7 +2,7 @@ name: Release
 
 # Build linux/amd64 + linux/arm64 binaries (dashboard + tracker embedded) and
 # attach them to a GitHub Release. install.sh downloads exactly these assets,
-# so keep the naming in sync: webshots_linux_<arch>.tar.gz + checksums.txt.
+# so keep the naming in sync: trace_ux_linux_<arch>.tar.gz + checksums.txt.
 on:
   push:
     tags: ["v*"]
@@ -37,18 +37,19 @@ jobs:
           VERSION="${GITHUB_REF_NAME}"
           mkdir -p dist
           for arch in amd64 arm64; do
+            mkdir -p "dist/trace_ux_linux_${arch}"
             CGO_ENABLED=0 GOOS=linux GOARCH=$arch \
               go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
-              -o "dist/webshots_linux_${arch}/webshots" ./server
-            tar -czf "dist/webshots_linux_${arch}.tar.gz" -C "dist/webshots_linux_${arch}" webshots
+              -o "dist/trace_ux_linux_${arch}/trace-ux" ./server
+            tar -czf "dist/trace_ux_linux_${arch}.tar.gz" -C "dist/trace_ux_linux_${arch}" trace-ux
           done
-          (cd dist && sha256sum webshots_linux_*.tar.gz > checksums.txt)
+          (cd dist && sha256sum trace_ux_linux_*.tar.gz > checksums.txt)
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/webshots_linux_amd64.tar.gz
-            dist/webshots_linux_arm64.tar.gz
+            dist/trace_ux_linux_amd64.tar.gz
+            dist/trace_ux_linux_arm64.tar.gz
             dist/checksums.txt
           generate_release_notes: true

@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-const authCookie = "trux_auth"
+const authCookie = "trace_ux_auth"
 
 type Server struct {
 	store  *Store
@@ -36,10 +36,10 @@ type Config struct {
 
 func loadConfig() Config {
 	cfg := Config{
-			   Addr:          envOr("TRACE_UX_ADDR", ":8080"),
-			   DataDir:       envOr("TRACE_UX_DATA", "./data"),
-			   Password:      os.Getenv("TRACE_UX_PASSWORD"),
-			   ResetAdmin:    os.Getenv("TRACE_UX_RESET_ADMIN") == "1",
+		Addr:          envOr("TRACE_UX_ADDR", ":8080"),
+		DataDir:       envOr("TRACE_UX_DATA", "./data"),
+		Password:      os.Getenv("TRACE_UX_PASSWORD"),
+		ResetAdmin:    os.Getenv("TRACE_UX_RESET_ADMIN") == "1",
 		RetentionDays: 90,
 	}
 	if v := os.Getenv("TRACE_UX_RETENTION_DAYS"); v != "" {
@@ -49,8 +49,8 @@ func loadConfig() Config {
 	}
 	cfg.DevStaticDir = os.Getenv("TRACE_UX_DEV_STATIC")
 	if cfg.Password == "" {
-			   log.Println("WARNING: TRACE_UX_PASSWORD not set, using default password 'trace-ux'. Set TRACE_UX_PASSWORD in production.")
-			   cfg.Password = "trace-ux"
+		log.Println("WARNING: TRACE_UX_PASSWORD not set, using default password 'trace-ux'. Set TRACE_UX_PASSWORD in production.")
+		cfg.Password = "trace-ux"
 	}
 	return cfg
 }

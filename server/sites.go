@@ -54,7 +54,7 @@ func DefaultSiteAppearance() *SiteAppearance {
 type FeedbackTrigger struct {
 	Mode    string   `json:"mode"` // always | page | action
 	Pages   []string `json:"pages,omitempty"`   // URL patterns with * wildcards
-	Actions []string `json:"actions,omitempty"` // trux-track-id names / track() names
+	Actions []string `json:"actions,omitempty"` // trace-ux-track-id names / track() names
 }
 
 type SiteSettings struct {

@@ -22,12 +22,12 @@ func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
 		case "--version", "-v":
-					   fmt.Printf("trace-ux %s\n", version)
+			fmt.Printf("trace-ux %s\n", version)
 			return
 		case "--help", "-h":
-					   fmt.Println("trace-ux — self-hosted session replay server")
-					   fmt.Println("  trace-ux            run the server (configure via TRACE_UX_* env vars)")
-					   fmt.Println("  trace-ux --version  print the version")
+			fmt.Println("trace-ux — self-hosted session replay server")
+			fmt.Println("  trace-ux            run the server (configure via TRACE_UX_* env vars)")
+			fmt.Println("  trace-ux --version  print the version")
 			return
 		}
 	}
@@ -53,7 +53,7 @@ func main() {
 		if err := store.ResetAdminPassword(cfg.Password); err != nil {
 			log.Fatalf("cannot reset admin password: %v", err)
 		}
-			   log.Println("admin password reset from TRACE_UX_PASSWORD; previous logins revoked")
+		log.Println("admin password reset from TRACE_UX_PASSWORD; previous logins revoked")
 	} else if err := store.EnsureAdmin(cfg.Password); err != nil {
 		log.Fatalf("cannot ensure admin user: %v", err)
 	}

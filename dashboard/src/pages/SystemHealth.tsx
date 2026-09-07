@@ -14,7 +14,7 @@ const pctLabel = (pct: number) => (pct >= 10 ? `${Math.round(pct)}%` : `${pct.to
 const clampPct = (v: number) => Math.max(0, Math.min(100, v));
 
 // Bar showing how much of the resource is in use; the leading accent segment
-// is the part Webshots itself accounts for.
+// is the part TraceUX itself accounts for.
 function Meter({ usedPct, shotPct, hot }: { usedPct: number; shotPct?: number; hot?: boolean }) {
   const shot = Math.max(0, Math.min(shotPct ?? 0, usedPct));
   return (
@@ -74,17 +74,17 @@ export default function SystemHealth() {
 
   const { ram, cpu, disk, store } = health;
   const ramUsedPct = ram.total_bytes > 0 ? (ram.used_bytes / ram.total_bytes) * 100 : 0;
-  const ramShotPct = ram.total_bytes > 0 ? (ram.webshots_bytes / ram.total_bytes) * 100 : 0;
+  const ramShotPct = ram.total_bytes > 0 ? (ram.trace_ux_bytes / ram.total_bytes) * 100 : 0;
   const diskUsed = disk.total_bytes > 0 ? disk.total_bytes - disk.free_bytes : 0;
   const diskUsedPct = disk.total_bytes > 0 ? (diskUsed / disk.total_bytes) * 100 : 0;
-  const diskShotPct = disk.total_bytes > 0 ? (disk.webshots_bytes / disk.total_bytes) * 100 : 0;
+  const diskShotPct = disk.total_bytes > 0 ? (disk.trace_ux_bytes / disk.total_bytes) * 100 : 0;
   const noOS = ram.total_bytes === 0 && disk.total_bytes === 0;
 
   return (
     <main className="page">
       <PageHeader
         title="System health"
-        subtitle="Live view of the server resources and the share Webshots accounts for"
+        subtitle="Live view of the server resources and the share TraceUX accounts for"
         actions={<Badge tone="neutral">Live · {fmtClock(stamp)}</Badge>}
       />
 
@@ -106,8 +106,8 @@ export default function SystemHealth() {
           <Row label="In use" value={ram.total_bytes > 0 ? fmtBytes(ram.used_bytes) : 'n/a'} />
           <Row label="Available" value={ram.total_bytes > 0 ? fmtBytes(ram.available_bytes) : 'n/a'} />
           <div className="health-row">
-            <span className="muted small">Webshots (RSS)</span>
-            <Badge tone="accent">{fmtBytes(ram.webshots_bytes)}</Badge>
+            <span className="muted small">TraceUX (RSS)</span>
+            <Badge tone="accent">{fmtBytes(ram.trace_ux_bytes)}</Badge>
           </div>
           {ram.mem_limit_bytes > 0 && (
             <Row label="Soft memory cap" value={fmtBytes(ram.mem_limit_bytes)} />
@@ -118,14 +118,14 @@ export default function SystemHealth() {
           <div className="health-card__head">
             <Icon name="clock" size={14} />
             <h3>CPU</h3>
-            <span className="health-card__big">{pctLabel(cpu.webshots_pct)}</span>
+            <span className="health-card__big">{pctLabel(cpu.trace_ux_pct)}</span>
           </div>
-          <Meter usedPct={cpu.webshots_pct} hot={cpu.webshots_pct >= 80} />
+          <Meter usedPct={cpu.trace_ux_pct} hot={cpu.trace_ux_pct >= 80} />
           <Row label="Cores" value={String(cpu.cores)} />
           <Row label="Load (1m)" value={cpu.load1.toFixed(2)} />
           <Row label="Load (5m)" value={cpu.load5.toFixed(2)} />
           <Row label="Load (15m)" value={cpu.load15.toFixed(2)} />
-          <Row label="Webshots uptime" value={fmtDuration(cpu.uptime_seconds * 1000)} />
+          <Row label="TraceUX uptime" value={fmtDuration(cpu.uptime_seconds * 1000)} />
         </Card>
 
         <Card className="health-card">
@@ -138,8 +138,8 @@ export default function SystemHealth() {
           <Row label="Volume" value={disk.total_bytes > 0 ? fmtBytes(disk.total_bytes) : 'n/a'} />
           <Row label="Free" value={disk.total_bytes > 0 ? fmtBytes(disk.free_bytes) : 'n/a'} />
           <div className="health-row">
-            <span className="muted small">Webshots data</span>
-            <Badge tone="accent">{fmtBytes(disk.webshots_bytes)}</Badge>
+            <span className="muted small">TraceUX data</span>
+            <Badge tone="accent">{fmtBytes(disk.trace_ux_bytes)}</Badge>
           </div>
           <Row label="Data dir" value={disk.data_dir} mono={false} />
         </Card>
@@ -148,7 +148,7 @@ export default function SystemHealth() {
       <Card className="health-store">
         <div className="health-store__row">
           <div>
-            <strong>What Webshots stores</strong>
+            <strong>What TraceUX stores</strong>
             <p className="muted small">
               Everything lives in the SQLite database inside <code>{disk.data_dir}</code> — recordings,
               feedback and user accounts. Per-site retention deletes old recordings and feedback

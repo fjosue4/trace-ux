@@ -39,7 +39,7 @@ export type SiteAppearance = {
 export type FeedbackTrigger = {
   mode: 'always' | 'page' | 'action';
   pages?: string[]; // URL patterns with * wildcards
-  actions?: string[]; // ws-track-id names / window.TraceUX.track names
+  actions?: string[]; // trace-ux-track-id names / window.TraceUX.track names
 };
 
 export type SiteSettings = {
@@ -127,7 +127,7 @@ export type Session = {
   remote_id?: string;
 };
 
-// A tracked activity moment (ws-track-id click or window.TraceUX.track()).
+// A tracked activity moment (trace-ux-track-id click or window.TraceUX.track()).
 export type CustomEvent = {
   ts: number; // unix millis, visitor's clock
   name: string;

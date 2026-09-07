@@ -1,5 +1,5 @@
 # Go
-/server/webshots
+/server/trace-ux
 /dist/
 *.test
 

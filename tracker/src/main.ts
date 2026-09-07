@@ -3,9 +3,9 @@
  * compressed batches to a TraceUX server. Loaded as:
  *   <script async src="https://your-server/t.js" data-site="SITE_KEY"></script>
  *
- * Privacy: all form inputs are masked, elements with class `trux-block` are
- * removed from the recording, `trux-mask` masks their text, and Do Not Track /
- * localStorage.trux_optout=1 disables tracking entirely.
+ * Privacy: all form inputs are masked, elements with class `trace-ux-block` are
+ * removed from the recording, `trace-ux-mask` masks their text, and Do Not Track /
+ * localStorage.trace_ux_optout=1 disables tracking entirely.
  */
 import { record } from '@rrweb/record';
 import type { eventWithTime } from '@rrweb/types';
@@ -41,7 +41,7 @@ type FeedbackCfg = {
   trigger?: { mode?: string; pages?: string[]; actions?: string[] };
 };
 
-type TruxConfig = {
+type TraceUXConfig = {
   sample_rate: number;
   checkout_interval_ms: number;
   mask_inputs: boolean;
@@ -74,7 +74,7 @@ declare global {
   }
 }
 
-const DEFAULTS: TruxConfig = {
+const DEFAULTS: TraceUXConfig = {
   sample_rate: 1,
   checkout_interval_ms: 30_000,
   mask_inputs: true,
@@ -101,7 +101,7 @@ interface StorageLike {
   if (!siteKey) return;
 
   try {
-    if (navigator.doNotTrack === '1' || localStorage.getItem('trux_optout') === '1') return;
+    if (navigator.doNotTrack === '1' || localStorage.getItem('trace_ux_optout') === '1') return;
   } catch {
     /* storage blocked: proceed anyway; tracking still honors the server config */
   }
@@ -124,13 +124,13 @@ interface StorageLike {
   // pageIdx and activeMs live in sessionStorage so a multi-page visit is one
   // continuous session even though every page load restarts the script.
   const store = sessionStorageSafe();
-  let sessionId = store.get('trux_sid');
-  let seq = Number(store.get('trux_seq') || '0');
-  let pageIdx = Number(store.get('trux_page') || '-1');
-  let activeMs = Number(store.get('trux_active') || '0');
+  let sessionId = store.get('trace_ux_sid');
+  let seq = Number(store.get('trace_ux_seq') || '0');
+  let pageIdx = Number(store.get('trace_ux_page') || '-1');
+  let activeMs = Number(store.get('trace_ux_active') || '0');
   let startedAt = Date.now();
   const stale =
-    !sessionId || startedAt - Number(store.get('trux_sid_ts') || '0') > SESSION_TTL_MS;
+    !sessionId || startedAt - Number(store.get('trace_ux_sid_ts') || '0') > SESSION_TTL_MS;
   // A session that already hit the 2h cap must not swallow this page load:
   // start a fresh one right away instead of recording into the old session
   // until the first tick notices.
@@ -176,7 +176,7 @@ interface StorageLike {
   function flush(useBeacon = false) {
     if (buffer.length === 0) return;
     const batch = { type: 'events', session_id: sessionId, seq: seq++, events: buffer };
-    store.set('trux_seq', String(seq));
+    store.set('trace_ux_seq', String(seq));
     buffer = [];
     send(batch, useBeacon);
   }
@@ -234,7 +234,7 @@ interface StorageLike {
   // ---- page tracking (works for MPAs and SPA route changes) ----
   function trackPage() {
     pageIdx++;
-    store.set('trux_page', String(pageIdx));
+    store.set('trace_ux_page', String(pageIdx));
     send(
       {
         type: 'page',
@@ -281,12 +281,12 @@ interface StorageLike {
           },
           checkoutEveryNms: cfg.checkout_interval_ms,
           maskAllInputs: cfg.mask_inputs,
-          // Elements carrying trux-mask as a class OR a bare attribute have their
+          // Elements carrying trace-ux-mask as a class OR a bare attribute have their
           // text masked, wherever they appear in the page.
-          maskTextClass: 'trux-mask',
-          maskTextSelector: '.trux-mask,[trux-mask],[data-trux-mask]',
-          blockClass: 'trux-block',
-          ignoreClass: 'trux-ignore',
+          maskTextClass: 'trace-ux-mask',
+          maskTextSelector: '.trace-ux-mask,[trace-ux-mask],[data-trace-ux-mask]',
+          blockClass: 'trace-ux-block',
+          ignoreClass: 'trace-ux-ignore',
         }) ?? undefined;
     } catch {
       /* recording unsupported in this browser */
@@ -339,14 +339,14 @@ interface StorageLike {
     },
   };
 
-  // Tracked clicks: any element with a ws-track-id attribute reports itself as
-  // seekable activity ("webshots-track").
+  // Tracked clicks: any element with a trace-ux-track-id attribute reports itself as
+  // seekable activity ("trace-ux-track").
   document.addEventListener(
     'click',
     (e) => {
-      const el = (e.target as Element | null)?.closest?.('[ws-track-id]');
+      const el = (e.target as Element | null)?.closest?.('[trace-ux-track-id]');
       if (el) {
-        const trackId = el.getAttribute('ws-track-id') || '';
+        const trackId = el.getAttribute('trace-ux-track-id') || '';
         sendCustom('click', trackId);
         try {
           mountFeedbackIfConfigured(trackId);
@@ -359,7 +359,7 @@ interface StorageLike {
   );
 
   // ---- in-app feedback widget ----
-  // Enabled and fully configured per site from the Webshots dashboard (served
+  // Enabled and fully configured per site from the TraceUX dashboard (served
   // via /api/config/{key}). Rendered inside a shadow root so host-page CSS
   // cannot break it, and its own neutral look works on any site.
   function mountFeedbackWidget(fb: FeedbackCfg, autoOpen = false): { open: () => void } {
@@ -392,7 +392,7 @@ interface StorageLike {
           ];
 
     const host = document.createElement('div');
-    host.id = 'ws-feedback-root';
+    host.id = 'trace-ux-feedback-root';
     const shadow = host.attachShadow({ mode: 'open' });
     shadow.innerHTML = `
       <style>
@@ -597,7 +597,7 @@ interface StorageLike {
         .map((q) => ({ id: q.id, label: q.label, value: answers.get(q.id) as string }));
       const ratingAnswer = questions.find((q) => q.type === 'rating' && answers.has(q.id));
       const textAnswer = questions.find((q) => q.type === 'text' && answers.has(q.id));
-      window.Webshots?.feedback({
+      window.TraceUX?.feedback({
         rating: ratingAnswer ? Number(answers.get(ratingAnswer.id)) : 0,
         comment: textAnswer ? (answers.get(textAnswer.id) as string) : '',
         surveyId,
@@ -614,7 +614,7 @@ interface StorageLike {
 
   // Trigger configuration (from the dashboard): 'always' mounts immediately,
   // 'page' waits for a matching URL pattern, 'action' waits for a matching
-  // tracked action (ws-track-id click or window.Webshots.track).
+  // tracked action (trace-ux-track-id click or window.TraceUX.track).
   let feedbackWidget: { open: () => void } | null = null;
   function matchesPages(patterns: string[]): boolean {
     const path = location.pathname;
@@ -649,8 +649,8 @@ interface StorageLike {
   }
 
   sendHello();
-  store.set('ws_sid', sessionId);
-  store.set('ws_sid_ts', String(startedAt));
+  store.set('trace_ux_sid', sessionId);
+  store.set('trace_ux_sid_ts', String(startedAt));
 
   startRecording();
   trackPage();
@@ -686,10 +686,10 @@ interface StorageLike {
     lastEventAt = Date.now();
     startedAt = lastEventAt;
     lastTick = startedAt;
-    store.set('ws_sid', sessionId);
-    store.set('ws_sid_ts', String(startedAt));
-    store.set('ws_page', '-1');
-    store.set('ws_active', '0');
+    store.set('trace_ux_sid', sessionId);
+    store.set('trace_ux_sid_ts', String(startedAt));
+    store.set('trace_ux_page', '-1');
+    store.set('trace_ux_active', '0');
     startRecording();
     sendHello();
     trackPage();
@@ -738,8 +738,8 @@ interface StorageLike {
     // Only visible time counts toward the session length; pings also keep
     // last_seen fresh on the server so retention can expire dead sessions.
     activeMs += now - lastTick;
-    store.set('ws_active', String(activeMs));
-    store.set('ws_sid_ts', String(now));
+    store.set('trace_ux_active', String(activeMs));
+    store.set('trace_ux_sid_ts', String(now));
     ping();
     lastTick = now;
   }, PING_INTERVAL_MS);
@@ -765,7 +765,7 @@ interface StorageLike {
   // ---- helpers ----
   function newId(): string {
     if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
-    return 'ws-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    return 'trace-ux-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
   }
 
   function sessionStorageSafe(): StorageLike {
@@ -787,7 +787,7 @@ interface StorageLike {
     }
   }
 
-  async function fetchConfig(origin: string, key: string): Promise<WsConfig> {
+  async function fetchConfig(origin: string, key: string): Promise<TraceUXConfig> {
     const ctrl = new AbortController();
     const bail = setTimeout(() => ctrl.abort(), 1500);
     try {

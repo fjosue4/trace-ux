@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 export type Theme = 'light' | 'dark';
 
-const STORAGE_KEY = 'ws_theme';
+const STORAGE_KEY = 'trace_ux_theme';
 
 function initialTheme(): Theme {
   const attr = document.documentElement.dataset.theme;

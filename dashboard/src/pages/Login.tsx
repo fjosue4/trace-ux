@@ -63,7 +63,7 @@ export default function Login() {
           </Button>
         </form>
         <p className="muted small login-hint">
-          Leave the username empty to sign in as the admin with the <code>WS_PASSWORD</code>.
+          Leave the username empty to sign in as the admin with the <code>TRACE_UX_PASSWORD</code>.
         </p>
       </Card>
     </main>

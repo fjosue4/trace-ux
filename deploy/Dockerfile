@@ -18,12 +18,12 @@ COPY server/ ./server/
 RUN rm -rf server/static && mkdir server/static
 COPY --from=frontend /app/tracker/dist/tracker.js server/static/tracker.js
 COPY --from=frontend /app/dashboard/dist/ server/static/
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /webshots ./server
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /trace-ux ./server
 
 # ---- runtime ----
 FROM gcr.io/distroless/static-debian12:nonroot
-COPY --from=server /webshots /webshots
+COPY --from=server /trace-ux /trace-ux
 VOLUME /data
-ENV WS_DATA=/data WS_ADDR=:8080
+ENV TRACE_UX_DATA=/data TRACE_UX_ADDR=:8080
 EXPOSE 8080
-ENTRYPOINT ["/webshots"]
+ENTRYPOINT ["/trace-ux"]

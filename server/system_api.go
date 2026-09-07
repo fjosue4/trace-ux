@@ -105,7 +105,7 @@ func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
 	ram := ramHealth{
 		TotalBytes:     total,
 		AvailableBytes: available,
-			   TraceUXBytes:   rss,
+		TraceUXBytes:   rss,
 	}
 	if total >= available {
 		ram.UsedBytes = total - available
@@ -116,13 +116,13 @@ func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
 
 	cpu := cpuHealth{
 		Cores:         runtime.NumCPU(),
-			   TraceUXPct:    traceUXCPUPercent(cpuSecs),
+		TraceUXPct:    traceUXCPUPercent(cpuSecs),
 		UptimeSeconds: time.Since(procStart).Seconds(),
 	}
 	cpu.Load1, cpu.Load5, cpu.Load15 = readLoadAvg()
 
 	disk := diskHealth{
-			   TraceUXBytes: uint64(dirSize(s.cfg.DataDir)),
+		TraceUXBytes: uint64(dirSize(s.cfg.DataDir)),
 		DataDir:      s.cfg.DataDir,
 	}
 	disk.TotalBytes, disk.FreeBytes = diskUsage(s.cfg.DataDir)

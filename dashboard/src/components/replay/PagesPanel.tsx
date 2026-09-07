@@ -15,7 +15,7 @@ type Props = {
 };
 
 // Sidebar: visit summary, the clickable page timeline, and tracked activity
-// (ws-track-id clicks / window.TraceUX.track calls). Every row seeks the
+// (trace-ux-track-id clicks / window.TraceUX.track calls). Every row seeks the
 // player to that moment.
 export default function PagesPanel({ session, pages, activity, eventsReady, firstTs, onSeekMs }: Props) {
   const s = session;

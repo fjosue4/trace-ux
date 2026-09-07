@@ -1,5 +1,5 @@
 services:
-  webshots:
+  trace-ux:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
@@ -9,11 +9,11 @@ services:
       - ./data:/data
     environment:
       # Change this before exposing the dashboard publicly.
-      WS_PASSWORD: ${WS_PASSWORD:-webshots}
-      WS_RETENTION_DAYS: ${WS_RETENTION_DAYS:-90}
+      TRACE_UX_PASSWORD: ${TRACE_UX_PASSWORD:-trace-ux}
+      TRACE_UX_RETENTION_DAYS: ${TRACE_UX_RETENTION_DAYS:-90}
     restart: unless-stopped
 
-  # Optional: automatic HTTPS in front of Webshots. Uncomment, set your
+  # Optional: automatic HTTPS in front of TraceUX. Uncomment, set your
   # domain, and point DNS at this host.
   # caddy:
   #   image: caddy:2-alpine
@@ -21,7 +21,7 @@ services:
   #   volumes:
   #     - ./Caddyfile:/etc/caddy/Caddyfile
   #     - caddy_data:/data
-  #   depends_on: [webshots]
+  #   depends_on: [trace-ux]
   #   restart: unless-stopped
 #
 # volumes:
