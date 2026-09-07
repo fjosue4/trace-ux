@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -32,6 +33,10 @@ func OpenStore(path string) (*Store, error) {
 	if err := s.migrate(); err != nil {
 		db.Close()
 		return nil, err
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("secure database file: %w", err)
 	}
 	return s, nil
 }
@@ -437,7 +442,7 @@ func (s *Store) ListSessions(f SessionFilter) ([]Session, error) {
 }
 
 type SessionFilter struct {
-	SiteID        int64  // 0 = all sites
+	SiteID        int64 // 0 = all sites
 	Browser       string
 	OS            string
 	Device        string
@@ -518,7 +523,7 @@ type CustomEvent struct {
 // are ignored via the primary key.
 func (s *Store) SaveCustomEvents(siteID int64, sessionID string, events []CustomEvent) error {
 	now := time.Now().Unix()
-	if _, err := s.db.Exec(ensureSession, sessionID, siteID, now, now); err != nil {
+	if err := s.ensureSessionForSite(siteID, sessionID, now); err != nil {
 		return err
 	}
 	for _, e := range events {
@@ -527,7 +532,7 @@ func (s *Store) SaveCustomEvents(siteID int64, sessionID string, events []Custom
 			return err
 		}
 	}
-	_, err := s.db.Exec(`UPDATE sessions SET last_seen = ? WHERE id = ?`, time.Now().Unix(), sessionID)
+	_, err := s.db.Exec(`UPDATE sessions SET last_seen = ? WHERE id = ? AND site_id = ?`, time.Now().Unix(), sessionID, siteID)
 	return err
 }
 

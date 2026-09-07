@@ -41,7 +41,7 @@ type FeedbackFilter struct {
 func (s *Store) SaveFeedback(siteID int64, sessionID, surveyID string, rating int, comment, answersJSON string) (int64, error) {
 	now := time.Now().Unix()
 	if sessionID != "" {
-		if _, err := s.db.Exec(ensureSession, sessionID, siteID, now, now); err != nil {
+		if err := s.ensureSessionForSite(siteID, sessionID, now); err != nil {
 			return 0, err
 		}
 	}

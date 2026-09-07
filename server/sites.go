@@ -14,7 +14,7 @@ import (
 type SurveyQuestion struct {
 	ID       string   `json:"id"`
 	Label    string   `json:"label"`
-	Type     string   `json:"type"` // rating | text | choice
+	Type     string   `json:"type"`              // rating | text | choice
 	Max      int      `json:"max,omitempty"`     // rating scale: 5 (stars) or 10 (NPS)
 	Options  []string `json:"options,omitempty"` // choice
 	Optional bool     `json:"optional,omitempty"`
@@ -52,7 +52,7 @@ func DefaultSiteAppearance() *SiteAppearance {
 
 // FeedbackTrigger controls when the widget shows up for a visitor.
 type FeedbackTrigger struct {
-	Mode    string   `json:"mode"` // always | page | action
+	Mode    string   `json:"mode"`              // always | page | action
 	Pages   []string `json:"pages,omitempty"`   // URL patterns with * wildcards
 	Actions []string `json:"actions,omitempty"` // trace-ux-track-id names / track() names
 }
@@ -135,6 +135,9 @@ func ValidateSiteSettings(s SiteSettings) error {
 	if a := s.Appearance; a != nil {
 		validColor := func(c string) bool {
 			if len(c) != 4 && len(c) != 7 {
+				return false
+			}
+			if c[0] != '#' {
 				return false
 			}
 			for _, r := range c[1:] {
@@ -229,6 +232,7 @@ func ValidateSiteSettings(s SiteSettings) error {
 	}
 	return nil
 }
+
 // ---- store operations ----
 
 // CanStartRecording enforces the per-site cap on simultaneous recordings.
@@ -240,8 +244,8 @@ func (s *Store) CanStartRecording(siteID int64, sessionID string, maxConcurrent 
 		return true, nil
 	}
 	var alreadyRecording int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE id = ? AND event_count > 0 AND last_seen > ?`,
-		sessionID, time.Now().Add(-30*time.Minute).Unix()).Scan(&alreadyRecording); err != nil {
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE id = ? AND site_id = ? AND event_count > 0 AND last_seen > ?`,
+		sessionID, siteID, time.Now().Add(-30*time.Minute).Unix()).Scan(&alreadyRecording); err != nil {
 		return false, err
 	}
 	if alreadyRecording > 0 {

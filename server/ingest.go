@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"compress/gzip"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -20,6 +23,24 @@ import (
 // retryable without server round-trips.
 
 const ingestBodyLimit = 10 << 20 // 10 MB
+
+const (
+	maxSessionIDLength = 64
+	maxEventCount      = 5_000
+	maxEventBytes      = 512 << 10
+	maxURLLength       = 2_048
+	maxReferrerLength  = 2_048
+	maxTitleLength     = 512
+	maxUTMLength       = 256
+	maxIdentityLength  = 256
+	maxUserAgentLength = 1_024
+	maxPageIndex       = 10_000
+)
+
+var (
+	errRequestBodyTooLarge = errors.New("request body too large")
+	errSessionSiteMismatch = errors.New("session belongs to another site")
+)
 
 // maxSessionDurationMs mirrors the tracker's MAX_SESSION_MS: one session never
 // spans more than 2h of active time. The tracker splits marathon visits into a
@@ -63,11 +84,11 @@ type ingestCustom struct {
 }
 
 type ingestFeedback struct {
-	Type      string          `json:"type"`
-	SessionID string          `json:"session_id"`
-	SurveyID  string          `json:"survey_id"`
-	Rating    int             `json:"rating"`
-	Comment   string          `json:"comment"`
+	Type      string           `json:"type"`
+	SessionID string           `json:"session_id"`
+	SurveyID  string           `json:"survey_id"`
+	Rating    int              `json:"rating"`
+	Comment   string           `json:"comment"`
 	Answers   []FeedbackAnswer `json:"answers"`
 }
 
@@ -107,10 +128,20 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	s.initSecurity()
+	clientKey := "ip:" + s.clientIP(r)
+	if !s.ingestIPLimiter.allow(clientKey) || !s.ingestSiteLimiter.allow(fmt.Sprintf("site:%d", site.ID)) {
+		writeRateLimited(w, "ingest rate limit exceeded")
+		return
+	}
 
 	body, err := readBody(r)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "unreadable body")
+		if errors.Is(err, errRequestBodyTooLarge) {
+			writeErr(w, http.StatusRequestEntityTooLarge, "request body too large")
+		} else {
+			writeErr(w, http.StatusBadRequest, "unreadable body")
+		}
 		return
 	}
 	var env ingestEnvelope
@@ -121,8 +152,16 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	// Feedback can be anonymous (no recording to attach to); every other batch
 	// type belongs to a session.
 	needsSession := env.Type != "feedback"
-	if needsSession && (env.SessionID == "" || len(env.SessionID) > 64 || !validSessionID(env.SessionID)) {
+	if needsSession && (env.SessionID == "" || len(env.SessionID) > maxSessionIDLength || !validSessionID(env.SessionID)) {
 		writeErr(w, http.StatusBadRequest, "missing session_id")
+		return
+	}
+	if !needsSession && env.SessionID != "" && (len(env.SessionID) > maxSessionIDLength || !validSessionID(env.SessionID)) {
+		writeErr(w, http.StatusBadRequest, "invalid session_id")
+		return
+	}
+	if len(r.Header.Get("User-Agent")) > maxUserAgentLength {
+		writeErr(w, http.StatusBadRequest, "user-agent too long")
 		return
 	}
 	if env.Type == "events" && !site.RecordingEnabled {
@@ -152,6 +191,16 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "invalid hello")
 			return
 		}
+		if len(m.URL) > maxURLLength || len(m.Referrer) > maxReferrerLength ||
+			len(m.UTMSource) > maxUTMLength || len(m.UTMMedium) > maxUTMLength ||
+			len(m.UTMCampaign) > maxUTMLength || len(m.Lang) > 64 ||
+			len(m.UserID) > maxIdentityLength || len(m.ClientID) > maxIdentityLength ||
+			len(m.RemoteID) > maxIdentityLength || m.ViewportW < 0 || m.ViewportW > 100_000 ||
+			m.ViewportH < 0 || m.ViewportH > 100_000 || m.ScreenW < 0 || m.ScreenW > 100_000 ||
+			m.ScreenH < 0 || m.ScreenH > 100_000 {
+			writeErr(w, http.StatusBadRequest, "invalid hello metadata")
+			return
+		}
 		err = s.store.SaveHello(site.ID, env.SessionID, s.userAgent(r), s.ipHash(r), &m)
 	case "events":
 		var m ingestEvents
@@ -162,6 +211,16 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		if len(m.Events) == 0 {
 			writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 			return
+		}
+		if len(m.Events) > maxEventCount {
+			writeErr(w, http.StatusBadRequest, "too many events")
+			return
+		}
+		for _, event := range m.Events {
+			if len(event) == 0 || len(event) > maxEventBytes {
+				writeErr(w, http.StatusBadRequest, "event is too large")
+				return
+			}
 		}
 		if m.Seq < 0 || m.Seq > 1_000_000 {
 			writeErr(w, http.StatusBadRequest, "invalid seq")
@@ -174,11 +233,19 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "invalid page")
 			return
 		}
+		if m.Idx < 0 || m.Idx > maxPageIndex || len(m.URL) > maxURLLength || len(m.Title) > maxTitleLength || m.EnteredAt < 0 {
+			writeErr(w, http.StatusBadRequest, "invalid page metadata")
+			return
+		}
 		err = s.store.SavePage(site.ID, env.SessionID, &m)
 	case "ping":
 		var m ingestPing
 		if err := json.Unmarshal(body, &m); err != nil {
 			writeErr(w, http.StatusBadRequest, "invalid ping")
+			return
+		}
+		if m.DurationMs < 0 || m.PageCount < 0 || m.PageCount > maxPageIndex || len(m.ExitURL) > maxURLLength {
+			writeErr(w, http.StatusBadRequest, "invalid ping metadata")
 			return
 		}
 		err = s.store.SavePing(site.ID, env.SessionID, &m)
@@ -255,6 +322,10 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
+		if errors.Is(err, errSessionSiteMismatch) {
+			writeErr(w, http.StatusBadRequest, "invalid session")
+			return
+		}
 		log.Printf("ingest %s: %v", env.Type, err)
 		writeErr(w, http.StatusInternalServerError, "storage error")
 		return
@@ -277,30 +348,61 @@ func validSessionID(id string) bool {
 // setting Content-Encoding on sendBeacon/fetch, so the tracker signals gzip
 // with a ?gz=1 query parameter; a real Content-Encoding header is honored too.
 func readBody(r *http.Request) ([]byte, error) {
-	var reader io.Reader = io.LimitReader(r.Body, ingestBodyLimit)
+	if r.ContentLength > ingestBodyLimit {
+		return nil, errRequestBodyTooLarge
+	}
+	var reader io.Reader = io.LimitReader(r.Body, ingestBodyLimit+1)
 	if r.URL.Query().Get("gz") == "1" || strings.EqualFold(r.Header.Get("Content-Encoding"), "gzip") {
 		zr, err := gzip.NewReader(reader)
 		if err != nil {
 			return nil, err
 		}
 		defer zr.Close()
-		reader = io.LimitReader(zr, ingestBodyLimit)
+		reader = io.LimitReader(zr, ingestBodyLimit+1)
 	}
-	return io.ReadAll(reader)
+	body, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > ingestBodyLimit {
+		return nil, errRequestBodyTooLarge
+	}
+	return body, nil
 }
 
 func (s *Server) clientIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		if host, _, err := net.SplitHostPort(strings.TrimSpace(strings.Split(xff, ",")[0])); err == nil {
-			return host
+	remote := strings.TrimSpace(r.RemoteAddr)
+	if host, _, err := net.SplitHostPort(remote); err == nil {
+		remote = host
+	}
+	remoteIP := net.ParseIP(remote)
+	if remoteIP == nil || s.cfg == nil || !trustedProxy(remoteIP, s.cfg.TrustedProxyCIDRs) {
+		return remote
+	}
+	parts := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	for i := len(parts) - 1; i >= 0; i-- {
+		candidate := strings.TrimSpace(parts[i])
+		if host, _, err := net.SplitHostPort(candidate); err == nil {
+			candidate = host
 		}
-		return strings.TrimSpace(strings.Split(xff, ",")[0])
+		ip := net.ParseIP(candidate)
+		if ip == nil {
+			continue
+		}
+		if !trustedProxy(ip, s.cfg.TrustedProxyCIDRs) {
+			return ip.String()
+		}
 	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
+	return remoteIP.String()
+}
+
+func trustedProxy(ip net.IP, networks []*net.IPNet) bool {
+	for _, network := range networks {
+		if network.Contains(ip) {
+			return true
+		}
 	}
-	return host
+	return false
 }
 
 // ipHash: salted, truncated — enough for returning-visitor counting later,
@@ -318,8 +420,23 @@ func (s *Server) userAgent(r *http.Request) string {
 
 // ---- Store: session persistence ----
 
-const ensureSession = `INSERT INTO sessions (id, site_id, started_at, last_seen) VALUES (?, ?, ?, ?)
-	ON CONFLICT(id) DO NOTHING`
+func (s *Store) ensureSessionForSite(siteID int64, sessionID string, now int64) error {
+	if _, err := s.db.Exec(`INSERT INTO sessions (id, site_id, started_at, last_seen) VALUES (?, ?, ?, ?)
+		ON CONFLICT(id) DO NOTHING`, sessionID, siteID, now, now); err != nil {
+		return err
+	}
+	var owner int64
+	if err := s.db.QueryRow(`SELECT site_id FROM sessions WHERE id = ?`, sessionID).Scan(&owner); err != nil {
+		if err == sql.ErrNoRows {
+			return errSessionSiteMismatch
+		}
+		return err
+	}
+	if owner != siteID {
+		return errSessionSiteMismatch
+	}
+	return nil
+}
 
 func (s *Store) touchSession(sessionID string) {
 	s.db.Exec(`UPDATE sessions SET last_seen = ? WHERE id = ?`, time.Now().Unix(), sessionID)
@@ -327,7 +444,7 @@ func (s *Store) touchSession(sessionID string) {
 
 func (s *Store) SaveHello(siteID int64, sessionID, ua, ipHash string, m *ingestHello) error {
 	now := time.Now().Unix()
-	if _, err := s.db.Exec(ensureSession, sessionID, siteID, now, now); err != nil {
+	if err := s.ensureSessionForSite(siteID, sessionID, now); err != nil {
 		return err
 	}
 	// Session metadata is set-if-empty: the first page of a visit provides the
@@ -355,17 +472,17 @@ func (s *Store) SaveHello(siteID int64, sessionID, ua, ipHash string, m *ingestH
 		user_agent = COALESCE(NULLIF(user_agent, ''), ?),
 		ip_hash    = COALESCE(NULLIF(ip_hash, ''), ?),
 		last_seen  = ?
-		WHERE id = ?`,
+		WHERE id = ? AND site_id = ?`,
 		m.URL, m.Referrer, m.UTMSource, m.UTMMedium, m.UTMCampaign,
 		m.UserID, m.UserID, m.ClientID, m.ClientID, m.RemoteID, m.RemoteID,
 		m.ViewportW, m.ViewportH, m.ScreenW, m.ScreenH,
-		browser, osName, device, ua, ipHash, now, sessionID)
+		browser, osName, device, ua, ipHash, now, sessionID, siteID)
 	return err
 }
 
 func (s *Store) SaveEvents(siteID int64, sessionID string, seq int, events []json.RawMessage) error {
 	now := time.Now().Unix()
-	if _, err := s.db.Exec(ensureSession, sessionID, siteID, now, now); err != nil {
+	if err := s.ensureSessionForSite(siteID, sessionID, now); err != nil {
 		return err
 	}
 	raw, err := json.Marshal(events)
@@ -388,13 +505,13 @@ func (s *Store) SaveEvents(siteID int64, sessionID string, seq int, events []jso
 	_, err = s.db.Exec(`UPDATE sessions SET
 		last_seen = ?,
 		event_count = (SELECT COALESCE(SUM(events), 0) FROM chunks WHERE session_id = ?)
-		WHERE id = ?`, now, sessionID, sessionID)
+		WHERE id = ? AND site_id = ?`, now, sessionID, sessionID, siteID)
 	return err
 }
 
 func (s *Store) SavePage(siteID int64, sessionID string, m *ingestPage) error {
 	now := time.Now().Unix()
-	if _, err := s.db.Exec(ensureSession, sessionID, siteID, now, now); err != nil {
+	if err := s.ensureSessionForSite(siteID, sessionID, now); err != nil {
 		return err
 	}
 	// left_at starts open (0) and is closed when the next page of the same
@@ -411,13 +528,13 @@ func (s *Store) SavePage(siteID int64, sessionID string, m *ingestPage) error {
 	_, err := s.db.Exec(`UPDATE sessions SET
 		last_seen = ?, page_count = MAX(page_count, ?),
 		exit_url = ?
-		WHERE id = ?`, now, m.Idx+1, m.URL, sessionID)
+		WHERE id = ? AND site_id = ?`, now, m.Idx+1, m.URL, sessionID, siteID)
 	return err
 }
 
 func (s *Store) SavePing(siteID int64, sessionID string, m *ingestPing) error {
 	now := time.Now().Unix()
-	if _, err := s.db.Exec(ensureSession, sessionID, siteID, now, now); err != nil {
+	if err := s.ensureSessionForSite(siteID, sessionID, now); err != nil {
 		return err
 	}
 	// Cap duration at 2h to match the tracker's session split.
@@ -425,7 +542,7 @@ func (s *Store) SavePing(siteID int64, sessionID string, m *ingestPing) error {
 		last_seen = ?, duration_ms = MIN(MAX(duration_ms, ?), ?),
 		page_count = MAX(page_count, ?),
 		exit_url = COALESCE(NULLIF(?, ''), exit_url)
-		WHERE id = ?`, now, m.DurationMs, maxSessionDurationMs, m.PageCount, m.ExitURL, sessionID)
+		WHERE id = ? AND site_id = ?`, now, m.DurationMs, maxSessionDurationMs, m.PageCount, m.ExitURL, sessionID, siteID)
 	return err
 }
 
