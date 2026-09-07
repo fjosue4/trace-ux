@@ -1,0 +1,55 @@
+.table-wrap {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
+}
+
+.table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+
+/* fixed layout: columns obey widths, cells clip with an ellipsis instead of
+   pushing the table wider than the page */
+.table--fixed { table-layout: fixed; }
+.table--fixed th,
+.table--fixed td { padding-left: 0.8rem; padding-right: 0.8rem; }
+.table--fixed td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* trailing action cells (play/delete) need room for the button inside the
+   fixed column — slim the padding instead of widening the column */
+.table--fixed th:last-child,
+.table--fixed td:last-child {
+  padding-left: 0.3rem;
+  padding-right: 0.6rem;
+}
+.table th {
+  text-align: left;
+  padding: 0.85rem 1.1rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.table td { padding: 0.85rem 1.1rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.table tbody tr:last-child td { border-bottom: none; }
+
+.table tr.is-clickable { cursor: pointer; transition: background-color var(--duration-fast) var(--ease-out); }
+.table tr.is-clickable:hover { background: var(--surface-2); }
+
+/* small pill stat chip (e.g. session length) */
+.table .chip {
+  display: inline-block;
+  padding: 0.18rem 0.7rem;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

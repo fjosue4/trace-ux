@@ -1,0 +1,30 @@
+.snippet-card { margin-bottom: 1rem; border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+
+.snippet-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin: 0.75rem 0 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+}
+
+.snippet-tab {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.3rem 0.9rem;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.snippet-tab.is-active {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.snippet-card pre { white-space: pre-wrap; word-break: break-all; }

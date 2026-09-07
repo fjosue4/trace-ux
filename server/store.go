@@ -93,6 +93,71 @@ var migrations = []string{
 		PRIMARY KEY (session_id, idx)
 	);
 	`,
+	// v2: dashboard users with roles + revocable login sessions.
+	`
+	CREATE TABLE IF NOT EXISTS users (
+		id            INTEGER PRIMARY KEY,
+		username      TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+		password_hash TEXT    NOT NULL,
+		role          TEXT    NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin', 'viewer')),
+		created_at    INTEGER NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS auth_sessions (
+		token_hash TEXT    PRIMARY KEY,
+		user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		created_at INTEGER NOT NULL,
+		expires_at INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_auth_sessions_user    ON auth_sessions(user_id);
+	CREATE INDEX IF NOT EXISTS idx_auth_sessions_expiry  ON auth_sessions(expires_at);
+	CREATE INDEX IF NOT EXISTS idx_pages_url             ON pages(url);
+	`,
+	// v3: visitor identity + tracked custom events ("trace-ux-track-id" clicks).
+	`
+	ALTER TABLE sessions ADD COLUMN user_id   TEXT NOT NULL DEFAULT '';
+	ALTER TABLE sessions ADD COLUMN client_id TEXT NOT NULL DEFAULT '';
+	ALTER TABLE sessions ADD COLUMN remote_id TEXT NOT NULL DEFAULT '';
+
+	CREATE TABLE IF NOT EXISTS custom_events (
+		session_id TEXT    NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		ts         INTEGER NOT NULL,
+		name       TEXT    NOT NULL,
+		track_id   TEXT    NOT NULL DEFAULT '',
+		PRIMARY KEY (session_id, ts, name, track_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_custom_events_session ON custom_events(session_id, ts);
+	`,
+	// v4: in-app visitor feedback and survey responses.
+	`
+	CREATE TABLE IF NOT EXISTS feedback (
+		id         INTEGER PRIMARY KEY,
+		site_id    INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+		session_id TEXT    NOT NULL DEFAULT '',
+		survey_id  TEXT    NOT NULL DEFAULT 'default',
+		rating     INTEGER NOT NULL,
+		comment    TEXT    NOT NULL DEFAULT '',
+		created_at INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_feedback_site   ON feedback(site_id, created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_feedback_survey ON feedback(site_id, survey_id);
+	`,
+	// v5: custom survey answers — a JSON array of {id, label, value} per response.
+	`
+	ALTER TABLE feedback ADD COLUMN answers TEXT NOT NULL DEFAULT '';
+	`,
+	// v6: per-site configuration managed from the dashboard — recording on/off
+	// and the feedback/survey widget setup (JSON).
+	`
+	ALTER TABLE sites ADD COLUMN recording_enabled INTEGER NOT NULL DEFAULT 1;
+	ALTER TABLE sites ADD COLUMN config TEXT NOT NULL DEFAULT '';
+	`,
+	// v7: the site's own URL — the CORS allowlist for the public tracker
+	// endpoints is derived from it, so cross-origin recording only works for
+	// sites an admin actually added.
+	`
+	ALTER TABLE sites ADD COLUMN url TEXT NOT NULL DEFAULT '';
+	`,
 }
 
 func (s *Store) migrate() error {
@@ -118,11 +183,14 @@ func (s *Store) migrate() error {
 // ---- Sites ----
 
 type Site struct {
-	ID           int64  `json:"id"`
-	Name         string `json:"name"`
-	SiteKey      string `json:"site_key"`
-	CreatedAt    int64  `json:"created_at"`
-	SessionCount int64  `json:"session_count"`
+	ID               int64        `json:"id"`
+	Name             string       `json:"name"`
+	URL              string       `json:"url"`
+	SiteKey          string       `json:"site_key"`
+	CreatedAt        int64        `json:"created_at"`
+	SessionCount     int64        `json:"session_count"`
+	RecordingEnabled bool         `json:"recording_enabled"`
+	Settings         SiteSettings `json:"settings"`
 }
 
 func newKey(n int) string {
@@ -133,21 +201,35 @@ func newKey(n int) string {
 	return hex.EncodeToString(b)
 }
 
-func (s *Store) CreateSite(name string) (Site, error) {
+func (s *Store) CreateSite(name, url string) (Site, error) {
 	now := time.Now().Unix()
 	key := newKey(16)
-	res, err := s.db.Exec(`INSERT INTO sites (name, site_key, created_at) VALUES (?, ?, ?)`, name, key, now)
+	res, err := s.db.Exec(`INSERT INTO sites (name, url, site_key, created_at) VALUES (?, ?, ?, ?)`, name, url, key, now)
 	if err != nil {
 		return Site{}, err
 	}
 	id, _ := res.LastInsertId()
-	return Site{ID: id, Name: name, SiteKey: key, CreatedAt: now}, nil
+	return Site{ID: id, Name: name, URL: url, SiteKey: key, CreatedAt: now, RecordingEnabled: true, Settings: DefaultSiteSettings()}, nil
 }
 
-const listSitesQuery = `
-	SELECT s.id, s.name, s.site_key, s.created_at,
-	       (SELECT COUNT(*) FROM sessions se WHERE se.site_id = s.id) AS session_count
-	FROM sites s ORDER BY s.created_at DESC`
+const siteCols = `s.id, s.name, s.url, s.site_key, s.created_at, s.recording_enabled, s.config,
+	(SELECT COUNT(*) FROM sessions se WHERE se.site_id = s.id) AS session_count`
+
+func scanSite(row interface{ Scan(...any) error }) (*Site, error) {
+	var st Site
+	var recording int
+	var config string
+	if err := row.Scan(&st.ID, &st.Name, &st.URL, &st.SiteKey, &st.CreatedAt, &recording, &config, &st.SessionCount); err != nil {
+		return nil, err
+	}
+	st.RecordingEnabled = recording != 0
+	st.Settings = ParseSiteSettings(config)
+	return &st, nil
+}
+
+const listSitesQuery = `SELECT ` + siteCols + ` FROM sites s ORDER BY s.created_at DESC`
+
+const siteByKeyQuery = `SELECT ` + siteCols + ` FROM sites s WHERE s.site_key = ?`
 
 func (s *Store) ListSites() ([]Site, error) {
 	rows, err := s.db.Query(listSitesQuery)
@@ -157,23 +239,24 @@ func (s *Store) ListSites() ([]Site, error) {
 	defer rows.Close()
 	sites := []Site{}
 	for rows.Next() {
-		var st Site
-		if err := rows.Scan(&st.ID, &st.Name, &st.SiteKey, &st.CreatedAt, &st.SessionCount); err != nil {
+		st, err := scanSite(rows)
+		if err != nil {
 			return nil, err
 		}
-		sites = append(sites, st)
+		sites = append(sites, *st)
 	}
 	return sites, rows.Err()
 }
 
 func (s *Store) GetSiteByKey(key string) (Site, error) {
-	var st Site
-	err := s.db.QueryRow(`SELECT id, name, site_key, created_at, 0 FROM sites WHERE site_key = ?`, key).
-		Scan(&st.ID, &st.Name, &st.SiteKey, &st.CreatedAt, &st.SessionCount)
+	st, err := scanSite(s.db.QueryRow(siteByKeyQuery, key))
 	if err == sql.ErrNoRows {
 		return Site{}, nil // unknown key: zero Site, no error; caller decides
 	}
-	return st, err
+	if st != nil {
+		return *st, err
+	}
+	return Site{}, err
 }
 
 func (s *Store) DeleteSite(id int64) error {
@@ -186,8 +269,10 @@ func (s *Store) DeleteSite(id int64) error {
 type Session struct {
 	ID          string `json:"id"`
 	SiteID      int64  `json:"site_id"`
+	SiteName    string `json:"site_name,omitempty"`
 	StartedAt   int64  `json:"started_at"`
 	LastSeen    int64  `json:"last_seen"`
+	Active      bool   `json:"active"` // in-progress: seen in the last 30 minutes
 	DurationMs  int64  `json:"duration_ms"`
 	PageCount   int    `json:"page_count"`
 	EventCount  int    `json:"event_count"`
@@ -207,6 +292,9 @@ type Session struct {
 	IPHash      string `json:"ip_hash"`
 	Country     string `json:"country"`
 	UserAgent   string `json:"user_agent"`
+	UserID      string `json:"user_id,omitempty"`
+	ClientID    string `json:"client_id,omitempty"`
+	RemoteID    string `json:"remote_id,omitempty"`
 }
 
 type SessionPage struct {
@@ -226,20 +314,51 @@ func (p SessionPage) Dwell() int64 {
 	return p.LeftAt - p.EnteredAt
 }
 
+// A session counts as in-progress while it was seen within the same 30-minute
+// window the concurrency gate uses; anything older is completed.
+const sessionActiveExpr = `CASE WHEN last_seen > CAST(strftime('%s','now') AS INTEGER) - 1800 THEN 1 ELSE 0 END`
+const sessionActiveExprQualified = `CASE WHEN s.last_seen > CAST(strftime('%s','now') AS INTEGER) - 1800 THEN 1 ELSE 0 END`
+
 const sessionCols = `id, site_id, started_at, last_seen, duration_ms, page_count, event_count,
 	initial_url, exit_url, referrer, utm_source, utm_medium, utm_campaign,
 	browser, os, device, viewport_w, viewport_h, screen_w, screen_h,
-	ip_hash, country, user_agent`
+	ip_hash, country, user_agent, user_id, client_id, remote_id,
+	` + sessionActiveExpr
+
+// sessionColsQualified is sessionCols for queries that join other tables
+// sharing column names (sites also has created_at).
+const sessionColsQualified = `s.id, s.site_id, s.started_at, s.last_seen, s.duration_ms, s.page_count, s.event_count,
+	s.initial_url, s.exit_url, s.referrer, s.utm_source, s.utm_medium, s.utm_campaign,
+	s.browser, s.os, s.device, s.viewport_w, s.viewport_h, s.screen_w, s.screen_h,
+	s.ip_hash, s.country, s.user_agent, s.user_id, s.client_id, s.remote_id,
+	` + sessionActiveExprQualified
 
 func scanSession(row interface{ Scan(...any) error }) (*Session, error) {
 	var s Session
+	var active int
 	err := row.Scan(&s.ID, &s.SiteID, &s.StartedAt, &s.LastSeen, &s.DurationMs, &s.PageCount, &s.EventCount,
 		&s.InitialURL, &s.ExitURL, &s.Referrer, &s.UTMSource, &s.UTMMedium, &s.UTMCampaign,
 		&s.Browser, &s.OS, &s.Device, &s.ViewportW, &s.ViewportH, &s.ScreenW, &s.ScreenH,
-		&s.IPHash, &s.Country, &s.UserAgent)
+		&s.IPHash, &s.Country, &s.UserAgent, &s.UserID, &s.ClientID, &s.RemoteID, &active)
 	if err != nil {
 		return nil, err
 	}
+	s.Active = active != 0
+	return &s, nil
+}
+
+// scanSessionNamed scans sessionCols plus the joined sites.name.
+func scanSessionNamed(row interface{ Scan(...any) error }) (*Session, error) {
+	var s Session
+	var active int
+	err := row.Scan(&s.ID, &s.SiteID, &s.StartedAt, &s.LastSeen, &s.DurationMs, &s.PageCount, &s.EventCount,
+		&s.InitialURL, &s.ExitURL, &s.Referrer, &s.UTMSource, &s.UTMMedium, &s.UTMCampaign,
+		&s.Browser, &s.OS, &s.Device, &s.ViewportW, &s.ViewportH, &s.ScreenW, &s.ScreenH,
+		&s.IPHash, &s.Country, &s.UserAgent, &s.UserID, &s.ClientID, &s.RemoteID, &active, &s.SiteName)
+	if err != nil {
+		return nil, err
+	}
+	s.Active = active != 0
 	return &s, nil
 }
 
@@ -251,36 +370,54 @@ func (s *Store) GetSession(id string) (*Session, error) {
 	return sess, nil
 }
 
-// ListSessions returns sessions for a site, newest first, with optional filters.
-// Empty filter values are ignored.
-func (s *Store) ListSessions(siteID int64, f SessionFilter) ([]Session, error) {
-	where := []any{"site_id = ?", siteID}
+// ListSessions returns sessions newest first, with optional filters. With
+// f.SiteID set it is scoped to one site; with 0 it spans every site (the rows
+// then carry the site name for display). Empty filter values are ignored.
+func (s *Store) ListSessions(f SessionFilter) ([]Session, error) {
+	query := `SELECT ` + sessionColsQualified + `, si.name
+		FROM sessions s JOIN sites si ON si.id = s.site_id`
+	args := []any{}
+	if f.SiteID > 0 {
+		query += ` WHERE s.site_id = ?`
+		args = append(args, f.SiteID)
+	} else {
+		query += ` WHERE 1=1`
+	}
 	if f.Browser != "" {
-		where = append(where, "browser = ?", f.Browser)
+		query += ` AND s.browser = ?`
+		args = append(args, f.Browser)
 	}
 	if f.OS != "" {
-		where = append(where, "os = ?", f.OS)
+		query += ` AND s.os = ?`
+		args = append(args, f.OS)
 	}
 	if f.Device != "" {
-		where = append(where, "device = ?", f.Device)
+		query += ` AND s.device = ?`
+		args = append(args, f.Device)
 	}
 	if f.URL != "" {
-		where = append(where, "(initial_url LIKE ? OR exit_url LIKE ?)", "%"+f.URL+"%", "%"+f.URL+"%")
+		// Match any path the session navigated through — pages holds the full
+		// per-page timeline, so filtering covers every hop, not just entry/exit.
+		like := "%" + f.URL + "%"
+		query += ` AND (s.initial_url LIKE ? OR s.exit_url LIKE ? OR EXISTS
+			(SELECT 1 FROM pages pg WHERE pg.session_id = s.id AND pg.url LIKE ?))`
+		args = append(args, like, like, like)
+	}
+	if f.Identity != "" {
+		// Visitor identity: matches any of the three custom IDs.
+		like := "%" + f.Identity + "%"
+		query += ` AND (s.user_id LIKE ? OR s.client_id LIKE ? OR s.remote_id LIKE ?)`
+		args = append(args, like, like, like)
 	}
 	if f.MinDurationMs > 0 {
-		where = append(where, "duration_ms >= ?", f.MinDurationMs)
+		query += ` AND s.duration_ms >= ?`
+		args = append(args, f.MinDurationMs)
 	}
 	if f.Before != 0 {
-		where = append(where, "started_at < ?", f.Before)
+		query += ` AND s.started_at < ?`
+		args = append(args, f.Before)
 	}
-
-	query := `SELECT ` + sessionCols + ` FROM sessions WHERE ` + where[0].(string)
-	args := []any{where[1]}
-	for i := 2; i < len(where); i += 2 {
-		query += ` AND ` + where[i].(string)
-		args = append(args, where[i+1])
-	}
-	query += ` ORDER BY started_at DESC LIMIT ?`
+	query += ` ORDER BY s.started_at DESC LIMIT ?`
 	args = append(args, f.Limit)
 
 	rows, err := s.db.Query(query, args...)
@@ -290,7 +427,7 @@ func (s *Store) ListSessions(siteID int64, f SessionFilter) ([]Session, error) {
 	defer rows.Close()
 	out := []Session{}
 	for rows.Next() {
-		sess, err := scanSession(rows)
+		sess, err := scanSessionNamed(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -300,10 +437,12 @@ func (s *Store) ListSessions(siteID int64, f SessionFilter) ([]Session, error) {
 }
 
 type SessionFilter struct {
+	SiteID        int64  // 0 = all sites
 	Browser       string
 	OS            string
 	Device        string
 	URL           string
+	Identity      string // matches user_id / client_id / remote_id
 	MinDurationMs int64
 	Before        int64 // pagination cursor: started_at of the last row shown
 	Limit         int
@@ -365,4 +504,46 @@ func (s *Store) GetSessionChunkSeqs(sessionID string) ([]int, error) {
 		seqs = append(seqs, seq)
 	}
 	return seqs, rows.Err()
+}
+
+// ---- Tracked custom events (trace-ux-track-id clicks, window.TraceUX.track) ----
+
+type CustomEvent struct {
+	TS      int64  `json:"ts"` // unix millis, visitor's clock
+	Name    string `json:"name"`
+	TrackID string `json:"track_id"`
+}
+
+// SaveCustomEvents stores tracked events for a session; duplicates (retries)
+// are ignored via the primary key.
+func (s *Store) SaveCustomEvents(siteID int64, sessionID string, events []CustomEvent) error {
+	now := time.Now().Unix()
+	if _, err := s.db.Exec(ensureSession, sessionID, siteID, now, now); err != nil {
+		return err
+	}
+	for _, e := range events {
+		if _, err := s.db.Exec(`INSERT OR IGNORE INTO custom_events (session_id, ts, name, track_id) VALUES (?, ?, ?, ?)`,
+			sessionID, e.TS, e.Name, e.TrackID); err != nil {
+			return err
+		}
+	}
+	_, err := s.db.Exec(`UPDATE sessions SET last_seen = ? WHERE id = ?`, time.Now().Unix(), sessionID)
+	return err
+}
+
+func (s *Store) GetCustomEvents(sessionID string) ([]CustomEvent, error) {
+	rows, err := s.db.Query(`SELECT ts, name, track_id FROM custom_events WHERE session_id = ? ORDER BY ts`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []CustomEvent{}
+	for rows.Next() {
+		var e CustomEvent
+		if err := rows.Scan(&e.TS, &e.Name, &e.TrackID); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }

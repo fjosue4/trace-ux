@@ -1,16 +1,14 @@
 package main
 
 import (
-	"crypto/hmac"
+	"context"
 	"crypto/rand"
-	"crypto/sha256"
-	"crypto/subtle"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -18,40 +16,41 @@ import (
 	"time"
 )
 
-const authCookie = "ws_auth"
-const authTTL = 30 * 24 * time.Hour
+const authCookie = "trace_ux_auth"
 
 type Server struct {
 	store  *Store
 	cfg    *Config
-	secret []byte
+	secret []byte // HMAC salt for ip_hash (auth cookies are DB-backed now)
 	static http.Handler // SPA + assets
 }
 
 type Config struct {
 	Addr          string
 	DataDir       string
-	Password      string
+	Password      string // bootstrap admin password (TRACE_UX_PASSWORD)
+	ResetAdmin    bool   // TRACE_UX_RESET_ADMIN=1: re-point admin at TRACE_UX_PASSWORD
 	RetentionDays int
 	DevStaticDir  string // serve dashboard/tracker from disk instead of embed (dev)
 }
 
 func loadConfig() Config {
 	cfg := Config{
-		Addr:          envOr("WS_ADDR", ":8080"),
-		DataDir:       envOr("WS_DATA", "./data"),
-		Password:      os.Getenv("WS_PASSWORD"),
+		Addr:          envOr("TRACE_UX_ADDR", ":8080"),
+		DataDir:       envOr("TRACE_UX_DATA", "./data"),
+		Password:      os.Getenv("TRACE_UX_PASSWORD"),
+		ResetAdmin:    os.Getenv("TRACE_UX_RESET_ADMIN") == "1",
 		RetentionDays: 90,
 	}
-	if v := os.Getenv("WS_RETENTION_DAYS"); v != "" {
+	if v := os.Getenv("TRACE_UX_RETENTION_DAYS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.RetentionDays = n
 		}
 	}
-	cfg.DevStaticDir = os.Getenv("WS_DEV_STATIC")
+	cfg.DevStaticDir = os.Getenv("TRACE_UX_DEV_STATIC")
 	if cfg.Password == "" {
-		log.Println("WARNING: WS_PASSWORD not set, using default password 'webshots'. Set WS_PASSWORD in production.")
-		cfg.Password = "webshots"
+		log.Println("WARNING: TRACE_UX_PASSWORD not set, using default password 'trace-ux'. Set TRACE_UX_PASSWORD in production.")
+		cfg.Password = "trace-ux"
 	}
 	return cfg
 }
@@ -88,17 +87,38 @@ func (s *Server) routes() http.Handler {
 
 	mux.HandleFunc("POST /api/auth/login", s.handleLogin)
 	mux.HandleFunc("POST /api/auth/logout", s.handleLogout)
+	mux.HandleFunc("POST /api/auth/password", s.auth(s.handleChangePassword))
 	mux.HandleFunc("GET /api/auth/me", s.auth(s.handleMe))
+
+	// User management: admin role only.
+	mux.HandleFunc("GET /api/users", s.auth(s.requireAdmin(s.handleListUsers)))
+	mux.HandleFunc("POST /api/users", s.auth(s.requireAdmin(s.handleCreateUser)))
+	mux.HandleFunc("PATCH /api/users/{id}", s.auth(s.requireAdmin(s.handleUpdateUser)))
+	mux.HandleFunc("DELETE /api/users/{id}", s.auth(s.requireAdmin(s.handleDeleteUser)))
+
+	// Server resource usage (admin only).
+	mux.HandleFunc("GET /api/system/health", s.auth(s.requireAdmin(s.handleSystemHealth)))
 
 	mux.HandleFunc("GET /api/sites", s.auth(s.handleListSites))
 	mux.HandleFunc("POST /api/sites", s.auth(s.handleCreateSite))
+	mux.HandleFunc("GET /api/sites/{id}", s.auth(s.handleGetSite))
+	mux.HandleFunc("PATCH /api/sites/{id}", s.auth(s.requireAdmin(s.handleUpdateSite)))
+	mux.HandleFunc("PUT /api/sites/{id}/settings", s.auth(s.requireAdmin(s.handlePutSiteSettings)))
 	mux.HandleFunc("DELETE /api/sites/{id}", s.auth(s.handleDeleteSite))
 
 	mux.HandleFunc("GET /api/sessions", s.auth(s.handleListSessions))
+	mux.HandleFunc("GET /api/sessions/stats", s.auth(s.handleSessionStats))
 	mux.HandleFunc("GET /api/sessions/{id}", s.auth(s.handleGetSession))
 	mux.HandleFunc("GET /api/sessions/{id}/events", s.auth(s.handleSessionEvents))
+	mux.HandleFunc("DELETE /api/sessions/{id}", s.auth(s.requireAdmin(s.handleDeleteSession)))
 
-	// Public tracker-facing endpoints (permissive CORS, like all web analytics).
+	// Feedback & surveys from tracked sites.
+	mux.HandleFunc("GET /api/feedback", s.auth(s.handleListFeedback))
+	mux.HandleFunc("GET /api/feedback/summary", s.auth(s.handleFeedbackSummary))
+	mux.HandleFunc("DELETE /api/feedback/{id}", s.auth(s.requireAdmin(s.handleDeleteFeedback)))
+
+	// Public tracker-facing endpoints. Cross-origin access is granted per
+	// site via the URL the admin registers (see cors below).
 	mux.HandleFunc("GET /api/config/{siteKey}", s.handleConfig)
 	mux.HandleFunc("POST /api/ingest/{siteKey}", s.handleIngest)
 
@@ -106,53 +126,131 @@ func (s *Server) routes() http.Handler {
 
 	mux.Handle("/", s.static)
 
-	return cors(mux)
+	return s.cors(mux)
 }
 
-// cors applies permissive CORS to public endpoints only; dashboard API is same-origin.
-func cors(next http.Handler) http.Handler {
+// cors restricts cross-origin tracker traffic to the origins of sites
+// registered in TraceUX. Each site declares its URL when an admin adds it;
+// the public endpoints (/api/config/{key}, /api/ingest/{key}) only grant
+// CORS to that origin. The dashboard API is same-origin and needs no grant.
+func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		isPublic := strings.HasPrefix(r.URL.Path, "/api/ingest/") || strings.HasPrefix(r.URL.Path, "/api/config/")
-		if isPublic {
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Encoding")
-			w.Header().Set("Access-Control-Max-Age", "86400")
+		if !isPublic {
+			next.ServeHTTP(w, r)
+			return
+		}
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			// Same-origin embedding or a non-browser client: nothing to grant.
 			if r.Method == http.MethodOptions {
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
+			next.ServeHTTP(w, r)
+			return
+		}
+		if !s.originAllowed(r.URL.Path, origin) {
+			if r.Method == http.MethodOptions {
+				writeErr(w, http.StatusForbidden, "origin not registered for this site")
+			} else {
+				// No grant header: the browser blocks reading the response.
+				next.ServeHTTP(w, r)
+			}
+			return
+		}
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Vary", "Origin")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Encoding")
+		w.Header().Set("Access-Control-Max-Age", "86400")
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
+// originAllowed reports whether origin matches the URL registered for the
+// site addressed by the path (/api/config/{siteKey}, /api/ingest/{siteKey}).
+func (s *Server) originAllowed(path, origin string) bool {
+	var key string
+	if after, ok := strings.CutPrefix(path, "/api/config/"); ok {
+		key, _, _ = strings.Cut(after, "/")
+	} else if after, ok := strings.CutPrefix(path, "/api/ingest/"); ok {
+		key, _, _ = strings.Cut(after, "/")
+	}
+	if key == "" {
+		return false
+	}
+	site, err := s.store.GetSiteByKey(key)
+	if err != nil || site.ID == 0 || site.URL == "" {
+		return false
+	}
+	return sameOrigin(site.URL, origin)
+}
+
+// sameOrigin compares scheme and host (with port) of a registered site URL
+// and a request Origin header.
+func sameOrigin(registered, origin string) bool {
+	u, err := url.Parse(registered)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	o, err := url.Parse(origin)
+	if err != nil || o.Host == "" {
+		return false
+	}
+	return strings.EqualFold(u.Scheme, o.Scheme) && strings.EqualFold(u.Host, o.Host)
+}
+
+// normalizeSiteURL validates the URL an admin registers for a site: it must
+// be absolute http(s) so the origin used for CORS is well-defined.
+func normalizeSiteURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return "", errors.New("url must be an absolute http(s) URL, e.g. https://example.com")
+	}
+	return raw, nil
+}
+
 // ---- Auth ----
 
-func (s *Server) signAuth(expiry int64) string {
-	mac := hmac.New(sha256.New, s.secret)
-	fmt.Fprintf(mac, "%d", expiry)
-	return fmt.Sprintf("%d.%s", expiry, hex.EncodeToString(mac.Sum(nil)))
+type ctxKey int
+
+const userCtxKey ctxKey = 0
+
+// currentUser returns the authenticated user attached by s.auth, or nil.
+func currentUser(r *http.Request) *User {
+	u, _ := r.Context().Value(userCtxKey).(*User)
+	return u
 }
 
-func (s *Server) checkAuth(token string) bool {
-	expStr, _, ok := strings.Cut(token, ".")
-	if !ok {
-		return false
-	}
-	exp, err := strconv.ParseInt(expStr, 10, 64)
-	if err != nil || time.Now().Unix() > exp {
-		return false
-	}
-	expected := s.signAuth(exp)
-	return subtle.ConstantTimeCompare([]byte(expected), []byte(token)) == 1
-}
-
+// auth resolves the login cookie to a user via the auth_sessions table, so
+// password changes, role changes and user deletion revoke access immediately.
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		c, err := r.Cookie(authCookie)
-		if err != nil || !s.checkAuth(c.Value) {
+		if err != nil || c.Value == "" {
 			writeErr(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		u, err := s.store.UserForToken(c.Value)
+		if err != nil || u == nil {
+			writeErr(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		next(w, r.WithContext(context.WithValue(r.Context(), userCtxKey, u)))
+	}
+}
+
+// requireAdmin gates a handler to the admin role (user management).
+func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if u := currentUser(r); u == nil || u.Role != "admin" {
+			writeErr(w, http.StatusForbidden, "admin only")
 			return
 		}
 		next(w, r)
@@ -161,34 +259,273 @@ func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var body struct {
+		Username string `json:"username"`
 		Password string `json:"password"`
 	}
 	if err := readJSON(w, r, &body); err != nil {
 		return
 	}
-	if subtle.ConstantTimeCompare([]byte(body.Password), []byte(s.cfg.Password)) != 1 {
-		writeErr(w, http.StatusUnauthorized, "invalid password")
+	username := strings.TrimSpace(body.Username)
+	if username == "" {
+		username = "admin" // legacy single-password logins
+	}
+	// First boot after upgrade: seed the admin account from TRACE_UX_PASSWORD.
+	if err := s.store.EnsureAdmin(s.cfg.Password); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	exp := time.Now().Add(authTTL).Unix()
+	rec, err := s.store.GetUserByUsername(username)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if rec == nil || !verifyPassword(body.Password, rec.PasswordHash) {
+		time.Sleep(200 * time.Millisecond) // blunt brute-force attempts
+		writeErr(w, http.StatusUnauthorized, "invalid username or password")
+		return
+	}
+	token, err := s.store.CreateAuthSession(rec.ID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     authCookie,
-		Value:    s.signAuth(exp),
+		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(authTTL.Seconds()),
+		MaxAge:   int(authSessionTTL.Seconds()),
 	})
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "user": rec.User})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if c, err := r.Cookie(authCookie); err == nil && c.Value != "" {
+		s.store.DeleteAuthSession(c.Value)
+	}
 	http.SetCookie(w, &http.Cookie{Name: authCookie, Value: "", Path: "/", MaxAge: -1})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]bool{"authenticated": true})
+	u := currentUser(r)
+	writeJSON(w, http.StatusOK, map[string]string{"username": u.Username, "role": u.Role})
+}
+
+// handleChangePassword lets any logged-in user rotate their own password after
+// confirming the current one. Every other login session is revoked.
+func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	u := currentUser(r)
+	var body struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := readJSON(w, r, &body); err != nil {
+		return
+	}
+	rec, err := s.store.GetUserByID(u.ID)
+	if err != nil || rec == nil {
+		writeErr(w, http.StatusInternalServerError, "user lookup failed")
+		return
+	}
+	if !verifyPassword(body.CurrentPassword, rec.PasswordHash) {
+		writeErr(w, http.StatusUnauthorized, "current password is wrong")
+		return
+	}
+	if err := setPasswordRules(body.NewPassword); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	hash, err := hashPassword(body.NewPassword)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if err := s.store.UpdateUserPassword(u.ID, hash); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	keep := ""
+	if c, err := r.Cookie(authCookie); err == nil {
+		keep = c.Value
+	}
+	if err := s.store.DeleteAuthSessionsForUser(u.ID, keep); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func setPasswordRules(pw string) error {
+	if len(pw) < 8 || len(pw) > 200 {
+		return errors.New("password must be 8-200 characters")
+	}
+	return nil
+}
+
+// ---- Users API (admin only) ----
+
+func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
+	users, err := s.store.ListUsers()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, users)
+}
+
+func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		Role     string `json:"role"`
+	}
+	if err := readJSON(w, r, &body); err != nil {
+		return
+	}
+	username := strings.TrimSpace(body.Username)
+	role := body.Role
+	if role == "" {
+		role = "viewer"
+	}
+	if !validateUsername(username) {
+		writeErr(w, http.StatusBadRequest, "username must be 1-64 characters (letters, digits, . _ -)")
+		return
+	}
+	if !validateRole(role) {
+		writeErr(w, http.StatusBadRequest, "role must be admin or viewer")
+		return
+	}
+	if err := setPasswordRules(body.Password); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	hash, err := hashPassword(body.Password)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	user, err := s.store.CreateUser(username, hash, role)
+	if err == errUserExists {
+		writeErr(w, http.StatusConflict, "username already taken")
+		return
+	}
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, user)
+}
+
+// handleUpdateUser resets a password and/or changes a role. Both revoke the
+// target user's logins so the change takes effect immediately.
+func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeErr(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+	var body struct {
+		Password string `json:"password"`
+		Role     string `json:"role"`
+	}
+	if err := readJSON(w, r, &body); err != nil {
+		return
+	}
+	if body.Password == "" && body.Role == "" {
+		writeErr(w, http.StatusBadRequest, "nothing to update")
+		return
+	}
+	target, err := s.store.GetUserByID(id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if target == nil {
+		writeErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if body.Role != "" {
+		if !validateRole(body.Role) {
+			writeErr(w, http.StatusBadRequest, "role must be admin or viewer")
+			return
+		}
+		if target.Role == "admin" && body.Role != "admin" {
+			other, err := s.store.HasOtherAdmin(id)
+			if err != nil {
+				writeErr(w, http.StatusInternalServerError, err.Error())
+				return
+			}
+			if !other {
+				writeErr(w, http.StatusBadRequest, "cannot demote the last admin")
+				return
+			}
+		}
+		if err := s.store.UpdateUserRole(id, body.Role); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if body.Password != "" {
+		if err := setPasswordRules(body.Password); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		hash, err := hashPassword(body.Password)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if err := s.store.UpdateUserPassword(id, hash); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if err := s.store.DeleteAuthSessionsForUser(id, ""); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	updated, err := s.store.GetUserByID(id)
+	if err != nil || updated == nil {
+		writeErr(w, http.StatusInternalServerError, "user lookup failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, updated.User)
+}
+
+func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeErr(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+	target, err := s.store.GetUserByID(id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if target == nil {
+		writeErr(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if target.Role == "admin" {
+		other, err := s.store.HasOtherAdmin(id)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if !other {
+			writeErr(w, http.StatusBadRequest, "cannot delete the last admin")
+			return
+		}
+	}
+	// auth_sessions cascade; the operator must log in again (as someone else).
+	if err := s.store.DeleteUser(id); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 // ---- Sites ----
@@ -205,6 +542,7 @@ func (s *Server) handleListSites(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Name string `json:"name"`
+		URL  string `json:"url"`
 	}
 	if err := readJSON(w, r, &body); err != nil {
 		return
@@ -214,7 +552,12 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "name must be 1-100 characters")
 		return
 	}
-	site, err := s.store.CreateSite(name)
+	siteURL, err := normalizeSiteURL(body.URL)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	site, err := s.store.CreateSite(name, siteURL)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -247,13 +590,24 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "unknown site key")
 		return
 	}
-	// v1: fixed config; sampling and masking knobs arrive with the dashboard.
+	// The dashboard owns these settings per site; the tracker consumes them.
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sample_rate":          1.0,
 		"checkout_interval_ms": 30000,
 		"mask_inputs":          true,
 		"flush_interval_ms":    5000,
 		"flush_batch_size":     20,
+		"recording_enabled":    site.RecordingEnabled,
+		"feedback": map[string]any{
+			"enabled":    site.Settings.FeedbackEnabled,
+			"position":   site.Settings.FeedbackPosition,
+			"survey_id":  site.Settings.SurveyID,
+			"title":      site.Settings.SurveyTitle,
+			"type":       site.Settings.SurveyType,
+			"questions":  site.Settings.Questions,
+			"appearance": site.Settings.Appearance,
+			"trigger":    site.Settings.FeedbackTrigger,
+		},
 	})
 }
 

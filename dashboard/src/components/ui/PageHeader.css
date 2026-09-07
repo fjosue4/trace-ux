@@ -1,0 +1,10 @@
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+  flex-wrap: wrap;
+}
+.page-head__sub { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.88rem; }
+.page-head__actions { display: flex; gap: 0.6rem; align-items: center; }

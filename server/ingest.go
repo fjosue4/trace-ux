@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -19,6 +20,12 @@ import (
 // retryable without server round-trips.
 
 const ingestBodyLimit = 10 << 20 // 10 MB
+
+// maxSessionDurationMs mirrors the tracker's MAX_SESSION_MS: one session never
+// spans more than 2h of active time. The tracker splits marathon visits into a
+// fresh session; this cap keeps buggy or hostile clients from inflating the
+// stored duration beyond what the split would have produced.
+const maxSessionDurationMs = 2 * 60 * 60 * 1000
 
 type ingestEnvelope struct {
 	Type      string `json:"type"`
@@ -38,6 +45,30 @@ type ingestHello struct {
 	ViewportH   int    `json:"viewport_h"`
 	ScreenW     int    `json:"screen_w"`
 	ScreenH     int    `json:"screen_h"`
+	UserID      string `json:"user_id"`
+	ClientID    string `json:"client_id"`
+	RemoteID    string `json:"remote_id"`
+}
+
+type ingestCustomEvent struct {
+	TS      int64  `json:"ts"`
+	Name    string `json:"name"`
+	TrackID string `json:"track_id"`
+}
+
+type ingestCustom struct {
+	Type      string              `json:"type"`
+	SessionID string              `json:"session_id"`
+	Events    []ingestCustomEvent `json:"events"`
+}
+
+type ingestFeedback struct {
+	Type      string          `json:"type"`
+	SessionID string          `json:"session_id"`
+	SurveyID  string          `json:"survey_id"`
+	Rating    int             `json:"rating"`
+	Comment   string          `json:"comment"`
+	Answers   []FeedbackAnswer `json:"answers"`
 }
 
 type ingestEvents struct {
@@ -87,9 +118,31 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid JSON")
 		return
 	}
-	if env.SessionID == "" || len(env.SessionID) > 64 || !validSessionID(env.SessionID) {
+	// Feedback can be anonymous (no recording to attach to); every other batch
+	// type belongs to a session.
+	needsSession := env.Type != "feedback"
+	if needsSession && (env.SessionID == "" || len(env.SessionID) > 64 || !validSessionID(env.SessionID)) {
 		writeErr(w, http.StatusBadRequest, "missing session_id")
 		return
+	}
+	if env.Type == "events" && !site.RecordingEnabled {
+		// Recordings are toggled per site from the dashboard; lightweight
+		// batches (hello/ping/page/custom/feedback) still flow so the feedback
+		// channel keeps working while recording is off.
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if env.Type == "events" {
+		ok, err := s.store.CanStartRecording(site.ID, env.SessionID, site.Settings.MaxConcurrentSessions)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if !ok {
+			// Per-site cap on simultaneous recordings reached.
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 	}
 
 	switch env.Type {
@@ -129,6 +182,73 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		err = s.store.SavePing(site.ID, env.SessionID, &m)
+	case "custom":
+		var m ingestCustom
+		if err := json.Unmarshal(body, &m); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid custom events")
+			return
+		}
+		if len(m.Events) == 0 {
+			writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+			return
+		}
+		if len(m.Events) > 100 {
+			writeErr(w, http.StatusBadRequest, "too many custom events")
+			return
+		}
+		events := make([]CustomEvent, 0, len(m.Events))
+		for _, e := range m.Events {
+			if e.TS <= 0 || len(e.Name) == 0 || len(e.Name) > 100 || len(e.TrackID) > 100 {
+				writeErr(w, http.StatusBadRequest, "invalid custom event")
+				return
+			}
+			events = append(events, CustomEvent{TS: e.TS, Name: e.Name, TrackID: e.TrackID})
+		}
+		err = s.store.SaveCustomEvents(site.ID, env.SessionID, events)
+	case "feedback":
+		var m ingestFeedback
+		if err := json.Unmarshal(body, &m); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid feedback")
+			return
+		}
+		if m.Rating < 0 || m.Rating > 10 {
+			writeErr(w, http.StatusBadRequest, "rating must be 0-10")
+			return
+		}
+		if len(m.Comment) > 2000 || len(m.SurveyID) > 100 {
+			writeErr(w, http.StatusBadRequest, "feedback payload too long")
+			return
+		}
+		if len(m.Answers) > 20 {
+			writeErr(w, http.StatusBadRequest, "too many answers")
+			return
+		}
+		for _, a := range m.Answers {
+			if len(a.ID) == 0 || len(a.ID) > 100 || len(a.Label) > 200 || len(a.Value) > 1000 {
+				writeErr(w, http.StatusBadRequest, "invalid answer")
+				return
+			}
+		}
+		if m.SurveyID == "" {
+			m.SurveyID = "default"
+		}
+		// Custom surveys may not ask a numeric question; derive the stored
+		// rating from the first numeric answer so summaries stay meaningful.
+		if m.Rating == 0 {
+			for _, a := range m.Answers {
+				if v, err := strconv.Atoi(a.Value); err == nil && v >= 0 && v <= 10 {
+					m.Rating = v
+					break
+				}
+			}
+		}
+		answersJSON := ""
+		if len(m.Answers) > 0 {
+			if b, err := json.Marshal(m.Answers); err == nil {
+				answersJSON = string(b)
+			}
+		}
+		_, err = s.store.SaveFeedback(site.ID, env.SessionID, m.SurveyID, m.Rating, m.Comment, answersJSON)
 	default:
 		writeErr(w, http.StatusBadRequest, "unknown batch type")
 		return
@@ -212,9 +332,9 @@ func (s *Store) SaveHello(siteID int64, sessionID, ua, ipHash string, m *ingestH
 	}
 	// Session metadata is set-if-empty: the first page of a visit provides the
 	// attribution (referrer, UTM, initial URL); later page loads in the same
-	// session send hello again and must not overwrite it. The referrer is only
-	// accepted while initial_url is still empty, so internal navigation
-	// referrers never masquerade as the external source.
+	// session send hello again and must not overwrite it. Visitor identity is
+	// the opposite: a non-empty id always wins, so a mid-visit
+	// window.TraceUX.identify() sticks for the rest of the session.
 	browser, osName, device := parseUA(ua)
 	_, err := s.db.Exec(`UPDATE sessions SET
 		initial_url = COALESCE(NULLIF(initial_url, ''), ?),
@@ -222,6 +342,9 @@ func (s *Store) SaveHello(siteID int64, sessionID, ua, ipHash string, m *ingestH
 		utm_source   = COALESCE(NULLIF(utm_source, ''), ?),
 		utm_medium   = COALESCE(NULLIF(utm_medium, ''), ?),
 		utm_campaign = COALESCE(NULLIF(utm_campaign, ''), ?),
+		user_id      = CASE WHEN ? != '' THEN ? ELSE user_id END,
+		client_id    = CASE WHEN ? != '' THEN ? ELSE client_id END,
+		remote_id    = CASE WHEN ? != '' THEN ? ELSE remote_id END,
 		viewport_w = COALESCE(NULLIF(viewport_w, 0), ?),
 		viewport_h = COALESCE(NULLIF(viewport_h, 0), ?),
 		screen_w   = COALESCE(NULLIF(screen_w, 0), ?),
@@ -234,6 +357,7 @@ func (s *Store) SaveHello(siteID int64, sessionID, ua, ipHash string, m *ingestH
 		last_seen  = ?
 		WHERE id = ?`,
 		m.URL, m.Referrer, m.UTMSource, m.UTMMedium, m.UTMCampaign,
+		m.UserID, m.UserID, m.ClientID, m.ClientID, m.RemoteID, m.RemoteID,
 		m.ViewportW, m.ViewportH, m.ScreenW, m.ScreenH,
 		browser, osName, device, ua, ipHash, now, sessionID)
 	return err
@@ -296,13 +420,12 @@ func (s *Store) SavePing(siteID int64, sessionID string, m *ingestPing) error {
 	if _, err := s.db.Exec(ensureSession, sessionID, siteID, now, now); err != nil {
 		return err
 	}
-	// Cap duration defensively: buggy or hostile clients must not inflate it
-	// beyond 24h of visible time.
+	// Cap duration at 2h to match the tracker's session split.
 	_, err := s.db.Exec(`UPDATE sessions SET
-		last_seen = ?, duration_ms = MIN(MAX(duration_ms, ?), 86400000),
+		last_seen = ?, duration_ms = MIN(MAX(duration_ms, ?), ?),
 		page_count = MAX(page_count, ?),
 		exit_url = COALESCE(NULLIF(?, ''), exit_url)
-		WHERE id = ?`, now, m.DurationMs, m.PageCount, m.ExitURL, sessionID)
+		WHERE id = ?`, now, m.DurationMs, maxSessionDurationMs, m.PageCount, m.ExitURL, sessionID)
 	return err
 }
 

@@ -1,12 +1,25 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+// Self-hosted Inter (latin subset) — consistent, professional type everywhere,
+// no external font CDN calls.
+import '@fontsource/inter/latin-400.css';
+import '@fontsource/inter/latin-500.css';
+import '@fontsource/inter/latin-600.css';
+import '@fontsource/inter/latin-700.css';
+import '@fontsource/inter/latin-800.css';
+// Global styles load first so page-level CSS can override base rules.
+import './styles/tokens.css';
+import './styles/base.css';
 import App from './App';
 import Login from './pages/Login';
 import Sites from './pages/Sites';
+import SiteDetail from './pages/SiteDetail';
 import Sessions from './pages/Sessions';
 import Replay from './pages/Replay';
-import './styles.css';
+import Feedback from './pages/Feedback';
+import Settings from './pages/Settings';
+import SystemHealth from './pages/SystemHealth';
 
 const router = createBrowserRouter([
   {
@@ -15,8 +28,12 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Sites /> },
       { path: 'login', element: <Login /> },
-      { path: 'site/:siteId', element: <Sessions /> },
+      { path: 'sessions', element: <Sessions /> },
+      { path: 'site/:siteId', element: <SiteDetail /> },
+      { path: 'feedback', element: <Feedback /> },
       { path: 'replay/:sessionId', element: <Replay /> },
+      { path: 'settings', element: <Settings /> },
+      { path: 'system-health', element: <SystemHealth /> },
     ],
   },
 ]);

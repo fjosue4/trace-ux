@@ -3,9 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Webshots</title>
-    <script type="module" crossorigin src="/assets/index-BdhDKp4W.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-BTS4posw.css">
+    <title>TraceUX</title>
+    <script>
+      // Set the theme before first paint to avoid a flash of the wrong palette.
+      // useTheme() takes over from here and keeps the choice in localStorage.
+      (function () {
+        var t;
+        try { t = localStorage.getItem('trace_ux_theme'); } catch (e) { /* storage blocked */ }
+        if (t !== 'light' && t !== 'dark') {
+          t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.dataset.theme = t;
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-D4gAnk3s.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-lbotObHb.css">
   </head>
   <body>
     <div id="root"></div>

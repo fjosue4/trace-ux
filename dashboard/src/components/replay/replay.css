@@ -1,0 +1,186 @@
+/* Replay page: the recording owns the left; every detail lives in the right
+   sidebar (visit summary + page timeline + tracked activity + details). */
+
+.replay-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 1.2rem;
+  align-items: start;
+}
+@media (max-width: 960px) {
+  .replay-grid { grid-template-columns: 1fr; }
+}
+
+/* keep the recording visible while scrolling the sidebar */
+.replay-main {
+  position: sticky;
+  top: 12px;
+  min-width: 0;
+}
+
+.player-frame {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 0.75rem;
+}
+/* rrweb-player floats .rr-player left; flow-root makes the host contain it. */
+.player-host { display: flow-root; }
+.player-host iframe { border-radius: var(--radius); overflow: hidden; }
+
+/* dedicated play overlay before playback starts */
+.player-cover {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  font: inherit;
+  color: var(--ink);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  backdrop-filter: blur(3px);
+  border: none;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+}
+.player-cover__btn {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-md), 0 0 0 10px var(--accent-soft);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+.player-cover:hover .player-cover__btn { transform: scale(1.08); }
+.player-cover__label { font-size: 0.85rem; font-weight: 600; }
+
+/* right sidebar stack */
+.replay-side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 1.2rem;
+  min-width: 0;
+}
+
+/* label/value grid — compact two columns inside the sidebar */
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.9rem 1.2rem;
+}
+.replay-side-col .meta-grid { grid-template-columns: 1fr 1fr; gap: 0.7rem 0.9rem; }
+.meta-block { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.meta-block--wide { grid-column: 1 / -1; }
+.meta-block__label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+.meta-block__value { font-size: 0.92rem; font-weight: 600; word-break: break-all; }
+.meta-block__value a { color: var(--accent); }
+.meta-block__value a:hover { text-decoration: underline; }
+
+/* clickable page timeline */
+.pages-list { margin: 0.2rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.3rem; }
+
+.page-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 0.5rem 0.6rem;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+.page-row:hover { background: var(--surface-2); }
+.page-row.is-active { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+
+.page-row__num {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.page-row.is-active .page-row__num { background: var(--accent); color: var(--on-accent); }
+
+.page-row__body { display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
+.page-row__url {
+  font-size: 0.85rem;
+  font-weight: 600;
+  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.page-row__meta { font-size: 0.76rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* tracked activity rows */
+.activity-row .page-row__num { background: var(--accent-soft); color: var(--accent); }
+.activity-row.is-active .page-row__num,
+.activity-row:hover .page-row__num { background: var(--accent); color: var(--on-accent); }
+
+/* rrweb-player ships a light-only controller stylesheet; these overrides map
+   its chrome onto our tokens in dark mode (selectors + doubled specificity
+   beat the vendor rules; scoping keeps it inside the player). */
+:root[data-theme='dark'] .player-frame .rr-player {
+  background: var(--surface);
+  box-shadow: none;
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+:root[data-theme='dark'] .player-frame .rr-controller {
+  background: var(--surface);
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+:root[data-theme='dark'] .player-frame .rr-timeline__time { color: var(--ink-2); }
+:root[data-theme='dark'] .player-frame .rr-progress {
+  background: var(--surface-2);
+  border-top-color: var(--surface);
+  border-bottom-color: var(--surface);
+}
+:root[data-theme='dark'] .player-frame .rr-progress__step { background: var(--accent-soft); }
+:root[data-theme='dark'] .player-frame .rr-progress__handler { background: var(--accent); }
+:root[data-theme='dark'] .player-frame .rr-controller__btns button { color: var(--ink-2); }
+:root[data-theme='dark'] .player-frame .rr-controller__btns button:active { background: var(--surface-2); }
+:root[data-theme='dark'] .player-frame .rr-controller__btns button.active {
+  color: var(--on-accent);
+  background: var(--accent);
+}
+:root[data-theme='dark'] .player-frame .switch .label { color: var(--ink-2); }
+
+/* long URL values: entry clamps to two lines, referrer stays on one; both get a copy button */
+.meta-value-row { display: flex; align-items: center; gap: 0.3rem; min-width: 0; }
+.meta-clamp2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-all;
+  min-width: 0;
+}
+.meta-oneline { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.meta-copy { width: 22px; height: 22px; flex: none; }

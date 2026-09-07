@@ -1,0 +1,12 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.14rem 0.6rem;
+  border-radius: var(--radius-pill);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.badge--accent { background: var(--accent-soft); color: var(--accent); }
+.badge--neutral { background: var(--surface-2); color: var(--muted); }
+.badge--danger { background: var(--danger-soft); color: var(--danger); }

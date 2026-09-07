@@ -1,5 +1,5 @@
 # Go
-/server/webshots
+/server/trace-ux
 /dist/
 *.test
 
@@ -20,3 +20,6 @@ data/
 # OS / editor
 .DS_Store
 server/static/tracker.js
+
+# Compiled Go binaries
+*.exe

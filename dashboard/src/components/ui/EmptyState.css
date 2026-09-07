@@ -1,0 +1,13 @@
+.empty { text-align: center; padding: 3.2rem 1.5rem; }
+.empty__icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: var(--surface-2);
+  display: grid;
+  place-items: center;
+  margin: 0 auto 0.9rem;
+  color: var(--muted);
+}
+.empty__title { margin: 0 0 0.3rem; }
+.empty__desc { margin: 0 auto 1.1rem; color: var(--muted); max-width: 48ch; font-size: 0.9rem; }

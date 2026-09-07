@@ -1,0 +1,114 @@
+/* Floating rounded panel, like the app-window dashboards. */
+.sidebar {
+  width: 228px;
+  flex: none;
+  position: sticky;
+  top: 12px;
+  height: calc(100vh - 24px);
+  margin: 12px;
+  display: flex;
+  flex-direction: column;
+  padding: 1.1rem 0.85rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 800;
+  font-size: 1.04rem;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  padding: 0.2rem 0.6rem 1.1rem;
+}
+
+.sidebar__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.sidebar__nav { display: flex; flex-direction: column; gap: 0.3rem; }
+
+.sidebar__link {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.95rem;
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.92rem;
+  transition: background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+.sidebar__link:hover { background: var(--surface-2); color: var(--ink); }
+/* Inverted pill: light chip on dark, dark chip on light — like the reference. */
+.sidebar__link.is-active { background: var(--ink); color: var(--bg); }
+
+.sidebar__footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+}
+
+.sidebar__theme {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font: inherit;
+  font-size: 0.88rem;
+  color: var(--muted);
+  background: none;
+  border: none;
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+  border-radius: var(--radius-pill);
+  transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
+}
+.sidebar__theme:hover { background: var(--surface-2); color: var(--ink); }
+
+.sidebar__user {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0 0.7rem;
+  font-size: 0.88rem;
+  min-width: 0;
+}
+.sidebar__user .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Narrow screens: the panel docks as a horizontal strip on top. */
+@media (max-width: 860px) {
+  .sidebar {
+    width: auto;
+    height: auto;
+    position: static;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.9rem;
+    margin: 10px 10px 0;
+  }
+  .sidebar__brand { padding: 0; }
+  .sidebar__nav { flex-direction: row; }
+  .sidebar__footer {
+    margin-top: 0;
+    margin-left: auto;
+    flex-direction: row;
+    align-items: center;
+    border-top: none;
+    padding-top: 0;
+  }
+  .sidebar__user { display: none; }
+}

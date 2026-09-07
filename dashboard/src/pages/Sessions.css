@@ -1,0 +1,23 @@
+/* Session rows keep durations aligned for easy scanning. */
+.table td:nth-child(n + 6) { font-variant-numeric: tabular-nums; }
+
+.play-btn { width: 34px; padding: 0; }
+.play-btn svg { margin-left: 2px; }
+
+.session-stats { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+.session-stat { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.85rem 1.3rem; }
+.session-stat__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.session-stat__dot { width: 8px; height: 8px; border-radius: var(--radius-pill); }
+.session-stat__dot--live { background: var(--accent); animation: stat-pulse 2s ease-in-out infinite; }
+.session-stat__dot--done { background: var(--muted); }
+.session-stat__num { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+@keyframes stat-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}

@@ -1,0 +1,3 @@
+.user-manager { display: flex; flex-direction: column; gap: 0.4rem; }
+.user-manager__create { gap: 0.8rem; align-items: flex-end; margin-bottom: 0.6rem; }
+.user-manager__create .field { min-width: 180px; }

@@ -1,0 +1,23 @@
+.center { place-items: center; }
+
+.login-card { width: 370px; text-align: center; padding: 2.2rem 1.9rem; box-shadow: var(--shadow-md); }
+
+.login-brand {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 800;
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
+}
+.login-brand__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.login-sub { margin: 0.2rem 0 1.5rem; }
+.login-hint { margin-top: 1.3rem; }
+.login-card .stack { margin-top: 0.4rem; text-align: left; }

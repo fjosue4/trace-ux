@@ -1,0 +1,95 @@
+/*
+ * Design tokens — the single source of truth for the visual language.
+ *
+ * Direction: modern SaaS dashboard (soft rounded geometry, pill controls,
+ * elevated surfaces, faint borders, pastel status colors). Light theme keeps
+ * the portfolio's warm paper; dark theme sits on near-black neutrals with the
+ * signal-orange brand accent (no purple). Themes switch via
+ * <html data-theme="light|dark">; index.html sets it before first paint.
+ *
+ * Change the look of the whole app here — components only reference tokens.
+ */
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  /* surfaces & text — warm paper page, white cards */
+  --page-bg: #e6e2d8;
+  --bg: #f0eee6;
+  --surface: #ffffff;
+  --surface-2: #f0eee6;
+  --ink: #0a0d0b;
+  --ink-2: #2c312c;
+  --muted: #5d625d;
+  --line: rgba(10, 13, 11, 0.08);
+  --line-strong: rgba(10, 13, 11, 0.18);
+
+  /* brand & feedback — signal, pastel status chips */
+  --accent: #d94928;
+  --accent-strong: #b93a1d;
+  --accent-soft: rgba(242, 95, 58, 0.12);
+  --on-accent: #ffffff;
+  --danger: #b3261e;
+  --danger-soft: rgba(179, 38, 30, 0.1);
+  --success: #14713f;
+  --success-soft: rgba(74, 222, 128, 0.28);
+
+  /* portfolio-native aliases */
+  --paper: #f0eee6;
+  --charcoal: #141915;
+  --signal: #f25f3a;
+  --olive: #7e8b5b;
+
+  --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.05);
+  --shadow-md: 0 16px 40px -16px rgb(16 24 40 / 0.22);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* surfaces & text — near-black neutrals, elevated cards (no purple) */
+  --page-bg: #050506;
+  --bg: #101116;
+  --surface: #17181d;
+  --surface-2: #212329;
+  --ink: #ecedef;
+  --ink-2: #c9cdd1;
+  --muted: #8a8f98;
+  --line: rgba(255, 255, 255, 0.07);
+  --line-strong: rgba(255, 255, 255, 0.14);
+
+  /* brand & feedback — signal on black; status chips pastel like the X palette */
+  --accent: #f25f3a;
+  --accent-strong: #ff7a54;
+  --accent-soft: rgba(242, 95, 58, 0.15);
+  --on-accent: #0a0a0c;
+  --danger: #ff6369;
+  --danger-soft: rgba(255, 99, 105, 0.12);
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.13);
+
+  --paper: #f0eee6;
+  --charcoal: #141915;
+  --signal: #f25f3a;
+  --olive: #7e8b5b;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
+  --shadow-md: 0 16px 40px -16px rgb(0 0 0 / 0.65);
+}
+
+:root {
+  /* typography — self-hosted Inter, system fallbacks */
+  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* geometry — soft, rounded */
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* motion */
+  --duration-fast: 180ms;
+  --duration-medium: 420ms;
+  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+}

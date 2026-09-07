@@ -14,7 +14,7 @@ import (
 var staticFS embed.FS
 
 // newStaticHandler returns the SPA handler for the dashboard. In dev mode
-// (WS_DEV_STATIC=<repo root>) it serves dashboard/dist from disk so frontend
+// (TRACE_UX_DEV_STATIC=<repo root>) it serves dashboard/dist from disk so frontend
 // changes don't require rebuilding the Go binary.
 func newStaticHandler(cfg Config) http.Handler {
 	if cfg.DevStaticDir != "" {

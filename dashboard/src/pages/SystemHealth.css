@@ -1,0 +1,71 @@
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.2rem;
+  margin-bottom: 1.2rem;
+}
+
+.health-card { display: flex; flex-direction: column; gap: 0.7rem; }
+
+.health-card__head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  color: var(--muted);
+}
+
+.health-card__head h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.health-card__big {
+  margin-left: auto;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.meter {
+  display: flex;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.meter__fill {
+  height: 100%;
+  background: var(--muted);
+  transition: width 0.5s ease;
+}
+
+.meter__fill--shot { background: var(--accent); }
+.meter__fill.is-hot { background: var(--danger); }
+
+.health-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.health-store { margin-bottom: 1.2rem; }
+
+.health-store__row {
+  display: flex;
+  gap: 1.5rem;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.health-store__row p { margin: 0.3rem 0 0; max-width: 46rem; }
+
+.health-store__counts { display: flex; gap: 1.6rem; }
+
+.health-store__count { display: flex; flex-direction: column; align-items: center; }
+.health-store__count strong { font-size: 1.4rem; font-variant-numeric: tabular-nums; }

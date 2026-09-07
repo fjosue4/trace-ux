@@ -1,0 +1,55 @@
+name: Release
+
+# Build linux/amd64 + linux/arm64 binaries (dashboard + tracker embedded) and
+# attach them to a GitHub Release. install.sh downloads exactly these assets,
+# so keep the naming in sync: trace_ux_linux_<arch>.tar.gz + checksums.txt.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27"
+
+      - name: Build frontend bundles
+        run: |
+          (cd tracker && npm ci --no-audit --no-fund && npm run build)
+          (cd dashboard && npm ci --no-audit --no-fund && npm run build)
+          rm -rf server/static/assets server/static/index.html
+          cp -r dashboard/dist/. server/static/
+          cp tracker/dist/tracker.js server/static/tracker.js
+
+      - name: Build binaries
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          mkdir -p dist
+          for arch in amd64 arm64; do
+            mkdir -p "dist/trace_ux_linux_${arch}"
+            CGO_ENABLED=0 GOOS=linux GOARCH=$arch \
+              go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
+              -o "dist/trace_ux_linux_${arch}/trace-ux" ./server
+            tar -czf "dist/trace_ux_linux_${arch}.tar.gz" -C "dist/trace_ux_linux_${arch}" trace-ux
+          done
+          (cd dist && sha256sum trace_ux_linux_*.tar.gz > checksums.txt)
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/trace_ux_linux_amd64.tar.gz
+            dist/trace_ux_linux_arm64.tar.gz
+            dist/checksums.txt
+          generate_release_notes: true

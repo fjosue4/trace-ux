@@ -3,7 +3,7 @@
 # dev: run the Go server against live frontend builds (no re-embed needed).
 # Requires tracker/dist and dashboard/dist to exist (make build-tracker etc).
 dev: build-tracker
-	WS_DEV_STATIC=$(CURDIR) WS_DATA=$(CURDIR)/data WS_ADDR=:8090 go run ./server
+	TRACE_UX_DEV_STATIC=$(CURDIR) TRACE_UX_DATA=$(CURDIR)/data TRACE_UX_ADDR=:8090 go run ./server
 
 # NOTE: build-dashboard overwrites the tracked placeholder server/static/index.html;
 # that file is a build artifact once the dashboard exists.
@@ -17,7 +17,7 @@ build-dashboard:
 	cp -r dashboard/dist/. server/static/
 
 build: build-tracker build-dashboard
-	go build -o server/webshots ./server
+	go build -o server/trace-ux ./server
 
 test:
 	go test ./server -v
@@ -27,4 +27,4 @@ serve-demo:
 	cd demo && python3 -m http.server 8081
 
 clean:
-	rm -rf data server/webshots
+	rm -rf data server/trace-ux
