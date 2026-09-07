@@ -453,10 +453,10 @@ func TestSiteManagementAndConfig(t *testing.T) {
 	// Site hub payload: settings default on, empty lists, zero stats.
 	detail := doReq(t, http.MethodGet, base, admin, "")
 	var hub struct {
-		Site     Site          `json:"site"`
-		Sessions []Session     `json:"sessions"`
-		Feedback []Feedback    `json:"feedback"`
-		Stats    SiteStats     `json:"stats"`
+		Site     Site       `json:"site"`
+		Sessions []Session  `json:"sessions"`
+		Feedback []Feedback `json:"feedback"`
+		Stats    SiteStats  `json:"stats"`
 	}
 	json.NewDecoder(detail.Body).Decode(&hub)
 	detail.Body.Close()
@@ -560,6 +560,16 @@ func TestSiteManagementAndConfig(t *testing.T) {
 	viewerResp := doReq(t, http.MethodPost, ts.URL+"/api/users", admin, `{"username":"vw","password":"vw-pass-123","role":"viewer"}`)
 	viewerResp.Body.Close()
 	vw := login(t, ts.URL, "vw", "vw-pass-123")
+	resp = doReq(t, http.MethodPost, ts.URL+"/api/sites", vw, `{"name":"Nope","url":"https://nope.example"}`)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("viewer create site: got %d, want 403", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = doReq(t, http.MethodDelete, ts.URL+"/api/sites/"+fmt.Sprint(site.ID), vw, "")
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("viewer delete site: got %d, want 403", resp.StatusCode)
+	}
+	resp.Body.Close()
 	resp = doReq(t, http.MethodPatch, base, vw, `{"recording_enabled":false}`)
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("viewer patch site: got %d, want 403", resp.StatusCode)

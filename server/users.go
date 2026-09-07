@@ -146,6 +146,9 @@ func (s *Store) EnsureAdmin(password string) error {
 	if n > 0 {
 		return nil
 	}
+	if password == "" {
+		return errors.New("TRACE_UX_PASSWORD must be set before the first admin account is created")
+	}
 	hash, err := hashPassword(password)
 	if err != nil {
 		return err
@@ -158,6 +161,9 @@ func (s *Store) EnsureAdmin(password string) error {
 // ResetAdminPassword re-points the admin account at the env password. Used by
 // TRACE_UX_RESET_ADMIN=1 as a lockout escape hatch.
 func (s *Store) ResetAdminPassword(password string) error {
+	if password == "" {
+		return errors.New("TRACE_UX_PASSWORD must be non-empty when resetting the admin password")
+	}
 	hash, err := hashPassword(password)
 	if err != nil {
 		return err

@@ -6,13 +6,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -21,17 +24,25 @@ const authCookie = "trace_ux_auth"
 type Server struct {
 	store  *Store
 	cfg    *Config
-	secret []byte // HMAC salt for ip_hash (auth cookies are DB-backed now)
+	secret []byte       // HMAC salt for ip_hash (auth cookies are DB-backed now)
 	static http.Handler // SPA + assets
+
+	securityOnce      sync.Once
+	loginIPLimiter    *requestLimiter
+	loginUserLimiter  *requestLimiter
+	ingestIPLimiter   *requestLimiter
+	ingestSiteLimiter *requestLimiter
 }
 
 type Config struct {
-	Addr          string
-	DataDir       string
-	Password      string // bootstrap admin password (TRACE_UX_PASSWORD)
-	ResetAdmin    bool   // TRACE_UX_RESET_ADMIN=1: re-point admin at TRACE_UX_PASSWORD
-	RetentionDays int
-	DevStaticDir  string // serve dashboard/tracker from disk instead of embed (dev)
+	Addr              string
+	DataDir           string
+	Password          string // bootstrap admin password (TRACE_UX_PASSWORD)
+	ResetAdmin        bool   // TRACE_UX_RESET_ADMIN=1: re-point admin at TRACE_UX_PASSWORD
+	RetentionDays     int
+	DevStaticDir      string // serve dashboard/tracker from disk instead of embed (dev)
+	SecureCookies     bool
+	TrustedProxyCIDRs []*net.IPNet
 }
 
 func loadConfig() Config {
@@ -41,6 +52,7 @@ func loadConfig() Config {
 		Password:      os.Getenv("TRACE_UX_PASSWORD"),
 		ResetAdmin:    os.Getenv("TRACE_UX_RESET_ADMIN") == "1",
 		RetentionDays: 90,
+		SecureCookies: envBool("TRACE_UX_SECURE_COOKIES", true),
 	}
 	if v := os.Getenv("TRACE_UX_RETENTION_DAYS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -48,11 +60,44 @@ func loadConfig() Config {
 		}
 	}
 	cfg.DevStaticDir = os.Getenv("TRACE_UX_DEV_STATIC")
+	cfg.TrustedProxyCIDRs = parseTrustedProxyCIDRs(os.Getenv("TRACE_UX_TRUSTED_PROXIES"))
 	if cfg.Password == "" {
-		log.Println("WARNING: TRACE_UX_PASSWORD not set, using default password 'trace-ux'. Set TRACE_UX_PASSWORD in production.")
-		cfg.Password = "trace-ux"
+		log.Println("WARNING: TRACE_UX_PASSWORD is not set; a fresh database will refuse to start until it is configured")
 	}
 	return cfg
+}
+
+func envBool(key string, def bool) bool {
+	v := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	if v == "" {
+		return def
+	}
+	switch v {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		log.Printf("WARNING: %s has invalid boolean value %q; using %t", key, v, def)
+		return def
+	}
+}
+
+func parseTrustedProxyCIDRs(raw string) []*net.IPNet {
+	var out []*net.IPNet
+	for _, item := range strings.Split(raw, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		_, network, err := net.ParseCIDR(item)
+		if err != nil {
+			log.Printf("WARNING: ignoring invalid TRACE_UX_TRUSTED_PROXIES entry %q", item)
+			continue
+		}
+		out = append(out, network)
+	}
+	return out
 }
 
 func envOr(key, def string) string {
@@ -65,17 +110,34 @@ func envOr(key, def string) string {
 // loadSecret returns the persisted HMAC secret used to sign auth cookies.
 func loadSecret(dataDir string) ([]byte, error) {
 	path := filepath.Join(dataDir, "secret.key")
-	if b, err := os.ReadFile(path); err == nil && len(b) == 32 {
+	if b, err := os.ReadFile(path); err == nil {
+		if len(b) != 32 {
+			return nil, fmt.Errorf("auth secret %s has invalid length", path)
+		}
+		if err := os.Chmod(path, 0o600); err != nil {
+			return nil, err
+		}
 		return b, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, err
 	}
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		return nil, err
+	}
+	if err := os.Chmod(dataDir, 0o700); err != nil {
 		return nil, err
 	}
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
 		return nil, err
 	}
-	return b, os.WriteFile(path, b, 0o600)
+	if err := os.WriteFile(path, b, 0o600); err != nil {
+		return nil, err
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		return nil, err
+	}
+	return b, nil
 }
 
 func (s *Server) routes() http.Handler {
@@ -85,8 +147,8 @@ func (s *Server) routes() http.Handler {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
-	mux.HandleFunc("POST /api/auth/login", s.handleLogin)
-	mux.HandleFunc("POST /api/auth/logout", s.handleLogout)
+	mux.HandleFunc("POST /api/auth/login", s.sameOrigin(s.handleLogin))
+	mux.HandleFunc("POST /api/auth/logout", s.sameOrigin(s.handleLogout))
 	mux.HandleFunc("POST /api/auth/password", s.auth(s.handleChangePassword))
 	mux.HandleFunc("GET /api/auth/me", s.auth(s.handleMe))
 
@@ -100,11 +162,11 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/system/health", s.auth(s.requireAdmin(s.handleSystemHealth)))
 
 	mux.HandleFunc("GET /api/sites", s.auth(s.handleListSites))
-	mux.HandleFunc("POST /api/sites", s.auth(s.handleCreateSite))
+	mux.HandleFunc("POST /api/sites", s.auth(s.requireAdmin(s.handleCreateSite)))
 	mux.HandleFunc("GET /api/sites/{id}", s.auth(s.handleGetSite))
 	mux.HandleFunc("PATCH /api/sites/{id}", s.auth(s.requireAdmin(s.handleUpdateSite)))
 	mux.HandleFunc("PUT /api/sites/{id}/settings", s.auth(s.requireAdmin(s.handlePutSiteSettings)))
-	mux.HandleFunc("DELETE /api/sites/{id}", s.auth(s.handleDeleteSite))
+	mux.HandleFunc("DELETE /api/sites/{id}", s.auth(s.requireAdmin(s.handleDeleteSite)))
 
 	mux.HandleFunc("GET /api/sessions", s.auth(s.handleListSessions))
 	mux.HandleFunc("GET /api/sessions/stats", s.auth(s.handleSessionStats))
@@ -126,7 +188,7 @@ func (s *Server) routes() http.Handler {
 
 	mux.Handle("/", s.static)
 
-	return s.cors(mux)
+	return s.securityHeaders(s.cors(mux))
 }
 
 // cors restricts cross-origin tracker traffic to the origins of sites
@@ -232,6 +294,10 @@ func currentUser(r *http.Request) *User {
 // password changes, role changes and user deletion revoke access immediately.
 func (s *Server) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if isMutation(r.Method) && !sameOriginRequest(r) {
+			writeErr(w, http.StatusForbidden, "cross-origin request blocked")
+			return
+		}
 		c, err := r.Cookie(authCookie)
 		if err != nil || c.Value == "" {
 			writeErr(w, http.StatusUnauthorized, "unauthorized")
@@ -258,6 +324,11 @@ func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	s.initSecurity()
+	if !s.loginIPLimiter.allow("ip:" + s.clientIP(r)) {
+		writeRateLimited(w, "too many login attempts")
+		return
+	}
 	var body struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -268,6 +339,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	username := strings.TrimSpace(body.Username)
 	if username == "" {
 		username = "admin" // legacy single-password logins
+	}
+	if !s.loginUserLimiter.allow("user:" + strings.ToLower(username)) {
+		writeRateLimited(w, "too many login attempts")
+		return
 	}
 	// First boot after upgrade: seed the admin account from TRACE_UX_PASSWORD.
 	if err := s.store.EnsureAdmin(s.cfg.Password); err != nil {
@@ -294,6 +369,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   s.cfg != nil && s.cfg.SecureCookies,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   int(authSessionTTL.Seconds()),
 	})
@@ -304,7 +380,15 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie(authCookie); err == nil && c.Value != "" {
 		s.store.DeleteAuthSession(c.Value)
 	}
-	http.SetCookie(w, &http.Cookie{Name: authCookie, Value: "", Path: "/", MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{
+		Name:     authCookie,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   s.cfg != nil && s.cfg.SecureCookies,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+	})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -643,10 +727,18 @@ func writeErr(w http.ResponseWriter, status int, msg string) {
 var errBadJSON = errors.New("invalid JSON body")
 
 func readJSON(w http.ResponseWriter, r *http.Request, v any) error {
-	r.Body = http.MaxBytesReader(w, r.Body, 10<<20) // 10 MB batch cap
+	r.Body = http.MaxBytesReader(w, r.Body, 256<<10) // dashboard JSON cap
 	dec := json.NewDecoder(r.Body)
 	if err := dec.Decode(v); err != nil {
 		writeErr(w, http.StatusBadRequest, errBadJSON.Error())
+		return err
+	}
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		writeErr(w, http.StatusBadRequest, errBadJSON.Error())
+		if err == nil {
+			return errors.New("multiple JSON values")
+		}
 		return err
 	}
 	return nil

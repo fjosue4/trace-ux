@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -99,35 +100,49 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var raw map[string]json.RawMessage
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 10<<20))
-	if err := dec.Decode(&raw); err != nil {
-		writeErr(w, http.StatusBadRequest, errBadJSON.Error())
+	if err := readJSON(w, r, &raw); err != nil {
 		return
 	}
 	settings := DefaultSiteSettings()
-	apply := func(key string, target any) {
+	apply := func(key string, target any) error {
 		if v, ok := raw[key]; ok {
-			_ = json.Unmarshal(v, target)
+			if err := json.Unmarshal(v, target); err != nil {
+				return fmt.Errorf("invalid %s", key)
+			}
+		}
+		return nil
+	}
+	for key, target := range map[string]any{
+		"feedback_enabled":        &settings.FeedbackEnabled,
+		"feedback_position":       &settings.FeedbackPosition,
+		"survey_id":               &settings.SurveyID,
+		"survey_title":            &settings.SurveyTitle,
+		"survey_type":             &settings.SurveyType,
+		"max_concurrent_sessions": &settings.MaxConcurrentSessions,
+		"retention_sessions_days": &settings.RetentionSessionsDays,
+		"retention_feedback_days": &settings.RetentionFeedbackDays,
+		"allow_delete_recordings": &settings.AllowDeleteRecordings,
+		"questions":               &settings.Questions,
+	} {
+		if err := apply(key, target); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
 		}
 	}
-	apply("feedback_enabled", &settings.FeedbackEnabled)
-	apply("feedback_position", &settings.FeedbackPosition)
-	apply("survey_id", &settings.SurveyID)
-	apply("survey_title", &settings.SurveyTitle)
-	apply("survey_type", &settings.SurveyType)
-	apply("max_concurrent_sessions", &settings.MaxConcurrentSessions)
-	apply("retention_sessions_days", &settings.RetentionSessionsDays)
-	apply("retention_feedback_days", &settings.RetentionFeedbackDays)
-	apply("allow_delete_recordings", &settings.AllowDeleteRecordings)
-	apply("questions", &settings.Questions)
 	if v, ok := raw["appearance"]; ok {
 		var a SiteAppearance
-		_ = json.Unmarshal(v, &a)
+		if err := json.Unmarshal(v, &a); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid appearance")
+			return
+		}
 		settings.Appearance = &a
 	}
 	if v, ok := raw["feedback_trigger"]; ok {
 		var t FeedbackTrigger
-		_ = json.Unmarshal(v, &t)
+		if err := json.Unmarshal(v, &t); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid feedback_trigger")
+			return
+		}
 		settings.FeedbackTrigger = &t
 	}
 	if err := ValidateSiteSettings(settings); err != nil {
