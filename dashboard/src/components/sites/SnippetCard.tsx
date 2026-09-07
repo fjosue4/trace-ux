@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Site } from '../../api';
+import { spring } from '../../lib/motion';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import { Icon } from '../ui/Icon';
@@ -53,24 +55,28 @@ export default function SnippetCard({ site, origin, title, onDismiss }: Props) {
       </div>
 
       <div className="snippet-tabs" role="tablist" aria-label="Installation method">
-        <button
+        <motion.button
           type="button"
           role="tab"
           aria-selected={method === 'manual'}
           className={`snippet-tab${method === 'manual' ? ' is-active' : ''}`}
           onClick={() => setMethod('manual')}
+          whileTap={{ scale: 0.96 }}
+          transition={spring}
         >
           Manual
-        </button>
-        <button
+        </motion.button>
+        <motion.button
           type="button"
           role="tab"
           aria-selected={method === 'gtm'}
           className={`snippet-tab${method === 'gtm' ? ' is-active' : ''}`}
           onClick={() => setMethod('gtm')}
+          whileTap={{ scale: 0.96 }}
+          transition={spring}
         >
           Google Tag Manager
-        </button>
+        </motion.button>
       </div>
 
       {method === 'manual' ? (
@@ -86,7 +92,9 @@ export default function SnippetCard({ site, origin, title, onDismiss }: Props) {
         </p>
       )}
 
-      <pre>{code}</pre>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.pre key={method} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.16 }}>{code}</motion.pre>
+      </AnimatePresence>
 
       <Button variant="secondary" size="sm" onClick={copy}>
         <Icon name={copied ? 'check' : 'copy'} size={13} />

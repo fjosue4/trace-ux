@@ -1,4 +1,6 @@
 import { ReactNode } from 'react';
+import { motion } from 'motion/react';
+import { stagger } from '../../lib/motion';
 import { SessionFilter } from '../../api';
 import { Input, Select, SelectOption } from '../ui/fields';
 import './FiltersBar.css';
@@ -31,7 +33,7 @@ const LENGTH_OPTIONS: SelectOption[] = [
 
 export default function FiltersBar({ filter, onChange, extra }: Props) {
   return (
-    <div className="filters">
+    <motion.div className="filters" variants={stagger} initial="hidden" animate="visible">
       {extra}
       <Select
         ariaLabel="Device"
@@ -74,6 +76,6 @@ export default function FiltersBar({ filter, onChange, extra }: Props) {
         value={filter.url || ''}
         onChange={(e) => onChange({ url: e.target.value || undefined })}
       />
-    </div>
+    </motion.div>
   );
 }

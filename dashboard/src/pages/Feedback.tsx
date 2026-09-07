@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, Feedback, FeedbackSummary, Site } from '../api';
+import { api, Feedback as FeedbackItem, FeedbackSummary, Site } from '../api';
 import { fmtTime, truncate } from '../lib/format';
 import { useUser } from '../App';
 import PageHeader from '../components/ui/PageHeader';
@@ -35,11 +35,11 @@ export default function Feedback() {
   const { user } = useUser();
   const [sites, setSites] = useState<Site[] | null>(null);
   const [summaries, setSummaries] = useState<FeedbackSummary[]>([]);
-  const [items, setItems] = useState<Feedback[] | null>(null);
+  const [items, setItems] = useState<FeedbackItem[] | null>(null);
   const [error, setError] = useState('');
   const [siteSel, setSiteSel] = useState<SiteSelection>('all');
   const [surveySel, setSurveySel] = useState<string>('all');
-  const [pendingDelete, setPendingDelete] = useState<Feedback | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<FeedbackItem | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {

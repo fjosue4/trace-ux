@@ -2,3 +2,9 @@
    No padding + overflow clip so row hover backgrounds fill the full card
    height and stay inside the rounded corners. */
 .card.site-list { padding: 0; overflow: hidden; }
+
+@media (max-width: 640px) {
+  .add-site .row { flex-direction: column; align-items: stretch; }
+  .add-site .field-control,
+  .add-site .btn { width: 100%; }
+}

@@ -1,6 +1,6 @@
 /* Floating rounded panel, like the app-window dashboards. */
 .sidebar {
-  width: 228px;
+  width: 236px;
   flex: none;
   position: sticky;
   top: 12px;
@@ -9,10 +9,11 @@
   display: flex;
   flex-direction: column;
   padding: 1.1rem 0.85rem;
-  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(18px);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
 }
 
 .sidebar__brand {
@@ -20,28 +21,29 @@
   align-items: center;
   gap: 0.5rem;
   font-weight: 800;
-  font-size: 1.04rem;
+  font-size: 1.1rem;
   letter-spacing: -0.02em;
   color: var(--ink);
   padding: 0.2rem 0.6rem 1.1rem;
 }
+.sidebar__brand-accent { color: var(--accent); }
 
 .sidebar__dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-soft);
+  box-shadow: 0 0 0 5px var(--accent-soft);
 }
 
-.sidebar__nav { display: flex; flex-direction: column; gap: 0.3rem; }
+.sidebar__nav { display: flex; flex-direction: column; gap: 0.25rem; }
 
 .sidebar__link {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  padding: 0.55rem 0.95rem;
-  border-radius: var(--radius-pill);
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius);
   color: var(--muted);
   font-weight: 600;
   font-size: 0.92rem;
@@ -50,7 +52,7 @@
 }
 .sidebar__link:hover { background: var(--surface-2); color: var(--ink); }
 /* Inverted pill: light chip on dark, dark chip on light — like the reference. */
-.sidebar__link.is-active { background: var(--ink); color: var(--bg); }
+.sidebar__link.is-active { background: var(--accent); color: var(--on-accent); box-shadow: var(--shadow-accent); }
 
 .sidebar__footer {
   margin-top: auto;
@@ -96,12 +98,14 @@
     position: static;
     flex-direction: row;
     align-items: center;
-    gap: 0.6rem;
-    padding: 0.55rem 0.9rem;
-    margin: 10px 10px 0;
+    gap: 0.5rem;
+    padding: 0.7rem;
+    margin: 8px 8px 0;
   }
   .sidebar__brand { padding: 0; }
   .sidebar__nav { flex-direction: row; }
+  .sidebar__nav > div { flex: none; }
+  .sidebar__link { padding: 0.55rem 0.7rem; }
   .sidebar__footer {
     margin-top: 0;
     margin-left: auto;
@@ -111,4 +115,25 @@
     padding-top: 0;
   }
   .sidebar__user { display: none; }
+}
+
+@media (max-width: 640px) {
+  .sidebar { align-items: center; flex-wrap: wrap; border-radius: 16px; }
+  .sidebar__brand { padding-left: 0.35rem; }
+  .sidebar__nav {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.3rem;
+    overflow: visible;
+    order: 3;
+  }
+  .sidebar__nav > div { min-width: 0; }
+  /* The hidden text is still a flex item; remove the desktop gap so icons
+     remain geometrically centered in every mobile navigation cell. */
+  .sidebar__link { justify-content: center; min-height: 42px; padding: 0.55rem; gap: 0; font-size: 0; }
+  .sidebar__link svg { width: 18px; height: 18px; }
+  .sidebar__footer { margin-left: auto; padding: 0; }
+  .sidebar__theme span, .sidebar__footer .btn { display: none; }
+  .sidebar__theme { width: 38px; height: 38px; justify-content: center; padding: 0; }
 }

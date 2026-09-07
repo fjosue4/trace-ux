@@ -1,4 +1,6 @@
 import { ReactNode } from 'react';
+import { motion } from 'motion/react';
+import { fadeUp } from '../../lib/motion';
 import './Table.css';
 
 type Props = {
@@ -13,7 +15,7 @@ type Props = {
 
 export default function Table({ headers, widths, fixed, children, className = '' }: Props) {
   return (
-    <div className={`table-wrap ${className}`.trim()}>
+    <motion.div className={`table-wrap ${className}`.trim()} variants={fadeUp} initial="hidden" animate="visible">
       <table className={`table${fixed ? ' table--fixed' : ''}`}>
         <thead>
           <tr>
@@ -26,6 +28,6 @@ export default function Table({ headers, widths, fixed, children, className = ''
         </thead>
         <tbody>{children}</tbody>
       </table>
-    </div>
+    </motion.div>
   );
 }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Outlet, useNavigate, useOutletContext } from 'react-router-dom';
+import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import { api, ApiError, CurrentUser } from './api';
 import { AuthContext } from './auth/auth';
 import Sidebar from './components/layout/Sidebar';
@@ -46,12 +47,23 @@ export default function App() {
             navigate('/login');
           }}
         />
-        <main className="app__main">
+        <motion.main
+          className="app__main"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 280, damping: 28 }}
+        >
           <Outlet context={{ user }} />
-        </main>
+        </motion.main>
       </div>
     );
   })();
 
-  return <AuthContext.Provider value={auth}>{content}</AuthContext.Provider>;
+  return (
+    <MotionConfig reducedMotion="user">
+      <AuthContext.Provider value={auth}>
+        <AnimatePresence mode="wait">{content}</AnimatePresence>
+      </AuthContext.Provider>
+    </MotionConfig>
+  );
 }

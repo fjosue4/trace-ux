@@ -25,7 +25,9 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   padding: 0.75rem;
+  transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
 }
+.player-frame:hover { border-color: var(--line-strong); box-shadow: var(--shadow-md); }
 /* rrweb-player floats .rr-player left; flow-root makes the host contain it. */
 .player-host { display: flow-root; }
 .player-host iframe { border-radius: var(--radius); overflow: hidden; }
@@ -59,7 +61,7 @@
   box-shadow: var(--shadow-md), 0 0 0 10px var(--accent-soft);
   transition: transform var(--duration-fast) var(--ease-out);
 }
-.player-cover:hover .player-cover__btn { transform: scale(1.08); }
+.player-cover:hover .player-cover__btn { transform: scale(1.06); box-shadow: var(--shadow-accent), 0 0 0 12px var(--accent-soft); }
 .player-cover__label { font-size: 0.85rem; font-weight: 600; }
 
 /* right sidebar stack */

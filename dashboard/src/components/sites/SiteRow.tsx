@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'motion/react';
 import { Site } from '../../api';
 import { fmtTime } from '../../lib/format';
+import { softSpring, spring } from '../../lib/motion';
 import Button from '../ui/Button';
 import { Icon } from '../ui/Icon';
 import './SiteRow.css';
@@ -26,10 +28,10 @@ export default function SiteRow({ site, origin, onDelete }: Props) {
   }
 
   return (
-    <div className="site-row">
-      <span className="site-row__icon" aria-hidden>
+    <motion.div className="site-row" layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -12 }} transition={softSpring}>
+      <motion.span className="site-row__icon" aria-hidden whileHover={{ rotate: -5, scale: 1.06 }} transition={spring}>
         <Icon name="globe" size={18} />
-      </span>
+      </motion.span>
 
       <div className="site-row__main">
         <Link to={`/site/${site.id}`} className="site-row__name" title="Manage this site">
@@ -37,14 +39,15 @@ export default function SiteRow({ site, origin, onDelete }: Props) {
         </Link>
         <span className="site-row__key">
           <span className="mono">{site.site_key}</span>
-          <button
+          <motion.button
             className={`icon-btn${keyCopied ? ' is-success' : ''}`}
             onClick={() => copyText(site.site_key, setKeyCopied)}
             aria-label="Copy site key"
             title={keyCopied ? 'Copied' : 'Copy site key'}
+            whileTap={{ scale: 0.88 }}
           >
             <Icon name={keyCopied ? 'check' : 'copy'} size={13} />
-          </button>
+          </motion.button>
         </span>
       </div>
 
@@ -61,14 +64,15 @@ export default function SiteRow({ site, origin, onDelete }: Props) {
       </div>
 
       <div className="site-row__actions">
-        <button
+        <motion.button
           className={`icon-btn${snippetCopied ? ' is-success' : ''}`}
           onClick={() => copyText(snippet, setSnippetCopied)}
           aria-label="Copy snippet"
           title={snippetCopied ? 'Snippet copied' : 'Copy snippet'}
+          whileTap={{ scale: 0.88 }}
         >
           <Icon name={snippetCopied ? 'check' : 'code'} size={15} />
-        </button>
+        </motion.button>
         <Link to={`/sessions?site=${site.id}`} className="btn btn--secondary btn--sm">
           <Icon name="play" size={12} />
           Sessions
@@ -78,6 +82,6 @@ export default function SiteRow({ site, origin, onDelete }: Props) {
           Delete
         </Button>
       </div>
-    </div>
+    </motion.div>
   );
 }

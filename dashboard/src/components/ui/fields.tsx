@@ -1,15 +1,23 @@
 import {
   CSSProperties,
-  InputHTMLAttributes,
   ReactNode,
   useEffect,
   useRef,
   useState,
 } from 'react';
+import { AnimatePresence, HTMLMotionProps, motion } from 'motion/react';
+import { softSpring, spring } from '../../lib/motion';
 import './fields.css';
 
-export function Input({ className = '', ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={`field-control ${className}`.trim()} {...props} />;
+export function Input({ className = '', ...props }: HTMLMotionProps<'input'>) {
+  return (
+    <motion.input
+      className={`field-control ${className}`.trim()}
+      whileFocus={{ scale: 1.006 }}
+      transition={spring}
+      {...props}
+    />
+  );
 }
 
 export type SelectOption = { value: string; label: string };
@@ -132,7 +140,7 @@ export function Select({ value, options, onChange, className = '', ariaLabel, di
 
   return (
     <span ref={wrapRef} className={`select-wrap${open ? ' is-open' : ''} ${className}`.trim()}>
-      <button
+      <motion.button
         type="button"
         className="field-control select-trigger"
         aria-haspopup="listbox"
@@ -141,10 +149,12 @@ export function Select({ value, options, onChange, className = '', ariaLabel, di
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : openMenu())}
         onKeyDown={onKeyDown}
+        whileTap={disabled ? undefined : { scale: 0.985 }}
+        transition={spring}
       >
         <span className="select-trigger__label">{selected?.label ?? value}</span>
-      </button>
-      <svg
+      </motion.button>
+      <motion.svg
         className="select-wrap__chevron"
         width="12"
         height="12"
@@ -155,34 +165,43 @@ export function Select({ value, options, onChange, className = '', ariaLabel, di
         strokeLinecap="round"
         strokeLinejoin="round"
         aria-hidden
+        animate={{ rotate: open ? 180 : 0 }}
+        transition={spring}
       >
         <path d="m6 9 6 6 6-6" />
-      </svg>
-      {open && pos && (
-        <div
-          className="select-menu"
-          role="listbox"
-          aria-label={ariaLabel}
-          ref={menuRef}
-          style={pos as CSSProperties}
-        >
-          {options.map((o, i) => (
-            <button
-              key={o.value}
-              type="button"
-              role="option"
-              aria-selected={o.value === value}
-              data-active={i === active || undefined}
-              className={`select-menu__option${o.value === value ? ' is-selected' : ''}`}
-              onMouseEnter={() => setActive(i)}
-              onClick={() => commit(o)}
-            >
-              <span className="select-menu__label">{o.label}</span>
-              {o.value === value && <CheckIcon />}
-            </button>
-          ))}
-        </div>
-      )}
+      </motion.svg>
+      <AnimatePresence>
+        {open && pos && (
+          <motion.div
+            className="select-menu"
+            role="listbox"
+            aria-label={ariaLabel}
+            ref={menuRef}
+            style={pos as CSSProperties}
+            initial={{ opacity: 0, y: -4, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -3, scale: 0.985 }}
+            transition={softSpring}
+          >
+            {options.map((o, i) => (
+              <motion.button
+                key={o.value}
+                type="button"
+                role="option"
+                aria-selected={o.value === value}
+                data-active={i === active || undefined}
+                className={`select-menu__option${o.value === value ? ' is-selected' : ''}`}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => commit(o)}
+                whileTap={{ scale: 0.98 }}
+              >
+                <span className="select-menu__label">{o.label}</span>
+                {o.value === value && <CheckIcon />}
+              </motion.button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </span>
   );
 }
@@ -207,10 +226,10 @@ type FieldProps = { label: string; hint?: string; children: ReactNode };
 
 export function Field({ label, hint, children }: FieldProps) {
   return (
-    <label className="field">
+    <motion.label className="field" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={softSpring}>
       <span className="field-label">{label}</span>
       {children}
       {hint && <span className="field-hint">{hint}</span>}
-    </label>
+    </motion.label>
   );
 }

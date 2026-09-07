@@ -23,8 +23,9 @@
 }
 
 .snippet-tab.is-active {
-  background: var(--ink);
-  color: var(--bg);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-accent);
 }
 
 .snippet-card pre { white-space: pre-wrap; word-break: break-all; }

@@ -112,3 +112,13 @@ a.hub-row:hover { background: var(--surface-2); text-decoration: none; }
   text-transform: uppercase;
   color: var(--muted);
 }
+
+@media (max-width: 640px) {
+  .hub-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; }
+  .hub-stat__num { font-size: 1.5rem; }
+  .hub-config__grid { grid-template-columns: 1fr; }
+  .hub-question { align-items: stretch; }
+  .hub-question > .field-control:first-child,
+  .hub-question .select-wrap { flex: 1 1 100%; }
+  .hub-question .select-wrap .field-control { width: 100%; }
+}

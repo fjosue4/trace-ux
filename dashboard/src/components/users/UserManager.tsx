@@ -1,5 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
 import { api, Role, User } from '../../api';
+import { fadeUp } from '../../lib/motion';
 import Button from '../ui/Button';
 import Notice from '../ui/Notice';
 import Table from '../ui/Table';
@@ -61,7 +63,7 @@ export default function UserManager() {
   }
 
   return (
-    <div className="user-manager">
+    <motion.div className="user-manager" variants={fadeUp} initial="hidden" animate="visible">
       <div className="row row--between">
         <p className="muted small">
           Admins manage users and sites; viewers browse sites, sessions and replays. Changing a
@@ -76,8 +78,9 @@ export default function UserManager() {
       {notice && <Notice tone="success">{notice}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
 
+      <AnimatePresence initial={false}>
       {adding && (
-        <form onSubmit={create} className="row row--wrap user-manager__create">
+        <motion.form onSubmit={create} className="row row--wrap user-manager__create" initial={{ opacity: 0, height: 0, y: -6 }} animate={{ opacity: 1, height: 'auto', y: 0 }} exit={{ opacity: 0, height: 0, y: -6 }}>
           <Field label="Username">
             <Input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />
           </Field>
@@ -93,8 +96,9 @@ export default function UserManager() {
             <Select value={role} options={ROLE_OPTIONS} onChange={(v) => setRole(v as Role)} ariaLabel="Role" />
           </Field>
           <Button type="submit">Create</Button>
-        </form>
+        </motion.form>
       )}
+      </AnimatePresence>
 
       {users === null ? (
         <Notice tone="info">Loading users…</Notice>
@@ -105,6 +109,6 @@ export default function UserManager() {
           ))}
         </Table>
       )}
-    </div>
+    </motion.div>
   );
 }

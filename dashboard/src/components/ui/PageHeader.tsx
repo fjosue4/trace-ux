@@ -1,4 +1,6 @@
 import { ReactNode } from 'react';
+import { motion } from 'motion/react';
+import { fadeUp, stagger } from '../../lib/motion';
 import './PageHeader.css';
 
 type Props = {
@@ -9,12 +11,12 @@ type Props = {
 
 export default function PageHeader({ title, subtitle, actions }: Props) {
   return (
-    <div className="page-head">
-      <div>
+    <motion.div className="page-head" variants={stagger} initial="hidden" animate="visible">
+      <motion.div variants={fadeUp}>
         <h1>{title}</h1>
         {subtitle && <p className="page-head__sub">{subtitle}</p>}
-      </div>
-      {actions && <div className="page-head__actions">{actions}</div>}
-    </div>
+      </motion.div>
+      {actions && <motion.div className="page-head__actions" variants={fadeUp}>{actions}</motion.div>}
+    </motion.div>
   );
 }

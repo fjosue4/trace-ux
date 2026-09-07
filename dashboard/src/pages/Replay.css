@@ -1,8 +1,6 @@
 .replay-main { min-width: 0; }
 
-/* the replay page drops the shared max-width so the recording gets all the space
-   (doubled class = wins over base.css regardless of bundle order) */
+/* The replay page uses a slightly tighter bottom edge around the player. */
 .page.page--wide {
-  max-width: none;
   padding-bottom: 2rem;
 }

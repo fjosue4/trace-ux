@@ -42,3 +42,10 @@
   .site-row__stats { flex-direction: row; gap: 0.9rem; }
   .site-row__actions { margin-left: 52px; }
 }
+
+@media (max-width: 520px) {
+  .site-row { align-items: flex-start; gap: 0.75rem; padding: 1rem; }
+  .site-row__main { width: calc(100% - 52px); }
+  .site-row__stats { width: 100%; margin-left: 0; justify-content: space-between; }
+  .site-row__actions { width: 100%; margin-left: 0; justify-content: flex-end; }
+}
