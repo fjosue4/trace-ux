@@ -6,12 +6,13 @@
   display: block;
   width: auto;
   height: 100%;
-  color: var(--accent);
-  --logo-accent: currentColor;
+  color: var(--ink);
+  --logo-accent: var(--accent);
 }
 
 :root[data-theme='dark'] .trace-logo {
   color: #fff;
+  --logo-accent: currentColor;
 }
 
 .trace-logo--on-green {
