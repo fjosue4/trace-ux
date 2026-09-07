@@ -1,7 +1,8 @@
-import { ButtonHTMLAttributes } from 'react';
+import { HTMLMotionProps, motion } from 'motion/react';
+import { spring } from '../../lib/motion';
 import './Button.css';
 
-type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
+type Props = HTMLMotionProps<'button'> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'dangerGhost';
   size?: 'md' | 'sm';
   block?: boolean;
@@ -18,5 +19,14 @@ export default function Button({
   const cls = ['btn', `btn--${variant}`, `btn--${size}`, block && 'btn--block', className]
     .filter(Boolean)
     .join(' ');
-  return <button type={type} className={cls} {...rest} />;
+  return (
+    <motion.button
+      type={type}
+      className={cls}
+      whileHover={rest.disabled ? undefined : { y: -2 }}
+      whileTap={rest.disabled ? undefined : { scale: 0.97, y: 0 }}
+      transition={spring}
+      {...rest}
+    />
+  );
 }

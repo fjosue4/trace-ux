@@ -22,10 +22,5 @@
   border-radius: 50%;
   border: 2px solid var(--line-strong);
   border-top-color: var(--accent);
-  animation: trace-ux-spin 0.7s linear infinite;
 }
 .loading__spinner--inline { width: 13px; height: 13px; display: inline-block; vertical-align: -2px; }
-
-@keyframes trace-ux-spin {
-  to { transform: rotate(360deg); }
-}

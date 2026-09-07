@@ -14,10 +14,23 @@
   color: var(--muted);
 }
 .session-stat__dot { width: 8px; height: 8px; border-radius: var(--radius-pill); }
-.session-stat__dot--live { background: var(--accent); animation: stat-pulse 2s ease-in-out infinite; }
+.session-stat__dot--live { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); animation: stat-pulse 2s ease-in-out infinite; }
 .session-stat__dot--done { background: var(--muted); }
 .session-stat__num { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 @keyframes stat-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }
+}
+
+@media (max-width: 640px) {
+  .session-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
+    margin-bottom: 1rem;
+  }
+  .session-stat { min-width: 0; padding: 0.9rem 1rem; }
+  .session-stat__label { align-items: flex-start; line-height: 1.25; }
+  .session-stat__num { font-size: 1.35rem; }
+  .play-btn { width: 36px; }
 }

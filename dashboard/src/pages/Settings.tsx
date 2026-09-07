@@ -1,5 +1,7 @@
 import { FormEvent, useState } from 'react';
+import { motion } from 'motion/react';
 import { api } from '../api';
+import { spring } from '../lib/motion';
 import { useUser } from '../App';
 import { Theme, useTheme } from '../hooks/useTheme';
 import PageHeader from '../components/ui/PageHeader';
@@ -71,13 +73,15 @@ export default function Settings() {
         <p className="muted small">Choose how TraceUX looks on this device.</p>
         <div className="seg" role="group" aria-label="Theme">
           {(['light', 'dark'] as Theme[]).map((t) => (
-            <button
+            <motion.button
               key={t}
               className={`seg__option${theme === t ? ' is-active' : ''}`}
               onClick={() => setTheme(t)}
+              whileTap={{ scale: 0.96 }}
+              transition={spring}
             >
               {t === 'light' ? 'Light' : 'Dark'}
-            </button>
+            </motion.button>
           ))}
         </div>
       </Card>

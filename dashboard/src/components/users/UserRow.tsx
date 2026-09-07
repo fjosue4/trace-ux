@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { motion } from 'motion/react';
 import { api, Role, User } from '../../api';
+import { fadeUp } from '../../lib/motion';
 import { fmtTime } from '../../lib/format';
 import { Input, Select, SelectOption } from '../ui/fields';
 import Badge from '../ui/Badge';
@@ -73,7 +75,7 @@ export default function UserRow({ user, onEvent, onChanged }: Props) {
   }
 
   return (
-    <tr>
+    <motion.tr variants={fadeUp} initial="hidden" animate="visible" layout>
       <td className="mono">
         {user.username}
         {user.role === 'admin' && (
@@ -136,6 +138,6 @@ export default function UserRow({ user, onEvent, onChanged }: Props) {
         onConfirm={remove}
         onClose={() => setConfirming(false)}
       />
-    </tr>
+    </motion.tr>
   );
 }

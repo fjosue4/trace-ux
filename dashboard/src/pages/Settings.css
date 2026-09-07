@@ -18,4 +18,4 @@
   transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 .seg__option:hover:not(.is-active) { color: var(--ink); }
-.seg__option.is-active { background: var(--ink); color: var(--bg); }
+.seg__option.is-active { background: var(--accent); color: var(--on-accent); box-shadow: var(--shadow-accent); }

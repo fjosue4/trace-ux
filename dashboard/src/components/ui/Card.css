@@ -3,5 +3,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
-  padding: 1.25rem 1.4rem;
+  padding: 1.35rem 1.45rem;
+  transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
 }
+.card:hover { border-color: var(--line-strong); box-shadow: var(--shadow-md); }

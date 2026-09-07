@@ -1,6 +1,8 @@
 import { useState } from 'react';
+import { motion } from 'motion/react';
 import { CustomEvent, Session, SessionPage } from '../../api';
 import { fmtClock, fmtDuration, fmtTime } from '../../lib/format';
+import { spring, stagger } from '../../lib/motion';
 import Card from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import './replay.css';
@@ -29,16 +31,19 @@ export default function PagesPanel({ session, pages, activity, eventsReady, firs
       </p>
 
       <h4>Pages visited</h4>
-      <ol className="pages-list">
+      <motion.ol className="pages-list" variants={stagger} initial="hidden" animate="visible">
         {pages.map((p) => (
-          <li key={p.idx}>
-            <button
+          <motion.li key={p.idx} variants={{ hidden: { opacity: 0, x: -8 }, visible: { opacity: 1, x: 0 } }}>
+            <motion.button
               className={`page-row${activePage === p.idx ? ' is-active' : ''}`}
               onClick={() => {
                 setActivePage(p.idx);
                 onSeekMs(p.entered_at * 1000 - firstTs);
               }}
               title={`Jump to ${p.url}`}
+              whileHover={{ x: 3 }}
+              whileTap={{ scale: 0.985 }}
+              transition={spring}
             >
               <span className="page-row__num">{p.idx + 1}</span>
               <span className="page-row__body">
@@ -49,10 +54,10 @@ export default function PagesPanel({ session, pages, activity, eventsReady, firs
                   {p.left_at ? ` – ${fmtClock(p.left_at)}` : ''}
                 </span>
               </span>
-            </button>
-          </li>
+            </motion.button>
+          </motion.li>
         ))}
-      </ol>
+      </motion.ol>
 
       {eventsReady && activity.length > 0 && (
         <>
@@ -60,10 +65,13 @@ export default function PagesPanel({ session, pages, activity, eventsReady, firs
           <ol className="pages-list">
             {activity.map((a, i) => (
               <li key={`${a.ts}-${i}`}>
-                <button
+                <motion.button
                   className="page-row activity-row"
                   title={`Jump to ${a.track_id || a.name}`}
                   onClick={() => onSeekMs(a.ts - firstTs)}
+                  whileHover={{ x: 3 }}
+                  whileTap={{ scale: 0.985 }}
+                  transition={spring}
                 >
                   <span className="page-row__num activity-row__icon">
                     <Icon name="bolt" size={12} />
@@ -72,7 +80,7 @@ export default function PagesPanel({ session, pages, activity, eventsReady, firs
                     <span className="page-row__url">{a.track_id || a.name}</span>
                     <span className="page-row__meta">{fmtClock(Math.floor(a.ts / 1000))}</span>
                   </span>
-                </button>
+                </motion.button>
               </li>
             ))}
           </ol>

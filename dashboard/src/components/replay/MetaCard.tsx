@@ -1,5 +1,7 @@
 import { ReactNode, useState } from 'react';
+import { motion } from 'motion/react';
 import { Session } from '../../api';
+import { fadeUp, spring } from '../../lib/motion';
 import Card from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import './replay.css';
@@ -49,7 +51,7 @@ export default function MetaCard({ session }: { session: Session }) {
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <button
+    <motion.button
       type="button"
       className={`icon-btn meta-copy${copied ? ' is-success' : ''}`}
       aria-label={copied ? 'Copied' : 'Copy value'}
@@ -63,9 +65,11 @@ function CopyButton({ text }: { text: string }) {
           })
           .catch(() => {});
       }}
+      whileTap={{ scale: 0.88 }}
+      transition={spring}
     >
       <Icon name={copied ? 'check' : 'copy'} size={12} />
-    </button>
+    </motion.button>
   );
 }
 
@@ -79,9 +83,9 @@ function MetaBlock({
   children: ReactNode;
 }) {
   return (
-    <div className={`meta-block${wide ? ' meta-block--wide' : ''}`}>
+    <motion.div className={`meta-block${wide ? ' meta-block--wide' : ''}`} variants={fadeUp} initial="hidden" animate="visible">
       <span className="meta-block__label">{label}</span>
       <span className="meta-block__value">{children}</span>
-    </div>
+    </motion.div>
   );
 }

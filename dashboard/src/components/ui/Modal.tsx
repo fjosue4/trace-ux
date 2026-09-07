@@ -1,5 +1,7 @@
 import { ReactNode, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { AnimatePresence, motion } from 'motion/react';
+import { softSpring } from '../../lib/motion';
 import { Icon } from './Icon';
 import './Modal.css';
 
@@ -28,26 +30,41 @@ export default function Modal({ open, onClose, title, children, footer }: Props)
     };
   }, [open, onClose]);
 
-  if (!open) return null;
-
   return createPortal(
-    <div
-      className="modal-backdrop"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="modal" role="dialog" aria-modal="true" aria-label={title}>
-        <div className="modal__head">
-          <h3>{title}</h3>
-          <button className="modal__close" onClick={onClose} aria-label="Close dialog">
-            <Icon name="x" size={16} />
-          </button>
-        </div>
-        <div className="modal__body">{children}</div>
-        {footer && <div className="modal__footer">{footer}</div>}
-      </div>
-    </div>,
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="modal-backdrop"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) onClose();
+          }}
+        >
+          <motion.div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label={title}
+            initial={{ opacity: 0, y: 18, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.98 }}
+            transition={softSpring}
+          >
+            <div className="modal__head">
+              <h3>{title}</h3>
+              <motion.button className="modal__close" onClick={onClose} aria-label="Close dialog" whileHover={{ rotate: 8, scale: 1.08 }} whileTap={{ scale: 0.92 }}>
+                <Icon name="x" size={16} />
+              </motion.button>
+            </div>
+            <div className="modal__body">{children}</div>
+            {footer && <div className="modal__footer">{footer}</div>}
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>,
     document.body,
   );
 }

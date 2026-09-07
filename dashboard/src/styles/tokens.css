@@ -3,8 +3,8 @@
  *
  * Direction: modern SaaS dashboard (soft rounded geometry, pill controls,
  * elevated surfaces, faint borders, pastel status colors). Light theme keeps
- * the portfolio's warm paper; dark theme sits on near-black neutrals with the
- * signal-orange brand accent (no purple). Themes switch via
+ * a calm mineral canvas; dark theme sits on deep forest neutrals with a fresh
+ * green brand accent. Themes switch via
  * <html data-theme="light|dark">; index.html sets it before first paint.
  *
  * Change the look of the whole app here — components only reference tokens.
@@ -13,68 +13,74 @@
 :root[data-theme='light'] {
   color-scheme: light;
 
-  /* surfaces & text — warm paper page, white cards */
-  --page-bg: #e6e2d8;
-  --bg: #f0eee6;
+  /* surfaces & text — cool mineral canvas, crisp elevated cards */
+  --page-bg: #f1f4ef;
+  --bg: #f7f9f5;
   --surface: #ffffff;
-  --surface-2: #f0eee6;
-  --ink: #0a0d0b;
-  --ink-2: #2c312c;
-  --muted: #5d625d;
-  --line: rgba(10, 13, 11, 0.08);
-  --line-strong: rgba(10, 13, 11, 0.18);
+  --surface-2: #f3f6f1;
+  --surface-3: #e9eee7;
+  --ink: #142018;
+  --ink-2: #34423a;
+  --muted: #6b786f;
+  --line: rgba(20, 48, 29, 0.09);
+  --line-strong: rgba(20, 48, 29, 0.16);
 
-  /* brand & feedback — signal, pastel status chips */
-  --accent: #d94928;
-  --accent-strong: #b93a1d;
-  --accent-soft: rgba(242, 95, 58, 0.12);
+  /* brand & feedback — grounded green, never neon */
+  --accent: #2f7d4a;
+  --accent-strong: #24663b;
+  --accent-soft: rgba(47, 125, 74, 0.12);
+  --accent-glow: rgba(47, 125, 74, 0.22);
   --on-accent: #ffffff;
   --danger: #b3261e;
   --danger-soft: rgba(179, 38, 30, 0.1);
-  --success: #14713f;
-  --success-soft: rgba(74, 222, 128, 0.28);
+  --success: #237a45;
+  --success-soft: rgba(35, 122, 69, 0.12);
 
   /* portfolio-native aliases */
   --paper: #f0eee6;
   --charcoal: #141915;
-  --signal: #f25f3a;
-  --olive: #7e8b5b;
+  --signal: #2f7d4a;
+  --olive: #668154;
 
-  --shadow-sm: 0 1px 2px rgb(16 24 40 / 0.05);
-  --shadow-md: 0 16px 40px -16px rgb(16 24 40 / 0.22);
+  --shadow-sm: 0 1px 2px rgb(20 48 29 / 0.04), 0 8px 24px -18px rgb(20 48 29 / 0.18);
+  --shadow-md: 0 24px 60px -28px rgb(20 48 29 / 0.3);
+  --shadow-accent: 0 12px 28px -12px var(--accent-glow);
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  /* surfaces & text — near-black neutrals, elevated cards (no purple) */
-  --page-bg: #050506;
-  --bg: #101116;
-  --surface: #17181d;
-  --surface-2: #212329;
-  --ink: #ecedef;
-  --ink-2: #c9cdd1;
-  --muted: #8a8f98;
-  --line: rgba(255, 255, 255, 0.07);
-  --line-strong: rgba(255, 255, 255, 0.14);
+  /* surfaces & text — deep forest neutrals, lifted panels */
+  --page-bg: #09100c;
+  --bg: #0e1711;
+  --surface: #142019;
+  --surface-2: #1b2a21;
+  --surface-3: #23352a;
+  --ink: #f0f6f1;
+  --ink-2: #c9d5cc;
+  --muted: #8d9d92;
+  --line: rgba(220, 242, 226, 0.075);
+  --line-strong: rgba(220, 242, 226, 0.15);
 
-  /* brand & feedback — signal on black; status chips pastel like the X palette */
-  --accent: #f25f3a;
-  --accent-strong: #ff7a54;
-  --accent-soft: rgba(242, 95, 58, 0.15);
-  --on-accent: #0a0a0c;
+  /* brand & feedback — luminous botanical green */
+  --accent: #66c983;
+  --accent-strong: #7bdb96;
+  --accent-soft: rgba(102, 201, 131, 0.14);
+  --accent-glow: rgba(102, 201, 131, 0.24);
+  --on-accent: #08140c;
   --danger: #ff6369;
   --danger-soft: rgba(255, 99, 105, 0.12);
-  --success: #4ade80;
-  --success-soft: rgba(74, 222, 128, 0.13);
+  --success: #72d58e;
+  --success-soft: rgba(114, 213, 142, 0.13);
 
   --paper: #f0eee6;
   --charcoal: #141915;
-  --signal: #f25f3a;
+  --signal: #66c983;
   --olive: #7e8b5b;
 
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5);
-  --shadow-md: 0 16px 40px -16px rgb(0 0 0 / 0.65);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.5), 0 10px 28px -22px rgb(0 0 0 / 0.9);
+  --shadow-md: 0 24px 60px -28px rgb(0 0 0 / 0.85);
+  --shadow-accent: 0 12px 28px -12px var(--accent-glow);
 }
 
 :root {
@@ -83,13 +89,13 @@
   --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 
   /* geometry — soft, rounded */
-  --radius-sm: 10px;
-  --radius: 14px;
-  --radius-lg: 20px;
+  --radius-sm: 9px;
+  --radius: 13px;
+  --radius-lg: 18px;
   --radius-pill: 999px;
 
   /* motion */
-  --duration-fast: 180ms;
-  --duration-medium: 420ms;
-  --ease-out: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --duration-fast: 160ms;
+  --duration-medium: 360ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
 }

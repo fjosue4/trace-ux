@@ -15,13 +15,14 @@ body {
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  min-width: 320px;
   transition:
     background-color var(--duration-medium) var(--ease-out),
     color var(--duration-medium) var(--ease-out);
 }
 
 h1, h2, h3, h4 { margin: 0; color: var(--ink); }
-h1 { font-size: 1.35rem; letter-spacing: -0.02em; }
+h1 { font-size: clamp(1.55rem, 2.2vw, 2rem); line-height: 1.12; letter-spacing: -0.045em; }
 h2 { font-size: 1.08rem; }
 h3 { font-size: 1rem; }
 h4 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin: 1.2rem 0 0.5rem; }
@@ -58,8 +59,8 @@ pre {
 .icon-btn {
   display: inline-grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border: none;
   border-radius: var(--radius-sm);
   background: none;
@@ -68,10 +69,11 @@ pre {
   transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 .icon-btn:hover { background: var(--surface-2); color: var(--ink); }
+.icon-btn:active { transform: scale(0.94); }
 .icon-btn.is-success { color: var(--success); }
 
 /* ---- layout primitives ---- */
-.page { width: 100%; margin: 0; padding: 1.6rem 1.8rem 3.5rem; }
+.page { width: 100%; max-width: 1440px; margin: 0 auto; padding: 2rem clamp(1rem, 2.5vw, 2.5rem) 4rem; }
 
 .center { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; }
 
@@ -80,3 +82,14 @@ pre {
 .row { display: flex; align-items: center; gap: 0.6rem; }
 .row--between { justify-content: space-between; }
 .row--wrap { flex-wrap: wrap; }
+
+@media (max-width: 860px) {
+  .page { padding: 1.25rem 1rem 3rem; }
+  .center { padding: 1rem; }
+  .row { min-width: 0; }
+}
+
+@media (max-width: 520px) {
+  h1 { font-size: 1.55rem; }
+  .card { padding: 1.1rem; }
+}

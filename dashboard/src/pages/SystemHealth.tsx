@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ReactNode } from 'react';
+import { motion } from 'motion/react';
 import { api, SystemHealth as Health } from '../api';
 import { fmtBytes, fmtClock, fmtDuration } from '../lib/format';
+import { fadeUp, softSpring } from '../lib/motion';
 import PageHeader from '../components/ui/PageHeader';
 import Card from '../components/ui/Card';
 import Notice from '../components/ui/Notice';
@@ -18,19 +20,19 @@ const clampPct = (v: number) => Math.max(0, Math.min(100, v));
 function Meter({ usedPct, shotPct, hot }: { usedPct: number; shotPct?: number; hot?: boolean }) {
   const shot = Math.max(0, Math.min(shotPct ?? 0, usedPct));
   return (
-    <div className="meter" aria-hidden>
-      {shot > 0 && <div className="meter__fill meter__fill--shot" style={{ width: `${clampPct(shot)}%` }} />}
-      <div className={`meter__fill${hot ? ' is-hot' : ''}`} style={{ width: `${clampPct(usedPct - shot)}%` }} />
-    </div>
+    <motion.div className="meter" aria-hidden initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      {shot > 0 && <motion.div className="meter__fill meter__fill--shot" initial={{ width: 0 }} animate={{ width: `${clampPct(shot)}%` }} transition={softSpring} />}
+      <motion.div className={`meter__fill${hot ? ' is-hot' : ''}`} initial={{ width: 0 }} animate={{ width: `${clampPct(usedPct - shot)}%` }} transition={softSpring} />
+    </motion.div>
   );
 }
 
 function Row({ label, value, mono = true }: { label: string; value: ReactNode; mono?: boolean }) {
   return (
-    <div className="health-row">
+    <motion.div className="health-row" variants={fadeUp} initial="hidden" animate="visible">
       <span className="muted small">{label}</span>
       <span className={`small${mono ? ' mono' : ''}`}>{value}</span>
-    </div>
+    </motion.div>
   );
 }
 

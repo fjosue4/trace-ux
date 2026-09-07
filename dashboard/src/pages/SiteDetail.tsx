@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, FeedbackTrigger, SiteAppearance, SiteDetail, SiteSettings, SurveyQuestion } from '../api';
+import { api, FeedbackTrigger, SiteAppearance, SiteDetail as SiteDetailData, SiteSettings, SurveyQuestion } from '../api';
 import { fmtDuration, fmtTime, stripProto, truncate } from '../lib/format';
 import { useUser } from '../App';
 import PageHeader from '../components/ui/PageHeader';
@@ -22,7 +22,7 @@ export default function SiteDetail() {
   const { siteId } = useParams();
   const { user } = useUser();
   const isAdmin = user.role === 'admin';
-  const [detail, setDetail] = useState<SiteDetail | null>(null);
+  const [detail, setDetail] = useState<SiteDetailData | null>(null);
   const [error, setError] = useState('');
   const [draft, setDraft] = useState<SiteSettings | null>(null);
   const [saving, setSaving] = useState(false);

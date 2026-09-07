@@ -1,4 +1,6 @@
 import { ReactNode } from 'react';
+import { motion } from 'motion/react';
+import { fadeUp } from '../../lib/motion';
 import './Notice.css';
 
 type Props = {
@@ -7,5 +9,5 @@ type Props = {
 };
 
 export default function Notice({ tone = 'info', children }: Props) {
-  return <div className={`notice notice--${tone}`}>{children}</div>;
+  return <motion.div className={`notice notice--${tone}`} variants={fadeUp} initial="hidden" animate="visible" exit="exit" role="status">{children}</motion.div>;
 }

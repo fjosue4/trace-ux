@@ -20,10 +20,10 @@
 .btn--block { width: 100%; }
 
 .btn--primary { background: var(--accent); color: var(--on-accent); box-shadow: var(--shadow-sm); }
-.btn--primary:hover:not(:disabled) { background: var(--accent-strong); }
+.btn--primary:hover:not(:disabled) { background: var(--accent-strong); box-shadow: var(--shadow-accent); }
 
-.btn--secondary { background: var(--surface); border-color: var(--line-strong); color: var(--ink); }
-.btn--secondary:hover:not(:disabled) { background: var(--surface-2); }
+.btn--secondary { background: var(--surface); border-color: var(--line); color: var(--ink); box-shadow: var(--shadow-sm); }
+.btn--secondary:hover:not(:disabled) { background: var(--surface-2); border-color: var(--line-strong); }
 
 .btn--ghost { background: transparent; color: var(--muted); }
 .btn--ghost:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }

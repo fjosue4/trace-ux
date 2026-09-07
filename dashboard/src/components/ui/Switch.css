@@ -16,7 +16,6 @@
   position: relative;
   transition: background-color var(--duration-fast) var(--ease-out);
 }
-.switch input:checked + .switch__track { background: var(--accent); }
 .switch input:focus-visible + .switch__track { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .switch__knob {
@@ -28,8 +27,6 @@
   border-radius: 50%;
   background: #fff;
   box-shadow: var(--shadow-sm);
-  transition: transform var(--duration-fast) var(--ease-out);
 }
-.switch input:checked + .switch__track .switch__knob { transform: translateX(16px); }
 
 .switch__label { font-size: 0.88rem; font-weight: 600; color: var(--ink); }

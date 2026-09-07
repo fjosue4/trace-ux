@@ -1,2 +1,6 @@
-.app { display: flex; min-height: 100vh; }
-.app__main { flex: 1; min-width: 0; }
+.app { display: flex; min-height: 100vh; background: radial-gradient(circle at 85% -10%, var(--accent-soft), transparent 32%); }
+.app__main { flex: 1; min-width: 0; overflow: clip; }
+
+@media (max-width: 860px) {
+  .app { flex-direction: column; }
+}
