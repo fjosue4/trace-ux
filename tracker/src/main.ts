@@ -101,6 +101,7 @@ interface StorageLike {
   if (!script) return;
   const siteKey = script.dataset.site;
   if (!siteKey) return;
+
   // A page can receive the snippet from both a static tag and a tag manager.
   // Only one recorder may own the page or every copy will emit its own stream.
   if (window.__traceUXStarted) return;
@@ -140,10 +141,10 @@ interface StorageLike {
   // A session that already hit the 2h cap must not swallow this page load:
   // start a fresh one right away instead of recording into the old session
   // until the first tick notices.
-	if (stale || activeMs >= MAX_SESSION_MS) {
-		sessionId = newId();
-		if (!sessionId) return;
-		seq = 0;
+  if (stale || activeMs >= MAX_SESSION_MS) {
+    sessionId = newId();
+    if (!sessionId) return;
+    seq = 0;
     pageIdx = -1;
     activeMs = 0;
   }
@@ -691,14 +692,14 @@ interface StorageLike {
       flush(true);
       ping(true);
     }
-	    const nextSessionId = newId();
-	    if (!nextSessionId) {
-	      stopped = true;
-	      return;
-	    }
-	    stopped = false;
-	    disarmWake();
-	    sessionId = nextSessionId;
+    const nextSessionId = newId();
+    if (!nextSessionId) {
+      stopped = true;
+      return;
+    }
+    stopped = false;
+    disarmWake();
+    sessionId = nextSessionId;
     seq = 0;
     pageIdx = -1;
     activeMs = 0;

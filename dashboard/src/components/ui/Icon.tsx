@@ -7,6 +7,9 @@ export type IconName =
   | 'copy'
   | 'check'
   | 'play'
+  | 'pause'
+  | 'maximize'
+  | 'minimize'
   | 'clock'
   | 'code'
   | 'x'
@@ -48,6 +51,14 @@ const GLYPHS: Record<IconName, ReactNode> = {
   ),
   check: <path d="M20 6 9 17l-5-5" />,
   play: <path d="M8 5.5v13l11-6.5-11-6.5z" fill="currentColor" stroke="none" />,
+  pause: (
+    <>
+      <path d="M7 5v14" strokeWidth="3" />
+      <path d="M17 5v14" strokeWidth="3" />
+    </>
+  ),
+  maximize: <path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5" />,
+  minimize: <path d="M8 3v5H3M16 3v5h5M21 16h-5v5M3 16h5v5" />,
   clock: (
     <>
       <circle cx="12" cy="12" r="9" />
