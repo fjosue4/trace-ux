@@ -89,7 +89,7 @@ const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // no interaction for this long ends the
 const MAX_SESSION_MS = 2 * 60 * 60 * 1000; // even continuous interaction splits at 2h
 const PING_INTERVAL_MS = 15_000;
 const GZIP_THRESHOLD = 2048; // compress batches larger than 2 KB
-const MAX_BUFFER_EVENTS = 5_000;
+const MAX_BUFFER_EVENTS = 5_000; // match the server-side batch safety cap
 
 interface StorageLike {
   get(key: string): string;
@@ -493,7 +493,7 @@ interface StorageLike {
           .btn:hover { transform: none; }
         }
       </style>
-      <button class="btn" aria-expanded="false">${ap.buttonLabel}</button>
+      <button class="btn" aria-expanded="false"></button>
       <div class="panel" hidden>
         <h3></h3>
         <div class="qs"></div>
@@ -503,6 +503,7 @@ interface StorageLike {
 
     const btn = shadow.querySelector('.btn') as HTMLButtonElement;
     const panel = shadow.querySelector('.panel') as HTMLDivElement;
+    btn.textContent = ap.buttonLabel;
     (shadow.querySelector('h3') as HTMLHeadingElement).textContent =
       questions[0] && questions[0].type === 'rating' ? '' : fb.title || 'Feedback';
     const qsRoot = shadow.querySelector('.qs') as HTMLDivElement;
@@ -691,13 +692,13 @@ interface StorageLike {
       flush(true);
       ping(true);
     }
-    stopped = false;
-    disarmWake();
     const nextSessionId = newId();
     if (!nextSessionId) {
       stopped = true;
       return;
     }
+    stopped = false;
+    disarmWake();
     sessionId = nextSessionId;
     seq = 0;
     pageIdx = -1;

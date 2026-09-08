@@ -33,8 +33,11 @@ func main() {
 	}
 	cfg := loadConfig()
 
-	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
+	if err := os.MkdirAll(cfg.DataDir, 0o700); err != nil {
 		log.Fatalf("cannot create data dir %s: %v", cfg.DataDir, err)
+	}
+	if err := os.Chmod(cfg.DataDir, 0o700); err != nil {
+		log.Fatalf("cannot secure data dir %s: %v", cfg.DataDir, err)
 	}
 	store, err := OpenStore(filepath.Join(cfg.DataDir, "trace_ux.db"))
 	if err != nil {

@@ -4,13 +4,21 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - ./data:/data
     environment:
-      # Change this before exposing the dashboard publicly.
-      TRACE_UX_PASSWORD: ${TRACE_UX_PASSWORD:-trace-ux}
+      # Required: never fall back to a known password.
+      TRACE_UX_PASSWORD: ${TRACE_UX_PASSWORD:?set TRACE_UX_PASSWORD before starting}
+      TRACE_UX_SECURE_COOKIES: ${TRACE_UX_SECURE_COOKIES:-1}
       TRACE_UX_RETENTION_DAYS: ${TRACE_UX_RETENTION_DAYS:-90}
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     restart: unless-stopped
 
   # Optional: automatic HTTPS in front of TraceUX. Uncomment, set your

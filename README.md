@@ -6,9 +6,21 @@ With Smartlook shutting down, TraceUX provides a self-hosted path for teams that
 
 > **Status: v0.2 — session replay core + multi-user access.** Working: multi-page session capture, full replay player, input masking, UTM/referrer attribution, per-site keys, retention, user accounts with admin-managed passwords, 2-hour session cap, filter sessions by any visited path. Roadmap: Console Logs tracking for errors and recordings match with errors.
 
+**Live landing page:** [trace-ux.builtbyfrank.dev](https://trace-ux.builtbyfrank.dev)
+
 ## Why
 
 With Smartlook shutting down, many teams are looking for a replacement that offers a familiar session-replay workflow while keeping data under their control. Existing self-hosted options are often heavy: full analytics suites that need 8 GB+ RAM, multi-service Docker stacks, or paid plugins. TraceUX is built for **a tiny VPS**: a single static binary (~20 MB, ~30 MB RAM) with SQLite and the dashboard embedded. Backups are copying one folder.
+
+## Screenshots
+
+### Sessions dashboard
+
+![TraceUX sessions dashboard](docs/images/trace-ux-sessions.png)
+
+### Session replay
+
+![TraceUX session replay](docs/images/trace-ux-session-replay.png)
 
 ## Quickstart
 
@@ -16,7 +28,7 @@ With Smartlook shutting down, many teams are looking for a replacement that offe
 
 ```bash
 mkdir trace-ux && cd trace-ux
-docker run -d --name trace-ux -p 8080:8080 -v "$PWD/data:/data" \
+docker run -d --name trace-ux -p 127.0.0.1:8080:8080 -v "$PWD/data:/data" \
   -e TRACE_UX_PASSWORD=change-me ghcr.io/fjosue4/trace-ux:latest
 ```
 
@@ -29,16 +41,16 @@ cd deploy && TRACE_UX_PASSWORD=change-me docker compose up -d
 **Single binary** (any Linux/macOS, amd64/arm64):
 
 ```bash
-TRACE_UX_PASSWORD=change-me ./trace-ux
+TRACE_UX_PASSWORD=change-me TRACE_UX_SECURE_COOKIES=0 ./trace-ux # local HTTP development only
 ```
 
 Then:
 
-1. Open `http://your-server:8080` and sign in. Leave the username empty (or type `admin`) and use `TRACE_UX_PASSWORD` — that's the bootstrap **admin** account.
+1. Put the dashboard behind HTTPS (the Compose example binds the backend to loopback for this purpose), then open your HTTPS URL and sign in. Leave the username empty (or type `admin`) and use `TRACE_UX_PASSWORD` — that's the bootstrap **admin** account.
 2. **Add site** → copy the snippet (the card has a **Manual** and a **Google Tag Manager** tab):
 
    ```html
-   <script async src="http://your-server:8080/t.js" data-site="YOUR_SITE_KEY"></script>
+   <script async src="https://your-server/t.js" data-site="YOUR_SITE_KEY"></script>
    ```
 
 3. **Manual:** paste it into the `<head>` of every page on your site.
@@ -88,10 +100,12 @@ No external database, no queue, no other services — SQLite lives in `/var/lib/
 
 | Env var            | Default   | Meaning                                              |
 | ------------------ | --------- | ---------------------------------------------------- |
-| `TRACE_UX_PASSWORD`      | `trace-ux`| Bootstrap admin password (**set this**)               |
+| `TRACE_UX_PASSWORD`      | —         | Required to create the first admin account             |
 | `TRACE_UX_RESET_ADMIN`   | —         | `1` = re-point `admin` at `TRACE_UX_PASSWORD` on boot |
 | `TRACE_UX_DATA`          | `./data`  | Data dir (SQLite db, users, auth secret)              |
 | `TRACE_UX_ADDR`          | `:8080`   | Listen address                                        |
+| `TRACE_UX_SECURE_COOKIES`| `1`       | Set `0` only for local HTTP development               |
+| `TRACE_UX_TRUSTED_PROXIES`| —        | Comma-separated proxy CIDRs allowed to supply XFF      |
 | `TRACE_UX_RETENTION_DAYS`| `90`      | Auto-delete sessions older than this                  |
 | `TRACE_UX_DEV_STATIC`    | —         | Dev only: serve frontend builds from disk             |
 
@@ -99,7 +113,7 @@ No external database, no queue, no other services — SQLite lives in `/var/lib/
 
 The dashboard supports real accounts; the **admin** (the `TRACE_UX_PASSWORD` account) manages them alone, under **Settings → Team** (hidden from viewers):
 
-- **Roles** — `admin` can manage users; `viewer` can browse sites, sessions and replays. Both can change their own password under **Settings**.
+- **Roles** — `admin` can manage users and sites; `viewer` can browse sites, sessions and replays. Both can change their own password under **Settings**.
 - **Creating users** — pick a username and a password (min 8 characters); the user signs in with it directly. No email, no invites.
 - **Revocation is immediate** — resetting a password, changing a role, or deleting a user signs that person out everywhere. Changing your own password keeps your current tab signed in.
 - **Passwords** are stored as salted PBKDF2-SHA256 hashes (210k iterations); login cookies are random tokens stored only as hashes, so a leaked DB can't be replayed.
