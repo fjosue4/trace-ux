@@ -184,6 +184,9 @@ export type Log = {
   session_started_at: number;
 };
 
+// The public demo replay exposes only the fields needed by its action feed.
+export type SharedLog = Pick<Log, 'id' | 'timestamp_ms' | 'severity' | 'message' | 'url'>;
+
 export type LogStats = {
   total: number;
   debug: number;
@@ -297,7 +300,7 @@ export const api = {
   },
 
   getSession: (id: string) =>
-    request<{ session: Session; pages: SessionPage[]; custom_events: CustomEvent[] }>(
+    request<{ session: Session; pages: SessionPage[]; custom_events: CustomEvent[]; logs: Log[] }>(
       `/api/sessions/${id}`,
     ),
 
@@ -337,7 +340,7 @@ export const api = {
   },
 
   getSharedSession: (token: string) =>
-    request<{ session: SharedSession }>(
+    request<{ session: SharedSession; custom_events: CustomEvent[]; logs: SharedLog[] }>(
       `/api/demo/replay/${encodeURIComponent(token)}`,
     ),
   getSharedEvents: (token: string, afterSeq: number) =>

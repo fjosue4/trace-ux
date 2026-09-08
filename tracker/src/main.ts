@@ -116,6 +116,7 @@ const MAX_SESSION_MS = 2 * 60 * 60 * 1000; // even continuous interaction splits
 const PING_INTERVAL_MS = 15_000;
 const GZIP_THRESHOLD = 2048; // compress batches larger than 2 KB
 const MAX_BUFFER_EVENTS = 5_000; // match the server-side batch safety cap
+const MAX_BUFFER_LOGS = 100; // match the server-side log batch safety cap
 
 interface StorageLike {
   get(key: string): string;
@@ -271,7 +272,12 @@ interface StorageLike {
       message: args.map(formatConsoleValue).join(' ').slice(0, 8192),
       url: location.href.slice(0, 2048),
     });
-    if (logBuffer.length >= 20) flushLogs();
+    if (logBuffer.length > MAX_BUFFER_LOGS) {
+      // Keep one digest-sized batch ready for the next scheduled flush. A
+      // count-based flush here can create a request loop on noisy pages when
+      // the page logs in response to each network request.
+      logBuffer.splice(0, logBuffer.length - MAX_BUFFER_LOGS);
+    }
   }
 
   function startLogTracking() {
@@ -884,8 +890,9 @@ interface StorageLike {
     }
   }
 
-  // Recording events are digested on a time boundary, not on event count. This
-  // keeps mutation-heavy pages from opening hundreds of concurrent requests.
+  // Recording events and browser logs are digested on the same time boundary,
+  // not on event count. This keeps noisy pages from opening a request loop:
+  // one recording request and, when needed, one logs request per digest tick.
   const flushIntervalMs = Math.max(5_000, cfg.flush_interval_ms || 5_000);
   setInterval(() => {
     flush();

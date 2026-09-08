@@ -4,9 +4,10 @@ import rrwebPlayer from 'rrweb-player';
 import { EventType, IncrementalSource } from '@rrweb/types';
 import type { eventWithTime } from '@rrweb/types';
 import 'rrweb-player/dist/style.css';
-import { api, SharedSession } from '../api';
+import { api, CustomEvent, SharedLog, SharedSession } from '../api';
 import Loading from '../components/ui/Loading';
 import Notice from '../components/ui/Notice';
+import PagesPanel from '../components/replay/PagesPanel';
 import ReplayControls, { type InactivePeriod } from '../components/replay/ReplayControls';
 import { Icon } from '../components/ui/Icon';
 import './Replay.css';
@@ -64,6 +65,8 @@ export default function ShareReplay() {
   const [error, setError] = useState('');
   const [progress, setProgress] = useState('Loading events…');
   const [loaded, setLoaded] = useState(false);
+  const [activity, setActivity] = useState<CustomEvent[]>([]);
+  const [logs, setLogs] = useState<SharedLog[]>([]);
   const [hostWidth, setHostWidth] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -89,6 +92,8 @@ export default function ShareReplay() {
         const meta = await api.getSharedSession(token);
         if (cancelled) return;
         setSession(meta.session);
+        setActivity(meta.custom_events);
+        setLogs(meta.logs);
         const all: eventWithTime[] = [];
         let afterSeq = -1;
         for (;;) {
@@ -264,6 +269,10 @@ export default function ShareReplay() {
     else void frame.requestFullscreen();
   }
 
+  function seekToOffset(offsetMs: number) {
+    seekPlayer(offsetMs);
+  }
+
   const playerReady = loaded && events !== null && events.length > 0;
 
   return (
@@ -278,39 +287,57 @@ export default function ShareReplay() {
       ) : !session ? (
         <Loading label={progress} />
       ) : (
-        <div className="share-replay-player">
-          <div ref={playerFrame} className="player-frame">
-            <div className="player-stage">
-              <div ref={playerHost} className="player-host" />
-              {playerReady ? (
-                !started && (
-                  <button type="button" className="player-cover" onClick={playFromStart} aria-label="Play recording">
-                    <span className="player-cover__btn"><Icon name="play" size={26} /></span>
-                    <span className="player-cover__label">Play recording</span>
-                  </button>
-                )
-              ) : (
-                <Loading label={progress} overlay />
+        <div className="share-replay-layout">
+          <div className="share-replay-player">
+            <div ref={playerFrame} className="player-frame">
+              <div className="player-stage">
+                <div ref={playerHost} className="player-host" />
+                {playerReady && started && (
+                  <button
+                    type="button"
+                    className="player-stage__toggle"
+                    onClick={togglePlayback}
+                    aria-label={isPlaying ? 'Pause recording' : 'Play recording'}
+                  />
+                )}
+                {playerReady ? (
+                  !started && (
+                    <button type="button" className="player-cover" onClick={playFromStart} aria-label="Play recording">
+                      <span className="player-cover__btn"><Icon name="play" size={26} /></span>
+                      <span className="player-cover__label">Play recording</span>
+                    </button>
+                  )
+                ) : (
+                  <Loading label={progress} overlay />
+                )}
+              </div>
+              {playerReady && (
+                <ReplayControls
+                  currentTime={currentTime}
+                  duration={duration}
+                  isPlaying={isPlaying}
+                  skipInactive={skipInactive}
+                  isSkipping={isSkipping}
+                  speed={speed}
+                  inactivePeriods={inactivePeriods}
+                  isFullscreen={isFullscreen}
+                  onSeek={seekPlayer}
+                  onTogglePlay={togglePlayback}
+                  onSpeedChange={changeSpeed}
+                  onToggleSkipInactive={toggleSkipInactive}
+                  onToggleFullscreen={toggleFullscreen}
+                />
               )}
             </div>
-            {playerReady && (
-              <ReplayControls
-                currentTime={currentTime}
-                duration={duration}
-                isPlaying={isPlaying}
-                skipInactive={skipInactive}
-                isSkipping={isSkipping}
-                speed={speed}
-                inactivePeriods={inactivePeriods}
-                isFullscreen={isFullscreen}
-                onSeek={seekPlayer}
-                onTogglePlay={togglePlayback}
-                onSpeedChange={changeSpeed}
-                onToggleSkipInactive={toggleSkipInactive}
-                onToggleFullscreen={toggleFullscreen}
-              />
-            )}
           </div>
+          <PagesPanel
+            session={session}
+            activity={activity}
+            logs={logs}
+            eventsReady={loaded}
+            firstTs={firstTs.current}
+            onSeekMs={seekToOffset}
+          />
         </div>
       )}
     </main>

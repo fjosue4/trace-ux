@@ -5,7 +5,8 @@
    theme and preserve the Trace UX casing. */
 .share-replay-page { color: var(--ink); }
 .share-replay-intro,
-.share-replay-player { max-width: 1100px; margin-inline: auto; }
+.share-replay-layout { max-width: 1380px; margin-inline: auto; }
+.share-replay-player { min-width: 0; }
 .share-replay-intro { margin-bottom: 1.25rem; }
 .share-replay-eyebrow {
   margin: 0 0 0.45rem;
@@ -17,6 +18,18 @@
 }
 .share-replay-intro h1 { color: var(--ink); }
 .share-replay-intro .muted { color: var(--muted); }
+
+.share-replay-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 1.2rem;
+  align-items: start;
+}
+.share-replay-layout .replay-side { min-width: 0; }
+
+@media (max-width: 960px) {
+  .share-replay-layout { grid-template-columns: 1fr; }
+}
 
 /* The replay page uses a slightly tighter bottom edge around the player. */
 .page.page--wide {

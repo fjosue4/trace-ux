@@ -4,7 +4,7 @@ import rrwebPlayer from 'rrweb-player';
 import { EventType, IncrementalSource } from '@rrweb/types';
 import type { eventWithTime } from '@rrweb/types';
 import 'rrweb-player/dist/style.css';
-import { api, Session, SessionPage } from '../api';
+import { api, Log, Session } from '../api';
 import { useUser } from '../App';
 import PageHeader from '../components/ui/PageHeader';
 import Notice from '../components/ui/Notice';
@@ -19,8 +19,8 @@ import './Replay.css';
 
 type Meta = {
   session: Session;
-  pages: SessionPage[];
   custom_events: { ts: number; name: string; track_id: string }[];
+  logs: Log[];
 };
 
 // The parts of the rrweb-player wrapper we need. Different builds expose
@@ -91,7 +91,7 @@ export default function Replay() {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
-  const [hostWidth, setHostWidth] = useState(0);
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(autoplay);
@@ -100,6 +100,7 @@ export default function Replay() {
   const [speed, setSpeed] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const playerFrame = useRef<HTMLDivElement>(null);
+  const playerStage = useRef<HTMLDivElement>(null);
   const playerHost = useRef<HTMLDivElement>(null);
   const player = useRef<PlayerLike | null>(null);
   const builtWidth = useRef(0);
@@ -147,13 +148,19 @@ export default function Replay() {
     };
   }, [sessionId]);
 
-  // Track the player host's width so the recording can fill available space.
+  // Track the stage's available box so desktop replays can fit both the
+  // recording and its controls inside the viewport without cropping it.
   useEffect(() => {
-    const el = playerHost.current;
+    const el = playerStage.current;
     if (!hasMeta || !el) return;
     const ro = new ResizeObserver((entries) => {
-      const w = Math.round(entries[0].contentRect.width);
-      if (w > 0) setHostWidth(w);
+      const { width, height } = entries[0].contentRect;
+      const next = { width: Math.round(width), height: Math.round(height) };
+      if (next.width > 0 && next.height > 0) {
+        setStageSize((current) => (
+          current.width === next.width && current.height === next.height ? current : next
+        ));
+      }
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -169,8 +176,15 @@ export default function Replay() {
   // (window resizes), resuming at the current playback position.
   useEffect(() => {
     if (!loaded || !events || events.length === 0 || !playerHost.current) return;
-    if (hostWidth < 240) return;
-    if (player.current && Math.abs(hostWidth - builtWidth.current) < 60) return;
+    if (stageSize.width < 240) return;
+
+    const isDesktop = window.matchMedia('(min-width: 961px)').matches;
+    const ratio = ratioFor(meta?.session);
+    const width = isDesktop && stageSize.height > 0
+      ? Math.min(stageSize.width, Math.floor(stageSize.height / ratio))
+      : stageSize.width;
+    if (width < 240) return;
+    if (player.current && Math.abs(width - builtWidth.current) < 60) return;
 
     // Preserve the position and playback state across responsive rebuilds.
     let resumeAt = 0;
@@ -182,8 +196,7 @@ export default function Replay() {
       player.current.pause?.();
     }
 
-    const width = hostWidth;
-    const height = Math.round(width * ratioFor(meta?.session));
+    const height = Math.round(width * ratio);
     builtWidth.current = width;
     playerHost.current.innerHTML = '';
     const nextPlayer = new rrwebPlayer({
@@ -248,7 +261,7 @@ export default function Replay() {
     }
 
     return () => window.clearTimeout(listenerTimer);
-  }, [loaded, events, hostWidth, meta, autoplay]);
+  }, [loaded, events, stageSize, meta, autoplay]);
 
   // Seek to an offset (ms from the first recorded event) and keep playing.
   const seekToOffset = useCallback((offsetMs: number) => {
@@ -260,12 +273,6 @@ export default function Replay() {
     setCurrentTime(target);
     setStarted(true);
   }, [isPlaying]);
-
-  // Pages and tracked activity are stamped with the visitor's clock; the first
-  // rrweb event shares that clock, so offsets are relative to it.
-  function seekToPage(page: SessionPage) {
-    seekToOffset(page.entered_at * 1000 - firstTs.current);
-  }
 
   function playFromStart() {
     if (player.current?.goto) player.current.goto(0, true);
@@ -352,7 +359,7 @@ export default function Replay() {
     );
   }
 
-  const { session, pages, custom_events: activity } = meta;
+  const { session, custom_events: activity, logs } = meta;
   const playerReady = loaded && events !== null && events.length > 0;
 
   return (
@@ -399,8 +406,16 @@ export default function Replay() {
       <div className="replay-grid">
         <div className="replay-main">
           <div ref={playerFrame} className="player-frame">
-            <div className="player-stage">
+            <div ref={playerStage} className="player-stage">
               <div ref={playerHost} className="player-host" />
+              {playerReady && started && (
+                <button
+                  type="button"
+                  className="player-stage__toggle"
+                  onClick={togglePlayback}
+                  aria-label={isPlaying ? 'Pause recording' : 'Play recording'}
+                />
+              )}
               {playerReady ? (
                 !started && (
                   <button type="button" className="player-cover" onClick={playFromStart} aria-label="Play recording">
@@ -436,8 +451,8 @@ export default function Replay() {
         <aside className="replay-side-col">
           <PagesPanel
             session={session}
-            pages={pages}
             activity={activity}
+            logs={logs}
             eventsReady={loaded}
             onSeekMs={seekToOffset}
             firstTs={firstTs.current}

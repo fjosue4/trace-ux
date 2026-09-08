@@ -590,6 +590,34 @@ func (s *Store) GetCustomEvents(sessionID string) ([]CustomEvent, error) {
 	return out, rows.Err()
 }
 
+// GetSessionLogs returns browser logs in recording order so the replay sidebar
+// can place them on the same clock as tracked custom events.
+func (s *Store) GetSessionLogs(sessionID string) ([]Log, error) {
+	rows, err := s.db.Query(`SELECT l.id, l.session_id, se.site_id, si.name, l.timestamp_ms,
+		l.severity, l.message, l.url, l.created_at, se.started_at
+		FROM logs l
+		JOIN sessions se ON se.id = l.session_id
+		JOIN sites si ON si.id = se.site_id
+		WHERE l.session_id = ?
+		ORDER BY l.timestamp_ms, l.id
+		LIMIT ?`, sessionID, maxLogListLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Log{}
+	for rows.Next() {
+		var item Log
+		if err := rows.Scan(&item.ID, &item.SessionID, &item.SiteID, &item.SiteName,
+			&item.TimestampMs, &item.Severity, &item.Message, &item.URL,
+			&item.CreatedAt, &item.SessionStartedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
 // ---- Logs ----
 
 type Log struct {
