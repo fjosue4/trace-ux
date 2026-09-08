@@ -6,9 +6,21 @@ With Smartlook shutting down, TraceUX provides a self-hosted path for teams that
 
 > **Status: v0.2 — session replay core + multi-user access.** Working: multi-page session capture, full replay player, input masking, UTM/referrer attribution, per-site keys, retention, user accounts with admin-managed passwords, 2-hour session cap, filter sessions by any visited path. Roadmap: heatmaps (click data is already captured), funnels, feedback widget.
 
+**Live landing page:** [trace-ux.builtbyfrank.dev](https://trace-ux.builtbyfrank.dev)
+
 ## Why
 
 With Smartlook shutting down, many teams are looking for a replacement that offers the familiar workflow of tools like Hotjar while keeping data under their control. Existing self-hosted options are often heavy: full analytics suites that need 8 GB+ RAM, multi-service Docker stacks, or paid plugins. TraceUX is built for **a tiny VPS**: a single static binary (~20 MB, ~30 MB RAM) with SQLite and the dashboard embedded. Backups are copying one folder.
+
+## Screenshots
+
+### Sessions dashboard
+
+![TraceUX sessions dashboard](docs/images/trace-ux-sessions.png)
+
+### Session replay
+
+![TraceUX session replay](docs/images/trace-ux-session-replay.png)
 
 ## Quickstart
 
