@@ -2,6 +2,7 @@ import {
   CSSProperties,
   ReactNode,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react';
@@ -32,19 +33,28 @@ type SelectProps = {
   disabled?: boolean;
 };
 
-type MenuPos = { top?: number; left: number; minWidth: number; bottom?: number };
+type MenuPos = { top: number; left: number; minWidth: number };
 
-// Fixed-position popover anchored to the trigger. It is rendered in a body
-// portal so animated cards/tables cannot become its containing block, and it
-// flips upward near the viewport edge.
+// A document-positioned popover anchored to the trigger. It is rendered in a
+// body portal so animated cards/tables cannot clip it, and it flips upward
+// near the viewport edge.
 function computeMenuPos(wrap: HTMLElement, optionCount: number): { pos: MenuPos; up: boolean } {
   const rect = wrap.getBoundingClientRect();
   const menuH = Math.min(optionCount * 36 + 12, 300);
   const up = window.innerHeight - rect.bottom < menuH + 12 && rect.top > menuH + 12;
-  const left = Math.max(8, Math.min(rect.left, window.innerWidth - Math.max(rect.width, 240) - 8));
-  const pos: MenuPos = up
-    ? { bottom: window.innerHeight - rect.top + 6, left, minWidth: rect.width }
-    : { top: rect.bottom + 6, left, minWidth: rect.width };
+  const scrollLeft = window.scrollX || window.pageXOffset;
+  const scrollTop = window.scrollY || window.pageYOffset;
+  const menuWidth = Math.max(rect.width, 240);
+  const viewportLeft = scrollLeft + 8;
+  const viewportRight = scrollLeft + window.innerWidth - menuWidth - 8;
+  const left = Math.min(
+    Math.max(rect.left + scrollLeft, viewportLeft),
+    Math.max(viewportLeft, viewportRight),
+  );
+  const top = up
+    ? rect.top + scrollTop - menuH - 6
+    : rect.bottom + scrollTop + 6;
+  const pos: MenuPos = { top, left, minWidth: rect.width };
   return { pos, up };
 }
 
@@ -60,6 +70,14 @@ export function Select({ value, options, onChange, className = '', ariaLabel, di
   const menuRef = useRef<HTMLDivElement>(null);
 
   const selected = options.find((o) => o.value === value);
+
+  // Measure after the open state commits as well as in the click handler. The
+  // second measurement covers production builds where the trigger can be
+  // remounted by an animated form/card while the click is being committed.
+  useLayoutEffect(() => {
+    if (!open || !wrapRef.current) return;
+    setPos(computeMenuPos(wrapRef.current, options.length).pos);
+  }, [open, options.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -175,40 +193,42 @@ export function Select({ value, options, onChange, className = '', ariaLabel, di
       >
         <path d="m6 9 6 6 6-6" />
       </motion.svg>
-      <AnimatePresence>
-        {open && pos && typeof document !== 'undefined' &&
-          createPortal(
-            <motion.div
-              className="select-menu"
-              role="listbox"
-              aria-label={ariaLabel}
-              ref={menuRef}
-              style={pos as CSSProperties}
-              initial={{ opacity: 0, y: -4, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -3, scale: 0.985 }}
-              transition={softSpring}
-            >
-              {options.map((o, i) => (
-                <motion.button
-                  key={o.value}
-                  type="button"
-                  role="option"
-                  aria-selected={o.value === value}
-                  data-active={i === active || undefined}
-                  className={`select-menu__option${o.value === value ? ' is-selected' : ''}`}
-                  onMouseEnter={() => setActive(i)}
-                  onClick={() => commit(o)}
-                  whileTap={{ scale: 0.98 }}
-                >
-                  <span className="select-menu__label">{o.label}</span>
-                  {o.value === value && <CheckIcon />}
-                </motion.button>
-              ))}
-            </motion.div>,
-            document.body,
-          )}
-      </AnimatePresence>
+      {typeof document !== 'undefined' &&
+        createPortal(
+          <AnimatePresence>
+            {open && pos && (
+              <motion.div
+                className="select-menu"
+                role="listbox"
+                aria-label={ariaLabel}
+                ref={menuRef}
+                style={pos as CSSProperties}
+                initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -3, scale: 0.985 }}
+                transition={softSpring}
+              >
+                {options.map((o, i) => (
+                  <motion.button
+                    key={o.value}
+                    type="button"
+                    role="option"
+                    aria-selected={o.value === value}
+                    data-active={i === active || undefined}
+                    className={`select-menu__option${o.value === value ? ' is-selected' : ''}`}
+                    onMouseEnter={() => setActive(i)}
+                    onClick={() => commit(o)}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <span className="select-menu__label">{o.label}</span>
+                    {o.value === value && <CheckIcon />}
+                  </motion.button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>,
+          document.body,
+        )}
     </span>
   );
 }
