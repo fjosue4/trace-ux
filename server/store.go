@@ -184,6 +184,22 @@ var migrations = []string{
 	);
 	CREATE INDEX IF NOT EXISTS idx_demo_replay_tokens_expiry ON demo_replay_tokens(expires_at);
 	`,
+	// v9: logs captured by the tracker and linked to recordings.
+	`
+	CREATE TABLE IF NOT EXISTS logs (
+		id           INTEGER PRIMARY KEY,
+		session_id   TEXT    NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		client_seq   INTEGER NOT NULL,
+		timestamp_ms INTEGER NOT NULL,
+		severity     TEXT    NOT NULL CHECK (severity IN ('debug', 'info', 'warn', 'error')),
+		message      TEXT    NOT NULL,
+		url          TEXT    NOT NULL DEFAULT '',
+		created_at   INTEGER NOT NULL,
+		UNIQUE (session_id, client_seq)
+	);
+	CREATE INDEX IF NOT EXISTS idx_logs_session_time ON logs(session_id, timestamp_ms);
+	CREATE INDEX IF NOT EXISTS idx_logs_severity_time ON logs(severity, created_at DESC);
+	`,
 }
 
 func (s *Store) migrate() error {
@@ -572,4 +588,174 @@ func (s *Store) GetCustomEvents(sessionID string) ([]CustomEvent, error) {
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+// ---- Logs ----
+
+type Log struct {
+	ID               int64  `json:"id"`
+	SessionID        string `json:"session_id"`
+	SiteID           int64  `json:"site_id"`
+	SiteName         string `json:"site_name,omitempty"`
+	TimestampMs      int64  `json:"timestamp_ms"`
+	Severity         string `json:"severity"`
+	Message          string `json:"message"`
+	URL              string `json:"url"`
+	CreatedAt        int64  `json:"created_at"`
+	SessionStartedAt int64  `json:"session_started_at"`
+	ClientSeq        int64  `json:"-"`
+}
+
+type LogFilter struct {
+	SiteID    int64
+	Severity  string
+	SessionID string
+	FromMs    int64
+	ToMs      int64
+	BeforeID  int64
+	Limit     int
+}
+
+type LogStats struct {
+	Total int64 `json:"total"`
+	Debug int64 `json:"debug"`
+	Info  int64 `json:"info"`
+	Warn  int64 `json:"warn"`
+	Error int64 `json:"error"`
+}
+
+// SaveLogs stores logs for a session. client_seq makes tracker retries
+// idempotent without exposing the deduplication key in dashboard responses.
+func (s *Store) SaveLogs(siteID int64, sessionID string, logs []Log) error {
+	now := time.Now().Unix()
+	if err := s.ensureSessionForSite(siteID, sessionID, now); err != nil {
+		return err
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, item := range logs {
+		if _, err := tx.Exec(`INSERT OR IGNORE INTO logs
+			(session_id, client_seq, timestamp_ms, severity, message, url, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			sessionID, item.ClientSeq, item.TimestampMs, item.Severity, item.Message, item.URL, now); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(`UPDATE sessions SET last_seen = ? WHERE id = ? AND site_id = ?`, now, sessionID, siteID); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// ListLogs returns newest logs first. Logs are joined to their session
+// and site so the global Logs page can link each row back to its recording.
+func (s *Store) ListLogs(f LogFilter) ([]Log, error) {
+	query := `SELECT l.id, l.session_id, se.site_id, si.name, l.timestamp_ms,
+		l.severity, l.message, l.url, l.created_at, se.started_at
+		FROM logs l
+		JOIN sessions se ON se.id = l.session_id
+		JOIN sites si ON si.id = se.site_id
+		WHERE 1=1`
+	args := []any{}
+	if f.SiteID > 0 {
+		query += ` AND se.site_id = ?`
+		args = append(args, f.SiteID)
+	}
+	if f.Severity != "" {
+		query += ` AND l.severity = ?`
+		args = append(args, f.Severity)
+	}
+	if f.SessionID != "" {
+		query += ` AND l.session_id = ?`
+		args = append(args, f.SessionID)
+	}
+	if f.FromMs > 0 {
+		query += ` AND l.timestamp_ms >= ?`
+		args = append(args, f.FromMs)
+	}
+	if f.ToMs > 0 {
+		query += ` AND l.timestamp_ms <= ?`
+		args = append(args, f.ToMs)
+	}
+	if f.BeforeID > 0 {
+		query += ` AND l.id < ?`
+		args = append(args, f.BeforeID)
+	}
+	limit := f.Limit
+	if limit <= 0 || limit > maxLogListLimit {
+		limit = maxLogListLimit
+	}
+	query += ` ORDER BY l.id DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Log{}
+	for rows.Next() {
+		var item Log
+		if err := rows.Scan(&item.ID, &item.SessionID, &item.SiteID, &item.SiteName,
+			&item.TimestampMs, &item.Severity, &item.Message, &item.URL,
+			&item.CreatedAt, &item.SessionStartedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+// LogStats returns counts for a site and optional event-time window. Severity
+// is intentionally ignored so the dashboard summary remains comparable while
+// the table's severity filter changes.
+func (s *Store) LogStats(f LogFilter) (LogStats, error) {
+	var stats LogStats
+	query := `SELECT l.severity, COUNT(*)
+		FROM logs l JOIN sessions se ON se.id = l.session_id
+		WHERE 1=1`
+	args := []any{}
+	if f.SiteID > 0 {
+		query += ` AND se.site_id = ?`
+		args = append(args, f.SiteID)
+	}
+	if f.FromMs > 0 {
+		query += ` AND l.timestamp_ms >= ?`
+		args = append(args, f.FromMs)
+	}
+	if f.ToMs > 0 {
+		query += ` AND l.timestamp_ms <= ?`
+		args = append(args, f.ToMs)
+	}
+	query += ` GROUP BY l.severity`
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return stats, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var severity string
+		var count int64
+		if err := rows.Scan(&severity, &count); err != nil {
+			return stats, err
+		}
+		switch severity {
+		case logSeverityDebug:
+			stats.Debug = count
+		case logSeverityInfo:
+			stats.Info = count
+		case logSeverityWarn:
+			stats.Warn = count
+		case logSeverityError:
+			stats.Error = count
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return stats, err
+	}
+	stats.Total = stats.Debug + stats.Info + stats.Warn + stats.Error
+	return stats, nil
 }

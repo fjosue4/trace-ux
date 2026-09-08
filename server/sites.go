@@ -70,6 +70,7 @@ type SiteSettings struct {
 	RetentionFeedbackDays int              `json:"retention_feedback_days,omitempty"` // 0 = server default
 	AllowDeleteRecordings bool             `json:"allow_delete_recordings"`
 	FeedbackTrigger       *FeedbackTrigger `json:"feedback_trigger,omitempty"`
+	Logs                  LogSettings      `json:"logs"`
 }
 
 func DefaultSiteSettings() SiteSettings {
@@ -81,6 +82,7 @@ func DefaultSiteSettings() SiteSettings {
 		SurveyType:            "stars",
 		AllowDeleteRecordings: true,
 		FeedbackTrigger:       &FeedbackTrigger{Mode: "always"},
+		Logs:                  DefaultLogSettings(),
 	}
 }
 
@@ -102,6 +104,15 @@ func ParseSiteSettings(configText string) SiteSettings {
 	}
 	if s.SurveyType == "" {
 		s.SurveyType = "stars"
+	}
+	if !validLogSeverity(s.Logs.MinimumSeverity) {
+		s.Logs.MinimumSeverity = logSeverityError
+	}
+	if s.Logs.RetentionDays < 0 || s.Logs.RetentionDays > maxLogRetentionDays {
+		s.Logs.RetentionDays = defaultLogRetentionDays
+	}
+	if s.Logs.MaxRows < 0 || s.Logs.MaxRows > maxLogRows {
+		s.Logs.MaxRows = defaultLogMaxRows
 	}
 	return s
 }
@@ -128,6 +139,15 @@ func ValidateSiteSettings(s SiteSettings) error {
 	}
 	if s.RetentionFeedbackDays < 0 || s.RetentionFeedbackDays > 3650 {
 		return fmt.Errorf("retention_feedback_days must be 0-3650")
+	}
+	if !validLogSeverity(s.Logs.MinimumSeverity) {
+		return fmt.Errorf("logs.minimum_severity must be debug, info, warn or error")
+	}
+	if s.Logs.RetentionDays < 0 || s.Logs.RetentionDays > maxLogRetentionDays {
+		return fmt.Errorf("logs.retention_days must be 0-%d", maxLogRetentionDays)
+	}
+	if s.Logs.MaxRows < 0 || s.Logs.MaxRows > maxLogRows {
+		return fmt.Errorf("logs.max_rows must be 0-%d", maxLogRows)
 	}
 
 	// Appearance applies to every survey type: colors must be hex, geometry
@@ -293,6 +313,43 @@ func (s *Store) RetentionSweep(defaultDays int) (int64, error) {
 		}
 		n, _ = res.RowsAffected()
 		total += n
+
+		logSettings := st.Settings.Logs
+		if logSettings.RetentionDays > 0 {
+			logCutoff := time.Now().AddDate(0, 0, -logSettings.RetentionDays).Unix()
+			res, err = s.db.Exec(`DELETE FROM logs
+				WHERE session_id IN (SELECT id FROM sessions WHERE site_id = ?)
+				AND created_at < ?`, st.ID, logCutoff)
+			if err != nil {
+				return total, err
+			}
+			n, _ = res.RowsAffected()
+			total += n
+		}
+
+		if logSettings.MaxRows > 0 {
+			var logCount int64
+			if err := s.db.QueryRow(`SELECT COUNT(*) FROM logs l
+				JOIN sessions se ON se.id = l.session_id
+				WHERE se.site_id = ?`, st.ID).Scan(&logCount); err != nil {
+				return total, err
+			}
+			if logCount > int64(logSettings.MaxRows) {
+				remove := logCount - int64(logSettings.MaxRows)
+				res, err = s.db.Exec(`DELETE FROM logs WHERE id IN (
+					SELECT l.id FROM logs l
+					JOIN sessions se ON se.id = l.session_id
+					WHERE se.site_id = ?
+					ORDER BY l.id ASC
+					LIMIT ?
+				)`, st.ID, remove)
+				if err != nil {
+					return total, err
+				}
+				n, _ = res.RowsAffected()
+				total += n
+			}
+		}
 	}
 	return total, nil
 }
