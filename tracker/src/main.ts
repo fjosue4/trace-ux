@@ -71,6 +71,7 @@ interface TraceUXApi {
 declare global {
   interface Window {
     TraceUX?: TraceUXApi;
+    __traceUXStarted?: boolean;
   }
 }
 
@@ -88,6 +89,7 @@ const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // no interaction for this long ends the
 const MAX_SESSION_MS = 2 * 60 * 60 * 1000; // even continuous interaction splits at 2h
 const PING_INTERVAL_MS = 15_000;
 const GZIP_THRESHOLD = 2048; // compress batches larger than 2 KB
+const MAX_BUFFER_EVENTS = 5_000; // match the server-side batch safety cap
 
 interface StorageLike {
   get(key: string): string;
@@ -99,6 +101,10 @@ interface StorageLike {
   if (!script) return;
   const siteKey = script.dataset.site;
   if (!siteKey) return;
+  // A page can receive the snippet from both a static tag and a tag manager.
+  // Only one recorder may own the page or every copy will emit its own stream.
+  if (window.__traceUXStarted) return;
+  window.__traceUXStarted = true;
 
   try {
     if (navigator.doNotTrack === '1' || localStorage.getItem('trace_ux_optout') === '1') return;
@@ -166,7 +172,9 @@ interface StorageLike {
       navigator.sendBeacon(url, body);
       return;
     }
-    fetch(url, { method: 'POST', body, keepalive: true, credentials: 'omit' }).catch(() => {});
+    // keepalive is reserved for lifecycle sends. Using it for every recording
+    // batch can fill the browser's small keepalive queue on mutation-heavy pages.
+    fetch(url, { method: 'POST', body, keepalive: useBeacon, credentials: 'omit' }).catch(() => {});
   }
 
   function compress(text: string): Promise<ArrayBuffer> {
@@ -176,9 +184,10 @@ interface StorageLike {
 
   function flush(useBeacon = false) {
     if (buffer.length === 0) return;
-    const batch = { type: 'events', session_id: sessionId, seq: seq++, events: buffer };
-    store.set('trace_ux_seq', String(seq));
+    const events = buffer;
     buffer = [];
+    const batch = { type: 'events', session_id: sessionId, seq: seq++, events };
+    store.set('trace_ux_seq', String(seq));
     send(batch, useBeacon);
   }
 
@@ -250,7 +259,6 @@ interface StorageLike {
   }
 
   function onRouteChange() {
-    flush();
     trackPage();
     try {
       mountFeedbackIfConfigured();
@@ -278,7 +286,11 @@ interface StorageLike {
           emit(event) {
             lastEventAt = Date.now(); // any recorded event (move/click/key/scroll) is activity
             buffer.push(event);
-            if (buffer.length >= cfg.flush_batch_size) flush();
+            if (buffer.length > MAX_BUFFER_EVENTS) {
+              // Keep the newest events if a page produces an extreme mutation
+              // storm before the next scheduled digest.
+              buffer.splice(0, buffer.length - MAX_BUFFER_EVENTS);
+            }
           },
           checkoutEveryNms: cfg.checkout_interval_ms,
           maskAllInputs: cfg.mask_inputs,
@@ -725,7 +737,10 @@ interface StorageLike {
     }
   }
 
-  setInterval(flush, cfg.flush_interval_ms);
+  // Recording events are digested on a time boundary, not on event count. This
+  // keeps mutation-heavy pages from opening hundreds of concurrent requests.
+  const flushIntervalMs = Math.max(5_000, cfg.flush_interval_ms || 5_000);
+  setInterval(flush, flushIntervalMs);
   setInterval(() => {
     const now = Date.now();
     if (stopped || document.visibilityState !== 'visible') {
