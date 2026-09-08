@@ -107,6 +107,8 @@ No external database, no queue, no other services — SQLite lives in `/var/lib/
 | `TRACE_UX_SECURE_COOKIES`| `1`       | Set `0` only for local HTTP development               |
 | `TRACE_UX_TRUSTED_PROXIES`| —        | Comma-separated proxy CIDRs allowed to supply XFF      |
 | `TRACE_UX_RETENTION_DAYS`| `90`      | Auto-delete sessions older than this                  |
+| `TRACE_UX_DEMO_REPLAY`  | `0`       | Enable short-lived public demo replay links            |
+| `TRACE_UX_DEMO_REPLAY_TTL` | `900`  | Demo replay lifetime in seconds (60–3600)             |
 | `TRACE_UX_DEV_STATIC`    | —         | Dev only: serve frontend builds from disk             |
 
 ## Users & access
@@ -220,6 +222,26 @@ Multi-stage: frontend bundles built with esbuild/Vite, then a `CGO_ENABLED=0` Go
 **Is this a real video?** No — and that's the point. We store DOM/style event streams and reconstruct the page in the player. It's tiny (~KBs per screen vs MBs per video second), searchable, and never captures actual pixels.
 
 **What about SPAs?** Route changes via the History API are detected and become page entries in the session timeline.
+
+**How can I add a demo “watch my visit” button?** The optional demo capability is disabled by default. Enable it only on an isolated demo deployment, then call `window.TraceUX.claimReplay()` from a button handler and redirect to the returned relative URL. The server stores only a keyed hash of the random capability, scopes it to the current site/session, rate-limits claims, and expires it automatically. This is intended for a private demo overlay, not as a replacement for dashboard authentication.
+
+```html
+<button id="watch-my-visit" type="button">Watch my visit</button>
+<script>
+  document.querySelector('#watch-my-visit').addEventListener('click', async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const link = await window.TraceUX.claimReplay();
+      // The server currently returns a same-origin relative path.
+      window.location.assign(new URL(link.url, window.location.origin).href);
+    } catch {
+      button.disabled = false;
+      button.textContent = 'Replay unavailable';
+    }
+  });
+</script>
+```
 
 **Can I see who the user was?** By design, no. Sessions are anonymous; no cookies, no cross-site identity, no raw IPs.
 

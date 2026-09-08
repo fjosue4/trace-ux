@@ -23,8 +23,10 @@ export default function App() {
   const [checked, setChecked] = useState(false);
   const navigate = useNavigate();
   const auth = useMemo(() => ({ onSignIn: (u: CurrentUser) => setUser(u) }), []);
+  const isPublicShare = window.location.pathname.startsWith('/share/');
 
   useEffect(() => {
+    if (isPublicShare) { setChecked(true); return; }
     api
       .me()
       .then(setUser)
@@ -32,10 +34,11 @@ export default function App() {
         if (e instanceof ApiError && e.status === 401) navigate('/login');
       })
       .finally(() => setChecked(true));
-  }, [navigate]);
+  }, [navigate, isPublicShare]);
 
   const content = (() => {
     if (!checked) return <Loading />;
+    if (isPublicShare) return <Outlet />;
     if (!user) return <Outlet />;
     return (
       <div className="app">

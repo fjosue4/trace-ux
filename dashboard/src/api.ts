@@ -127,6 +127,11 @@ export type Session = {
   remote_id?: string;
 };
 
+export type SharedSession = Pick<
+  Session,
+  'id' | 'started_at' | 'last_seen' | 'duration_ms' | 'page_count' | 'event_count' | 'viewport_w' | 'viewport_h'
+>;
+
 // A tracked activity moment (trace-ux-track-id click or window.TraceUX.track()).
 export type CustomEvent = {
   ts: number; // unix millis, visitor's clock
@@ -267,6 +272,15 @@ export const api = {
   getEvents: (id: string, afterSeq: number) =>
     request<{ next_seq: number; has_more: boolean; events: unknown[] }>(
       `/api/sessions/${id}/events?after_seq=${afterSeq}&max_events=400`,
+    ),
+
+  getSharedSession: (token: string) =>
+    request<{ session: SharedSession }>(
+      `/api/demo/replay/${encodeURIComponent(token)}`,
+    ),
+  getSharedEvents: (token: string, afterSeq: number) =>
+    request<{ next_seq: number; has_more: boolean; events: unknown[] }>(
+      `/api/demo/replay/${encodeURIComponent(token)}/events?after_seq=${afterSeq}&max_events=400`,
     ),
 
   // Site management.
