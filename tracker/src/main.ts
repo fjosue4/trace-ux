@@ -71,6 +71,7 @@ interface TraceUXApi {
 declare global {
   interface Window {
     TraceUX?: TraceUXApi;
+    __traceUXStarted?: boolean;
   }
 }
 
@@ -88,6 +89,7 @@ const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // no interaction for this long ends the
 const MAX_SESSION_MS = 2 * 60 * 60 * 1000; // even continuous interaction splits at 2h
 const PING_INTERVAL_MS = 15_000;
 const GZIP_THRESHOLD = 2048; // compress batches larger than 2 KB
+const MAX_BUFFER_EVENTS = 5_000;
 
 interface StorageLike {
   get(key: string): string;
@@ -99,6 +101,11 @@ interface StorageLike {
   if (!script) return;
   const siteKey = script.dataset.site;
   if (!siteKey) return;
+
+  // A page can receive the snippet from both a static tag and a tag manager.
+  // Only one recorder may own the page or every copy will emit its own stream.
+  if (window.__traceUXStarted) return;
+  window.__traceUXStarted = true;
 
   try {
     if (navigator.doNotTrack === '1' || localStorage.getItem('trace_ux_optout') === '1') return;
@@ -136,6 +143,7 @@ interface StorageLike {
   // until the first tick notices.
   if (stale || activeMs >= MAX_SESSION_MS) {
     sessionId = newId();
+    if (!sessionId) return;
     seq = 0;
     pageIdx = -1;
     activeMs = 0;
@@ -165,7 +173,9 @@ interface StorageLike {
       navigator.sendBeacon(url, body);
       return;
     }
-    fetch(url, { method: 'POST', body, keepalive: true, credentials: 'omit' }).catch(() => {});
+    // keepalive is reserved for lifecycle sends. Using it for every recording
+    // batch can fill the browser's small keepalive queue on mutation-heavy pages.
+    fetch(url, { method: 'POST', body, keepalive: useBeacon, credentials: 'omit' }).catch(() => {});
   }
 
   function compress(text: string): Promise<ArrayBuffer> {
@@ -175,9 +185,10 @@ interface StorageLike {
 
   function flush(useBeacon = false) {
     if (buffer.length === 0) return;
-    const batch = { type: 'events', session_id: sessionId, seq: seq++, events: buffer };
-    store.set('trace_ux_seq', String(seq));
+    const events = buffer;
     buffer = [];
+    const batch = { type: 'events', session_id: sessionId, seq: seq++, events };
+    store.set('trace_ux_seq', String(seq));
     send(batch, useBeacon);
   }
 
@@ -249,7 +260,6 @@ interface StorageLike {
   }
 
   function onRouteChange() {
-    flush();
     trackPage();
     try {
       mountFeedbackIfConfigured();
@@ -277,7 +287,11 @@ interface StorageLike {
           emit(event) {
             lastEventAt = Date.now(); // any recorded event (move/click/key/scroll) is activity
             buffer.push(event);
-            if (buffer.length >= cfg.flush_batch_size) flush();
+            if (buffer.length > MAX_BUFFER_EVENTS) {
+              // Keep the newest events if a page produces an extreme mutation
+              // storm before the next scheduled digest.
+              buffer.splice(0, buffer.length - MAX_BUFFER_EVENTS);
+            }
           },
           checkoutEveryNms: cfg.checkout_interval_ms,
           maskAllInputs: cfg.mask_inputs,
@@ -679,7 +693,12 @@ interface StorageLike {
     }
     stopped = false;
     disarmWake();
-    sessionId = newId();
+    const nextSessionId = newId();
+    if (!nextSessionId) {
+      stopped = true;
+      return;
+    }
+    sessionId = nextSessionId;
     seq = 0;
     pageIdx = -1;
     activeMs = 0;
@@ -718,7 +737,10 @@ interface StorageLike {
     }
   }
 
-  setInterval(flush, cfg.flush_interval_ms);
+  // Recording events are digested on a time boundary, not on event count. This
+  // keeps mutation-heavy pages from opening hundreds of concurrent requests.
+  const flushIntervalMs = Math.max(5_000, cfg.flush_interval_ms || 5_000);
+  setInterval(flush, flushIntervalMs);
   setInterval(() => {
     const now = Date.now();
     if (stopped || document.visibilityState !== 'visible') {
@@ -764,8 +786,20 @@ interface StorageLike {
 
   // ---- helpers ----
   function newId(): string {
-    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
-    return 'trace-ux-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const cryptoAPI =
+      typeof globalThis.crypto !== 'undefined'
+        ? (globalThis.crypto as Crypto & { randomUUID?: () => string })
+        : undefined;
+    if (typeof cryptoAPI?.randomUUID === 'function') return cryptoAPI.randomUUID();
+    if (cryptoAPI && typeof cryptoAPI.getRandomValues === 'function') {
+      const bytes = new Uint8Array(16);
+      cryptoAPI.getRandomValues(bytes);
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+      return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    }
+    return '';
   }
 
   function sessionStorageSafe(): StorageLike {
