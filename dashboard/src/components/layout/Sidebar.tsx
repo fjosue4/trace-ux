@@ -59,6 +59,7 @@ export default function Sidebar({ user, onLogout }: Props) {
         <NavItem to="/" end icon="globe" label="Sites" />
         <NavItem to="/sessions" icon="film" label="Sessions" />
         <NavItem to="/feedback" icon="message" label="Feedback" />
+        <NavItem to="/logs" icon="code" label="Logs" />
         {user.role === 'admin' && (
           <NavItem to="/system-health" icon="bolt" label="System health" />
         )}

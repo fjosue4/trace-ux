@@ -41,6 +41,13 @@ type FeedbackCfg = {
   trigger?: { mode?: string; pages?: string[]; actions?: string[] };
 };
 
+type LogSeverity = 'debug' | 'info' | 'warn' | 'error';
+
+type LogCfg = {
+  enabled: boolean;
+  minimum_severity: LogSeverity;
+};
+
 type TraceUXConfig = {
   sample_rate: number;
   checkout_interval_ms: number;
@@ -48,7 +55,16 @@ type TraceUXConfig = {
   flush_interval_ms: number;
   flush_batch_size: number;
   recording_enabled?: boolean;
+  logs?: LogCfg;
   feedback?: FeedbackCfg;
+};
+
+type PendingLog = {
+  client_seq: number;
+  timestamp_ms: number;
+  severity: LogSeverity;
+  message: string;
+  url: string;
 };
 
 // Public API on window.TraceUX for the host page.
@@ -84,6 +100,14 @@ const DEFAULTS: TraceUXConfig = {
   flush_interval_ms: 5_000,
   flush_batch_size: 20,
   recording_enabled: true, // dashboard can turn recording off per site
+  logs: { enabled: false, minimum_severity: 'error' },
+};
+
+const LOG_SEVERITY_RANK: Record<LogSeverity, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
 };
 
 const SESSION_TTL_MS = 30 * 60 * 1000; // hidden-tab grace before a visit ends
@@ -92,6 +116,7 @@ const MAX_SESSION_MS = 2 * 60 * 60 * 1000; // even continuous interaction splits
 const PING_INTERVAL_MS = 15_000;
 const GZIP_THRESHOLD = 2048; // compress batches larger than 2 KB
 const MAX_BUFFER_EVENTS = 5_000; // match the server-side batch safety cap
+const MAX_BUFFER_LOGS = 100; // match the server-side log batch safety cap
 
 interface StorageLike {
   get(key: string): string;
@@ -144,6 +169,7 @@ interface StorageLike {
   const store = sessionStorageSafe();
   let sessionId = store.get('trace_ux_sid');
   let seq = Number(store.get('trace_ux_seq') || '0');
+  let logSeq = Number(store.get('trace_ux_log_seq') || '0');
   let pageIdx = Number(store.get('trace_ux_page') || '-1');
   let activeMs = Number(store.get('trace_ux_active') || '0');
   let startedAt = Date.now();
@@ -156,6 +182,7 @@ interface StorageLike {
     sessionId = newId();
     if (!sessionId) return;
     seq = 0;
+    logSeq = 0;
     pageIdx = -1;
     activeMs = 0;
   }
@@ -163,9 +190,11 @@ interface StorageLike {
   let stopped = false;
   let stopRecording: ReturnType<typeof record> | undefined;
   let buffer: eventWithTime[] = [];
+  let logBuffer: PendingLog[] = [];
   let lastTick = startedAt;
   let lastEventAt = startedAt; // last real user interaction (any recorded event)
   let wakeArmed = false;
+  let restoreConsole: (() => void) | undefined;
 
   // ---- transport ----
   function send(batch: unknown, useBeacon: boolean) {
@@ -201,6 +230,93 @@ interface StorageLike {
     const batch = { type: 'events', session_id: sessionId, seq: seq++, events };
     store.set('trace_ux_seq', String(seq));
     send(batch, useBeacon);
+  }
+
+  function flushLogs(useBeacon = false) {
+    if (logBuffer.length === 0) return;
+    const logs = logBuffer;
+    logBuffer = [];
+    send({ type: 'logs', session_id: sessionId, logs }, useBeacon);
+  }
+
+  function logMinimumSeverity(): LogSeverity {
+    const configured = cfg.logs?.minimum_severity;
+    return configured && configured in LOG_SEVERITY_RANK ? configured : 'error';
+  }
+
+  function formatConsoleValue(value: unknown): string {
+    if (typeof value === 'string') return value;
+    if (value instanceof Error) return `${value.name}: ${value.message}`;
+    if (typeof Element !== 'undefined' && value instanceof Element) {
+      return `[Element ${value.tagName.toLowerCase()}]`;
+    }
+    if (value === undefined) return 'undefined';
+    if (value === null) return 'null';
+    try {
+      const json = JSON.stringify(value);
+      return json === undefined ? String(value) : json;
+    } catch {
+      return String(value);
+    }
+  }
+
+  function captureLog(severity: LogSeverity, args: unknown[]) {
+    if (stopped || cfg.recording_enabled === false || cfg.logs?.enabled !== true) return;
+    if (LOG_SEVERITY_RANK[severity] < LOG_SEVERITY_RANK[logMinimumSeverity()]) return;
+    logSeq++;
+    store.set('trace_ux_log_seq', String(logSeq));
+    logBuffer.push({
+      client_seq: logSeq,
+      timestamp_ms: Date.now(),
+      severity,
+      message: args.map(formatConsoleValue).join(' ').slice(0, 8192),
+      url: location.href.slice(0, 2048),
+    });
+    if (logBuffer.length > MAX_BUFFER_LOGS) {
+      // Keep one digest-sized batch ready for the next scheduled flush. A
+      // count-based flush here can create a request loop on noisy pages when
+      // the page logs in response to each network request.
+      logBuffer.splice(0, logBuffer.length - MAX_BUFFER_LOGS);
+    }
+  }
+
+  function startLogTracking() {
+    if (cfg.recording_enabled === false || cfg.logs?.enabled !== true || restoreConsole) return;
+    const consoleObject = console as unknown as Record<string, (...args: unknown[]) => void>;
+    const methods: Array<{ name: string; severity: LogSeverity }> = [
+      { name: 'debug', severity: 'debug' },
+      { name: 'info', severity: 'info' },
+      { name: 'log', severity: 'info' },
+      { name: 'warn', severity: 'warn' },
+      { name: 'error', severity: 'error' },
+    ];
+    const originals: Array<{ name: string; fn: (...args: unknown[]) => void }> = [];
+    for (const method of methods) {
+      const original = consoleObject[method.name];
+      if (typeof original !== 'function') continue;
+      const bound = original.bind(console);
+      try {
+        consoleObject[method.name] = (...args: unknown[]) => {
+          bound(...args);
+          captureLog(method.severity, args);
+        };
+        originals.push({ name: method.name, fn: original });
+      } catch {
+        /* some hosts expose a read-only console */
+      }
+    }
+    if (originals.length > 0) {
+      restoreConsole = () => {
+        for (const original of originals) {
+          try {
+            consoleObject[original.name] = original.fn;
+          } catch {
+            /* best effort */
+          }
+        }
+        restoreConsole = undefined;
+      };
+    }
   }
 
   function ping(useBeacon = false) {
@@ -694,8 +810,10 @@ interface StorageLike {
   sendHello();
   store.set('trace_ux_sid', sessionId);
   store.set('trace_ux_sid_ts', String(startedAt));
+  store.set('trace_ux_log_seq', String(logSeq));
 
   startRecording();
+  startLogTracking();
   trackPage();
 
   // ---- session lifecycle ----
@@ -706,8 +824,10 @@ interface StorageLike {
     if (stopped) return;
     stopped = true;
     flush(true);
+    flushLogs(true);
     ping(true);
     stopRecording?.();
+    restoreConsole?.();
     wakeOnInteraction();
   }
 
@@ -718,6 +838,7 @@ interface StorageLike {
   function newSession(finalize = false) {
     if (finalize && !stopped) {
       flush(true);
+      flushLogs(true);
       ping(true);
     }
     const nextSessionId = newId();
@@ -729,6 +850,7 @@ interface StorageLike {
     disarmWake();
     sessionId = nextSessionId;
     seq = 0;
+    logSeq = 0;
     pageIdx = -1;
     activeMs = 0;
     lastEventAt = Date.now();
@@ -736,9 +858,11 @@ interface StorageLike {
     lastTick = startedAt;
     store.set('trace_ux_sid', sessionId);
     store.set('trace_ux_sid_ts', String(startedAt));
+    store.set('trace_ux_log_seq', String(logSeq));
     store.set('trace_ux_page', '-1');
     store.set('trace_ux_active', '0');
     startRecording();
+    startLogTracking();
     sendHello();
     trackPage();
   }
@@ -766,10 +890,14 @@ interface StorageLike {
     }
   }
 
-  // Recording events are digested on a time boundary, not on event count. This
-  // keeps mutation-heavy pages from opening hundreds of concurrent requests.
+  // Recording events and browser logs are digested on the same time boundary,
+  // not on event count. This keeps noisy pages from opening a request loop:
+  // one recording request and, when needed, one logs request per digest tick.
   const flushIntervalMs = Math.max(5_000, cfg.flush_interval_ms || 5_000);
-  setInterval(flush, flushIntervalMs);
+  setInterval(() => {
+    flush();
+    flushLogs();
+  }, flushIntervalMs);
   setInterval(() => {
     const now = Date.now();
     if (stopped || document.visibilityState !== 'visible') {
@@ -797,6 +925,7 @@ interface StorageLike {
 
   window.addEventListener('pagehide', () => {
     flush(true);
+    flushLogs(true);
     if (!stopped) ping(true);
   });
 
@@ -805,6 +934,7 @@ interface StorageLike {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
       flush(true);
+      flushLogs(true);
       if (!stopped) ping(true);
       hideTimer = setTimeout(endSession, SESSION_TTL_MS);
     } else {
@@ -857,7 +987,12 @@ interface StorageLike {
       const res = await fetch(`${origin}/api/config/${encodeURIComponent(key)}`, {
         signal: ctrl.signal,
       });
-      return { ...DEFAULTS, ...(await res.json()) };
+      const remote = await res.json();
+      return {
+        ...DEFAULTS,
+        ...remote,
+        logs: { ...DEFAULTS.logs, ...(remote.logs || {}) },
+      };
     } catch {
       return DEFAULTS;
     } finally {

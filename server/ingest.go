@@ -35,6 +35,9 @@ const (
 	maxIdentityLength  = 256
 	maxUserAgentLength = 1_024
 	maxPageIndex       = 10_000
+	maxLogCount        = 100
+	maxLogMessageBytes = 8 << 10
+	maxLogClientSeq    = 1_000_000_000
 )
 
 var (
@@ -81,6 +84,20 @@ type ingestCustom struct {
 	Type      string              `json:"type"`
 	SessionID string              `json:"session_id"`
 	Events    []ingestCustomEvent `json:"events"`
+}
+
+type ingestLog struct {
+	ClientSeq   int64  `json:"client_seq"`
+	TimestampMs int64  `json:"timestamp_ms"`
+	Severity    string `json:"severity"`
+	Message     string `json:"message"`
+	URL         string `json:"url"`
+}
+
+type ingestLogs struct {
+	Type      string      `json:"type"`
+	SessionID string      `json:"session_id"`
+	Logs      []ingestLog `json:"logs"`
 }
 
 type ingestFeedback struct {
@@ -168,6 +185,12 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		// Recordings are toggled per site from the dashboard; lightweight
 		// batches (hello/ping/page/custom/feedback) still flow so the feedback
 		// channel keeps working while recording is off.
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if env.Type == "logs" && (!site.RecordingEnabled || !site.Settings.Logs.Enabled) {
+		// Logs are recording context, so they follow both the recording toggle
+		// and the per-site log toggle.
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -272,6 +295,45 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			events = append(events, CustomEvent{TS: e.TS, Name: e.Name, TrackID: e.TrackID})
 		}
 		err = s.store.SaveCustomEvents(site.ID, env.SessionID, events)
+	case "logs":
+		var m ingestLogs
+		if err := json.Unmarshal(body, &m); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid logs")
+			return
+		}
+		if len(m.Logs) == 0 {
+			writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+			return
+		}
+		if len(m.Logs) > maxLogCount {
+			writeErr(w, http.StatusBadRequest, "too many logs")
+			return
+		}
+		logs := make([]Log, 0, len(m.Logs))
+		for _, item := range m.Logs {
+			if item.ClientSeq <= 0 || item.ClientSeq > maxLogClientSeq || item.TimestampMs <= 0 ||
+				!validLogSeverity(item.Severity) || len(item.Message) > maxLogMessageBytes || len(item.URL) > maxURLLength {
+				writeErr(w, http.StatusBadRequest, "invalid log")
+				return
+			}
+			// The tracker filters before sending, but the server must enforce the
+			// configured threshold for untrusted clients as well.
+			if !logMeetsMinimumSeverity(item.Severity, site.Settings.Logs.MinimumSeverity) {
+				continue
+			}
+			logs = append(logs, Log{
+				ClientSeq:   item.ClientSeq,
+				TimestampMs: item.TimestampMs,
+				Severity:    item.Severity,
+				Message:     item.Message,
+				URL:         item.URL,
+			})
+		}
+		if len(logs) == 0 {
+			writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+			return
+		}
+		err = s.store.SaveLogs(site.ID, env.SessionID, logs)
 	case "feedback":
 		var m ingestFeedback
 		if err := json.Unmarshal(body, &m); err != nil {

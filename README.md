@@ -6,9 +6,9 @@ Self-hosted, open-source session replay for your websites — a lean, privacy-fi
 
 With Smartlook shutting down, TraceUX provides a self-hosted path for teams that still need session replay and product feedback without handing their data to another hosted analytics platform. It records how real visitors use your site (DOM event streams, not video), stores them on **your own server**, and plays them back in a clean dashboard. One binary, one SQLite file, one Docker container.
 
-> **Status: v0.2 — session replay core + multi-user access.** Working: multi-page session capture, full replay player, input masking, UTM/referrer attribution, per-site keys, retention, user accounts with admin-managed passwords, 2-hour session cap, filter sessions by any visited path. Roadmap: Console Logs tracking for errors and recordings match with errors.
->
-> The demo records your visit to the landing page and lets you watch and share that session replay before installing anything. [Read the Full Details ↓](#why)
+> **Status: v0.2 — session replay core + multi-user access.** Working: multi-page session capture, full replay player, input masking, UTM/referrer attribution, per-site keys, retention, user accounts with admin-managed passwords, 2-hour session cap, filter sessions by any visited path, and recording-linked logs. Roadmap: show logs inside the replay timeline.
+
+**Live landing page:** [trace-ux.builtbyfrank.dev](https://trace-ux.builtbyfrank.dev)
 
 ## Why
 
@@ -149,6 +149,14 @@ Mark any element to appear as seekable activity in the replay sidebar:
 or programmatically: `window.TraceUX.track('checkout-click')`. Clicking an activity row jumps the recording to that exact moment.
 
 Masking: all form inputs are masked by default; any element carrying `trace-ux-mask` — as a class or as a bare attribute — has its text masked, and `trace-ux-block` (class) removes the element from the recording entirely.
+
+### Logs
+
+Logs can be enabled per site from the site's **Logs** configuration. Choose the minimum severity to store: errors only, warnings and errors, info and above, or all levels. Captured rows are linked to the visitor's recording session and appear in the dashboard's **Logs** page, which opens in a live view of the last 15 minutes, refreshes every 5 seconds, and shows up to 1,000 rows. The page also supports site, severity, preset time-window, and custom time filters.
+
+Log storage has two independent per-site caps: 15 days by default and 1,000,000 rows by default. The oldest rows are removed during the regular retention sweep; either cap can be changed or disabled from the same Logs configuration. Logs are also removed automatically when their related recording is removed, and are not yet shown inside the replay timeline.
+
+Because browser console output can contain sensitive values, enable this only when the site's logging policy allows it. TraceUX stores a bounded, formatted message rather than raw console argument objects.
 
 ## Feedback & surveys
 

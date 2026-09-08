@@ -51,14 +51,14 @@ type Config struct {
 
 func loadConfig() Config {
 	cfg := Config{
-		Addr:          envOr("TRACE_UX_ADDR", ":8080"),
-		DataDir:       envOr("TRACE_UX_DATA", "./data"),
-		Password:      os.Getenv("TRACE_UX_PASSWORD"),
-		ResetAdmin:    os.Getenv("TRACE_UX_RESET_ADMIN") == "1",
-		RetentionDays: 90,
-		SecureCookies: envBool("TRACE_UX_SECURE_COOKIES", true),
+		Addr:              envOr("TRACE_UX_ADDR", ":8080"),
+		DataDir:           envOr("TRACE_UX_DATA", "./data"),
+		Password:          os.Getenv("TRACE_UX_PASSWORD"),
+		ResetAdmin:        os.Getenv("TRACE_UX_RESET_ADMIN") == "1",
+		RetentionDays:     90,
+		SecureCookies:     envBool("TRACE_UX_SECURE_COOKIES", true),
 		DemoReplayEnabled: envBool("TRACE_UX_DEMO_REPLAY", false),
-		DemoReplayTTL: 15 * time.Minute,
+		DemoReplayTTL:     15 * time.Minute,
 	}
 	if v := os.Getenv("TRACE_UX_DEMO_REPLAY_TTL"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 60 && n <= 3600 {
@@ -184,6 +184,11 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/sessions/{id}", s.auth(s.handleGetSession))
 	mux.HandleFunc("GET /api/sessions/{id}/events", s.auth(s.handleSessionEvents))
 	mux.HandleFunc("DELETE /api/sessions/{id}", s.auth(s.requireAdmin(s.handleDeleteSession)))
+
+	// Logs captured from tracked sites. Every row is linked to a
+	// recording through its session_id.
+	mux.HandleFunc("GET /api/logs", s.auth(s.handleListLogs))
+	mux.HandleFunc("GET /api/logs/stats", s.auth(s.handleLogStats))
 
 	// Feedback & surveys from tracked sites.
 	mux.HandleFunc("GET /api/feedback", s.auth(s.handleListFeedback))
@@ -698,6 +703,10 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		"flush_interval_ms":    5000,
 		"flush_batch_size":     20,
 		"recording_enabled":    site.RecordingEnabled,
+		"logs": map[string]any{
+			"enabled":          site.RecordingEnabled && site.Settings.Logs.Enabled,
+			"minimum_severity": site.Settings.Logs.MinimumSeverity,
+		},
 		"feedback": map[string]any{
 			"enabled":    site.Settings.FeedbackEnabled,
 			"position":   site.Settings.FeedbackPosition,

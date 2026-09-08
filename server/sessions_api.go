@@ -77,7 +77,17 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"session": sess, "pages": pages, "custom_events": activity})
+	logs, err := s.store.GetSessionLogs(id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"session":       sess,
+		"pages":         pages,
+		"custom_events": activity,
+		"logs":          logs,
+	})
 }
 
 // handleSessionEvents streams decompressed rrweb events page by page.

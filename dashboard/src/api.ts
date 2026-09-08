@@ -53,6 +53,7 @@ export type SiteSettings = {
   retention_sessions_days: number; // 0 = server default
   retention_feedback_days: number; // 0 = server default
   allow_delete_recordings: boolean;
+  logs: LogSettings;
   questions?: SurveyQuestion[];
   appearance?: SiteAppearance;
   feedback_trigger?: FeedbackTrigger;
@@ -127,6 +128,15 @@ export type Session = {
   remote_id?: string;
 };
 
+export type LogSeverity = 'debug' | 'info' | 'warn' | 'error';
+
+export type LogSettings = {
+  enabled: boolean;
+  minimum_severity: LogSeverity;
+  retention_days: number; // 0 = no time-based cap
+  max_rows: number; // 0 = no row cap
+};
+
 export type SharedSession = Pick<
   Session,
   'id' | 'started_at' | 'last_seen' | 'duration_ms' | 'page_count' | 'event_count' | 'viewport_w' | 'viewport_h'
@@ -159,6 +169,40 @@ export type FeedbackSummary = {
   survey_id: string;
   count: number;
   average: number;
+};
+
+export type Log = {
+  id: number;
+  session_id: string;
+  site_id: number;
+  site_name?: string;
+  timestamp_ms: number;
+  severity: LogSeverity;
+  message: string;
+  url: string;
+  created_at: number;
+  session_started_at: number;
+};
+
+// The public demo replay exposes only the fields needed by its action feed.
+export type SharedLog = Pick<Log, 'id' | 'timestamp_ms' | 'severity' | 'message' | 'url'>;
+
+export type LogStats = {
+  total: number;
+  debug: number;
+  info: number;
+  warn: number;
+  error: number;
+};
+
+export type LogQuery = {
+  siteId?: number | null;
+  severity?: LogSeverity | '';
+  sessionId?: string;
+  beforeId?: number;
+  fromMs?: number;
+  toMs?: number;
+  limit?: number;
 };
 
 export type SessionPage = {
@@ -256,7 +300,7 @@ export const api = {
   },
 
   getSession: (id: string) =>
-    request<{ session: Session; pages: SessionPage[]; custom_events: CustomEvent[] }>(
+    request<{ session: Session; pages: SessionPage[]; custom_events: CustomEvent[]; logs: Log[] }>(
       `/api/sessions/${id}`,
     ),
 
@@ -274,8 +318,29 @@ export const api = {
       `/api/sessions/${id}/events?after_seq=${afterSeq}&max_events=400`,
     ),
 
+  listLogs: (query: LogQuery = {}) => {
+    const q = new URLSearchParams();
+    if (query.siteId) q.set('site_id', String(query.siteId));
+    if (query.severity) q.set('severity', query.severity);
+    if (query.sessionId) q.set('session_id', query.sessionId);
+    if (query.beforeId) q.set('before_id', String(query.beforeId));
+    if (query.fromMs) q.set('from_ms', String(query.fromMs));
+    if (query.toMs) q.set('to_ms', String(query.toMs));
+    q.set('limit', String(query.limit ?? 1000));
+    return request<Log[]>(`/api/logs?${q.toString()}`);
+  },
+
+  logStats: (query: Pick<LogQuery, 'siteId' | 'fromMs' | 'toMs'> = {}) => {
+    const q = new URLSearchParams();
+    if (query.siteId) q.set('site_id', String(query.siteId));
+    if (query.fromMs) q.set('from_ms', String(query.fromMs));
+    if (query.toMs) q.set('to_ms', String(query.toMs));
+    const suffix = q.toString();
+    return request<LogStats>(`/api/logs/stats${suffix ? `?${suffix}` : ''}`);
+  },
+
   getSharedSession: (token: string) =>
-    request<{ session: SharedSession }>(
+    request<{ session: SharedSession; custom_events: CustomEvent[]; logs: SharedLog[] }>(
       `/api/demo/replay/${encodeURIComponent(token)}`,
     ),
   getSharedEvents: (token: string, afterSeq: number) =>

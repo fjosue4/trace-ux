@@ -123,6 +123,7 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 		"retention_feedback_days": &settings.RetentionFeedbackDays,
 		"allow_delete_recordings": &settings.AllowDeleteRecordings,
 		"questions":               &settings.Questions,
+		"logs":                    &settings.Logs,
 	} {
 		if err := apply(key, target); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
