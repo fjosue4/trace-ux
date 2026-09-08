@@ -83,6 +83,9 @@ func main() {
 			} else if n > 0 {
 				log.Printf("auth gc: removed %d expired logins", n)
 			}
+			if err := store.DeleteExpiredDemoReplayTokens(time.Now().Unix()); err != nil {
+				log.Printf("demo replay gc: %v", err)
+			}
 			time.Sleep(6 * time.Hour)
 		}
 	}()

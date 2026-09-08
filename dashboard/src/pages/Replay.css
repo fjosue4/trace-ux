@@ -1,5 +1,23 @@
 .replay-main { min-width: 0; }
 
+/* Public token replay keeps the current player, without the authenticated
+   dashboard shell. Keep the intro explicit so it remains readable in either
+   theme and preserve the Trace UX casing. */
+.share-replay-page { color: var(--ink); }
+.share-replay-intro,
+.share-replay-player { max-width: 1100px; margin-inline: auto; }
+.share-replay-intro { margin-bottom: 1.25rem; }
+.share-replay-eyebrow {
+  margin: 0 0 0.45rem;
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  line-height: 1.35;
+}
+.share-replay-intro h1 { color: var(--ink); }
+.share-replay-intro .muted { color: var(--muted); }
+
 /* The replay page uses a slightly tighter bottom edge around the player. */
 .page.page--wide {
   padding-bottom: 2rem;

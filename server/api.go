@@ -32,6 +32,8 @@ type Server struct {
 	loginUserLimiter  *requestLimiter
 	ingestIPLimiter   *requestLimiter
 	ingestSiteLimiter *requestLimiter
+	demoClaimLimiter  *requestLimiter
+	demoReplayLimiter *requestLimiter
 }
 
 type Config struct {
@@ -43,6 +45,8 @@ type Config struct {
 	DevStaticDir      string // serve dashboard/tracker from disk instead of embed (dev)
 	SecureCookies     bool
 	TrustedProxyCIDRs []*net.IPNet
+	DemoReplayEnabled bool
+	DemoReplayTTL     time.Duration
 }
 
 func loadConfig() Config {
@@ -53,6 +57,13 @@ func loadConfig() Config {
 		ResetAdmin:    os.Getenv("TRACE_UX_RESET_ADMIN") == "1",
 		RetentionDays: 90,
 		SecureCookies: envBool("TRACE_UX_SECURE_COOKIES", true),
+		DemoReplayEnabled: envBool("TRACE_UX_DEMO_REPLAY", false),
+		DemoReplayTTL: 15 * time.Minute,
+	}
+	if v := os.Getenv("TRACE_UX_DEMO_REPLAY_TTL"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 60 && n <= 3600 {
+			cfg.DemoReplayTTL = time.Duration(n) * time.Second
+		}
 	}
 	if v := os.Getenv("TRACE_UX_RETENTION_DAYS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -183,6 +194,9 @@ func (s *Server) routes() http.Handler {
 	// site via the URL the admin registers (see cors below).
 	mux.HandleFunc("GET /api/config/{siteKey}", s.handleConfig)
 	mux.HandleFunc("POST /api/ingest/{siteKey}", s.handleIngest)
+	mux.HandleFunc("POST /api/demo/claim/{siteKey}", s.handleDemoClaim)
+	mux.HandleFunc("GET /api/demo/replay/{token}", s.handleDemoReplay)
+	mux.HandleFunc("GET /api/demo/replay/{token}/events", s.handleDemoReplayEvents)
 
 	mux.HandleFunc("GET /t.js", s.handleTracker)
 
@@ -197,7 +211,7 @@ func (s *Server) routes() http.Handler {
 // CORS to that origin. The dashboard API is same-origin and needs no grant.
 func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		isPublic := strings.HasPrefix(r.URL.Path, "/api/ingest/") || strings.HasPrefix(r.URL.Path, "/api/config/")
+		isPublic := strings.HasPrefix(r.URL.Path, "/api/ingest/") || strings.HasPrefix(r.URL.Path, "/api/config/") || strings.HasPrefix(r.URL.Path, "/api/demo/claim/")
 		if !isPublic {
 			next.ServeHTTP(w, r)
 			return
@@ -241,6 +255,8 @@ func (s *Server) originAllowed(path, origin string) bool {
 	if after, ok := strings.CutPrefix(path, "/api/config/"); ok {
 		key, _, _ = strings.Cut(after, "/")
 	} else if after, ok := strings.CutPrefix(path, "/api/ingest/"); ok {
+		key, _, _ = strings.Cut(after, "/")
+	} else if after, ok := strings.CutPrefix(path, "/api/demo/claim/"); ok {
 		key, _, _ = strings.Cut(after, "/")
 	}
 	if key == "" {

@@ -66,6 +66,8 @@ func (s *Server) initSecurity() {
 		s.loginUserLimiter = newRequestLimiter(10, minute)
 		s.ingestIPLimiter = newRequestLimiter(120, minute)
 		s.ingestSiteLimiter = newRequestLimiter(2_000, minute)
+		s.demoClaimLimiter = newRequestLimiter(12, minute)
+		s.demoReplayLimiter = newRequestLimiter(120, minute)
 	})
 }
 

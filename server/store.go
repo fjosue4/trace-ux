@@ -173,6 +173,17 @@ var migrations = []string{
 	`
 	ALTER TABLE sites ADD COLUMN url TEXT NOT NULL DEFAULT '';
 	`,
+	// v8: short-lived, site-scoped demo replay capabilities.
+	`
+	CREATE TABLE IF NOT EXISTS demo_replay_tokens (
+		token_hash TEXT PRIMARY KEY,
+		site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+		session_id TEXT NOT NULL,
+		created_at INTEGER NOT NULL,
+		expires_at INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_demo_replay_tokens_expiry ON demo_replay_tokens(expires_at);
+	`,
 }
 
 func (s *Store) migrate() error {

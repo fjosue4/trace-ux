@@ -66,6 +66,8 @@ interface TraceUXApi {
   track: (name: string, trackId?: string) => void;
   /** Submit in-app feedback/survey response, linked to the current session. */
   feedback: (input: TraceUXFeedbackInput) => void;
+  /** Request a short-lived demo replay link without exposing the session ID. */
+  claimReplay: () => Promise<{ url: string; expires_at: number }>;
 }
 
 declare global {
@@ -97,7 +99,16 @@ interface StorageLike {
 }
 
 (async () => {
-  const script = document.currentScript as HTMLScriptElement | null;
+  // document.currentScript can be null when a tag manager injects this async
+  // script. Fall back to the matching tracker tag so the public API still
+  // initializes on GTM-managed pages.
+  const script =
+    (document.currentScript as HTMLScriptElement | null) ||
+    (Array.from(document.scripts).find((candidate) => {
+      const element = candidate as HTMLScriptElement;
+      return element.dataset.site && new URL(element.src, location.href).pathname.endsWith('/t.js');
+    }) as HTMLScriptElement | undefined) ||
+    null;
   if (!script) return;
   const siteKey = script.dataset.site;
   if (!siteKey) return;
@@ -350,6 +361,23 @@ interface StorageLike {
     },
     feedback(input) {
       sendFeedback(input);
+    },
+    async claimReplay() {
+      // Flush first so the server has the current visit before validating it.
+      flush();
+      ping();
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      const res = await fetch(`${origin}/api/demo/claim/${encodeURIComponent(siteKey)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'omit',
+        body: JSON.stringify({ session_id: sessionId }),
+      });
+      if (!res.ok) throw new Error('Temporary replay access is unavailable.');
+      const link = (await res.json()) as { url: string; expires_at: number };
+      // Resolve the server's relative share path against the tracker origin;
+      // the landing page may be hosted on a different origin.
+      return { ...link, url: new URL(link.url, origin).toString() };
     },
   };
 
