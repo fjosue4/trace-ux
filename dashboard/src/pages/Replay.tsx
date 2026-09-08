@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import rrwebPlayer from 'rrweb-player';
+import { EventType, IncrementalSource } from '@rrweb/types';
 import type { eventWithTime } from '@rrweb/types';
 import 'rrweb-player/dist/style.css';
 import { api, Session, SessionPage } from '../api';
@@ -12,6 +13,7 @@ import Button from '../components/ui/Button';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import MetaCard from '../components/replay/MetaCard';
 import PagesPanel from '../components/replay/PagesPanel';
+import ReplayControls, { type InactivePeriod } from '../components/replay/ReplayControls';
 import { Icon } from '../components/ui/Icon';
 import './Replay.css';
 
@@ -24,13 +26,21 @@ type Meta = {
 // The parts of the rrweb-player wrapper we need. Different builds expose
 // seeking as goto()/play() on the wrapper or only on the core replayer.
 type PlayerLike = {
-  play?: (offsetMs?: number) => void;
+  play?: () => void;
   pause?: () => void;
   goto?: (offsetMs: number, playAfter?: boolean) => void;
+  toggle?: () => void;
+  setSpeed?: (speed: number) => void;
+  toggleSkipInactive?: () => void;
+  toggleFullscreen?: () => void;
+  addEventListener?: (event: string, handler: (payload?: unknown) => void) => void;
+  getMetaData?: () => { totalTime: number };
   getReplayer?: () => {
     play?: (offsetMs?: number) => void;
+    pause?: (offsetMs?: number) => void;
     goto?: (offsetMs: number, playAfter?: boolean) => void;
     getCurrentTime?: () => number;
+    on?: (event: string, handler: (payload?: unknown) => void) => void;
   };
 };
 
@@ -41,6 +51,28 @@ function ratioFor(s?: Session): number {
     return Math.min(Math.max(s.viewport_h / s.viewport_w, 0.45), 1.1);
   }
   return 0.5625; // 16:9 fallback
+}
+
+// Match rrweb-player's inactivity heuristic so the custom timeline can show
+// the same gaps that the skip-inactive control fast-forwards over.
+function getInactivePeriods(events: eventWithTime[]): InactivePeriod[] {
+  if (events.length < 2) return [];
+
+  const first = events[0].timestamp;
+  let lastActive = first;
+  const periods: InactivePeriod[] = [];
+
+  for (const event of events) {
+    if (event.type !== EventType.IncrementalSnapshot) continue;
+    const source = event.data.source;
+    if (source <= IncrementalSource.Mutation || source > IncrementalSource.Input) continue;
+    if (event.timestamp - lastActive > 10_000) {
+      periods.push({ start: lastActive - first, end: event.timestamp - first });
+    }
+    lastActive = event.timestamp;
+  }
+
+  return periods;
 }
 
 export default function Replay() {
@@ -60,11 +92,22 @@ export default function Replay() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [hostWidth, setHostWidth] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(autoplay);
+  const [skipInactive, setSkipInactive] = useState(true);
+  const [isSkipping, setIsSkipping] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const playerFrame = useRef<HTMLDivElement>(null);
   const playerHost = useRef<HTMLDivElement>(null);
   const player = useRef<PlayerLike | null>(null);
   const builtWidth = useRef(0);
+  const speedRef = useRef(1);
+  const skipInactiveRef = useRef(true);
   const firstTs = useRef(0); // client-clock ms of the first rrweb event
   const hasMeta = meta !== null;
+  const inactivePeriods = useMemo(() => getInactivePeriods(events ?? []), [events]);
 
   // Load metadata + the full event stream, paged from the server.
   useEffect(() => {
@@ -98,6 +141,7 @@ export default function Replay() {
 
     return () => {
       cancelled = true;
+      player.current?.pause?.();
       player.current = null;
       builtWidth.current = 0;
     };
@@ -115,6 +159,12 @@ export default function Replay() {
     return () => ro.disconnect();
   }, [hasMeta]);
 
+  useEffect(() => {
+    const onFullscreenChange = () => setIsFullscreen(document.fullscreenElement === playerFrame.current);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
   // Mount the player once sized; rebuild only when the host changes meaningfully
   // (window resizes), resuming at the current playback position.
   useEffect(() => {
@@ -122,35 +172,82 @@ export default function Replay() {
     if (hostWidth < 240) return;
     if (player.current && Math.abs(hostWidth - builtWidth.current) < 60) return;
 
-    // Preserve the position across rebuilds.
+    // Preserve the position and playback state across responsive rebuilds.
     let resumeAt = 0;
+    const resumePlaying = isPlaying;
     if (player.current) {
       const rp = player.current.getReplayer?.();
       const t = rp && typeof rp.getCurrentTime === 'function' ? rp.getCurrentTime() : 0;
       if (typeof t === 'number' && t > 500) resumeAt = t;
+      player.current.pause?.();
     }
 
     const width = hostWidth;
-    const height = Math.round(width * ratioFor(meta?.session)) + 2;
+    const height = Math.round(width * ratioFor(meta?.session));
     builtWidth.current = width;
     playerHost.current.innerHTML = '';
-    player.current = new rrwebPlayer({
+    const nextPlayer = new rrwebPlayer({
       target: playerHost.current,
       props: {
         events,
         width,
         height,
-        autoPlay: autoplay,
-        speed: 1, // rrweb-player otherwise starts at the first speedOption
-        showController: true,
+        autoPlay: autoplay && !resumeAt,
+        speed: speedRef.current,
+        showController: false,
+        skipInactive: skipInactiveRef.current,
         speedOption: [0.5, 1, 2, 4, 8],
       },
     }) as unknown as PlayerLike;
+    player.current = nextPlayer;
+    const eventDuration = Math.max(0, events[events.length - 1].timestamp - firstTs.current);
+    let nextDuration = eventDuration;
+    try {
+      nextDuration = nextPlayer.getMetaData?.().totalTime ?? eventDuration;
+    } catch {
+      // The wrapper exposes getMetaData before its inner replayer is mounted.
+    }
+    setDuration(nextDuration);
+    setCurrentTime(resumeAt);
+    setIsPlaying(autoplay && !resumeAt ? true : resumePlaying && resumeAt > 0);
+
+    // The rrweb wrapper emits UI events for the current position and player
+    // state. Register after its Svelte controller has mounted, and ignore
+    // callbacks from a player that has since been replaced by a resize.
+    const listenerTimer = window.setTimeout(() => {
+      if (player.current !== nextPlayer) return;
+      try {
+        setDuration(nextPlayer.getMetaData?.().totalTime ?? eventDuration);
+      } catch {
+        // The event-derived duration is already in state.
+      }
+      nextPlayer.addEventListener?.('ui-update-current-time', (payload) => {
+        if (player.current !== nextPlayer) return;
+        const value = (payload as { payload?: unknown } | undefined)?.payload;
+        if (typeof value === 'number') setCurrentTime(value);
+      });
+      nextPlayer.addEventListener?.('ui-update-player-state', (payload) => {
+        if (player.current !== nextPlayer) return;
+        const value = (payload as { payload?: unknown } | undefined)?.payload;
+        if (value === 'playing' || value === 'paused') {
+          setIsPlaying(value === 'playing');
+          if (value === 'playing') setStarted(true);
+        }
+      });
+
+      nextPlayer.getReplayer?.()?.on?.('state-change', (state) => {
+        if (player.current !== nextPlayer) return;
+        const value = (state as { speed?: { value?: unknown } } | undefined)?.speed?.value;
+        setIsSkipping(value === 'skipping');
+      });
+    }, 0);
 
     if (resumeAt > 0) {
-      player.current.play?.(resumeAt);
+      nextPlayer.goto?.(resumeAt, resumePlaying);
       setStarted(true);
     }
+
+    return () => window.clearTimeout(listenerTimer);
   }, [loaded, events, hostWidth, meta, autoplay]);
 
   // Seek to an offset (ms from the first recorded event) and keep playing.
@@ -158,10 +255,11 @@ export default function Replay() {
     const target = Math.max(0, offsetMs);
     const core = player.current?.getReplayer ? player.current.getReplayer() : player.current;
     if (!core) return;
-    if (typeof core.goto === 'function') core.goto(target);
+    if (typeof core.goto === 'function') core.goto(target, isPlaying);
     else core.play?.(target);
+    setCurrentTime(target);
     setStarted(true);
-  }, []);
+  }, [isPlaying]);
 
   // Pages and tracked activity are stamped with the visitor's clock; the first
   // rrweb event shares that clock, so offsets are relative to it.
@@ -170,8 +268,59 @@ export default function Replay() {
   }
 
   function playFromStart() {
-    player.current?.play?.(0);
+    if (player.current?.goto) player.current.goto(0, true);
+    else player.current?.play?.();
+    setCurrentTime(0);
     setStarted(true);
+    setIsPlaying(true);
+  }
+
+  function togglePlayback() {
+    if (isPlaying) {
+      player.current?.pause?.();
+      setIsPlaying(false);
+      return;
+    }
+
+    const target = duration > 0 && currentTime >= duration ? 0 : currentTime;
+    if (player.current?.goto) player.current.goto(target, true);
+    else player.current?.play?.();
+    setCurrentTime(target);
+    setStarted(true);
+    setIsPlaying(true);
+  }
+
+  function seekPlayer(offsetMs: number) {
+    const target = Math.min(Math.max(0, offsetMs), duration || Number.MAX_SAFE_INTEGER);
+    const core = player.current?.getReplayer ? player.current.getReplayer() : player.current;
+    if (!core) return;
+    if (typeof core.goto === 'function') core.goto(target, isPlaying);
+    else core.play?.(target);
+    setCurrentTime(target);
+    setStarted(true);
+  }
+
+  function changeSpeed(nextSpeed: number) {
+    speedRef.current = nextSpeed;
+    player.current?.setSpeed?.(nextSpeed);
+    setSpeed(nextSpeed);
+  }
+
+  function toggleSkipInactive() {
+    const nextValue = !skipInactive;
+    skipInactiveRef.current = nextValue;
+    player.current?.toggleSkipInactive?.();
+    setSkipInactive(nextValue);
+  }
+
+  function toggleFullscreen() {
+    const frame = playerFrame.current;
+    if (!frame) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void frame.requestFullscreen();
+    }
   }
 
   async function removeSession() {
@@ -249,19 +398,38 @@ export default function Replay() {
 
       <div className="replay-grid">
         <div className="replay-main">
-          <div className="player-frame">
-            <div ref={playerHost} className="player-host" />
-            {playerReady ? (
-              !started && (
-                <button className="player-cover" onClick={playFromStart} aria-label="Play recording">
-                  <span className="player-cover__btn">
-                    <Icon name="play" size={26} />
-                  </span>
-                  <span className="player-cover__label">Play recording</span>
-                </button>
-              )
-            ) : (
-              <Loading label={progress} overlay />
+          <div ref={playerFrame} className="player-frame">
+            <div className="player-stage">
+              <div ref={playerHost} className="player-host" />
+              {playerReady ? (
+                !started && (
+                  <button type="button" className="player-cover" onClick={playFromStart} aria-label="Play recording">
+                    <span className="player-cover__btn">
+                      <Icon name="play" size={26} />
+                    </span>
+                    <span className="player-cover__label">Play recording</span>
+                  </button>
+                )
+              ) : (
+                <Loading label={progress} overlay />
+              )}
+            </div>
+            {playerReady && (
+              <ReplayControls
+                currentTime={currentTime}
+                duration={duration}
+                isPlaying={isPlaying}
+                skipInactive={skipInactive}
+                isSkipping={isSkipping}
+                speed={speed}
+                inactivePeriods={inactivePeriods}
+                isFullscreen={isFullscreen}
+                onSeek={seekPlayer}
+                onTogglePlay={togglePlayback}
+                onSpeedChange={changeSpeed}
+                onToggleSkipInactive={toggleSkipInactive}
+                onToggleFullscreen={toggleFullscreen}
+              />
             )}
           </div>
         </div>
