@@ -2,11 +2,11 @@
 
 Self-hosted, open-source session replay for your websites — a lean, privacy-first alternative to Smartlook with an experience you control.
 
+## **Try TraceUX live:** [Open the Live Demo →](https://trace-ux.builtbyfrank.dev/)
+
 With Smartlook shutting down, TraceUX provides a self-hosted path for teams that still need session replay and product feedback without handing their data to another hosted analytics platform. It records how real visitors use your site (DOM event streams, not video), stores them on **your own server**, and plays them back in a clean dashboard. One binary, one SQLite file, one Docker container.
 
 > **Status: v0.2 — session replay core + multi-user access.** Working: multi-page session capture, full replay player, input masking, UTM/referrer attribution, per-site keys, retention, user accounts with admin-managed passwords, 2-hour session cap, filter sessions by any visited path. Roadmap: Console Logs tracking for errors and recordings match with errors.
-
-> **Try TraceUX live:** [Open the Live Demo →](https://trace-ux.builtbyfrank.dev/)
 >
 > The demo records your visit to the landing page and lets you watch and share that session replay before installing anything. [Read the Full Details ↓](#why)
 
