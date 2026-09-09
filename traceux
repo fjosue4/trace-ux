@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# Local development launcher. Production still uses the embedded Go binary.
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+usage() {
+  cat <<'USAGE'
+TraceUX local development launcher
+
+  ./traceux --start     start the Go API and Vite dashboard together
+  ./traceux --help      show this help
+
+The dashboard is available at http://127.0.0.1:5173 and the API at
+http://127.0.0.1:8090. React changes update through Vite HMR.
+USAGE
+}
+
+case "${1:-}" in
+  --start) ;;
+  --help|-h|"") usage; exit 0 ;;
+  *) usage >&2; exit 2 ;;
+esac
+
+for command_name in go node npm; do
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    echo "traceux: required command not found: $command_name" >&2
+    exit 1
+  fi
+done
+
+install_dependencies() {
+  local package_dir="$1"
+  if [[ ! -d "$ROOT_DIR/$package_dir/node_modules" ]]; then
+    echo "traceux: installing $package_dir dependencies"
+    (cd "$ROOT_DIR/$package_dir" && npm ci --no-audit --no-fund)
+  fi
+}
+
+install_dependencies tracker
+install_dependencies dashboard
+
+echo "traceux: building tracker bundle"
+(cd "$ROOT_DIR/tracker" && npm run build)
+
+TRACE_UX_ADDR="${TRACE_UX_ADDR:-127.0.0.1:8090}"
+TRACE_UX_DATA="${TRACE_UX_DATA:-$ROOT_DIR/data}"
+TRACE_UX_PASSWORD="${TRACE_UX_PASSWORD:-dev-password}"
+TRACE_UX_SECURE_COOKIES="${TRACE_UX_SECURE_COOKIES:-0}"
+TRACE_UX_VITE_HOST="${TRACE_UX_VITE_HOST:-127.0.0.1}"
+TRACE_UX_VITE_PORT="${TRACE_UX_VITE_PORT:-5173}"
+if [[ "$TRACE_UX_ADDR" == :* ]]; then
+  TRACE_UX_DEV_API="http://127.0.0.1$TRACE_UX_ADDR"
+else
+  TRACE_UX_DEV_API="http://$TRACE_UX_ADDR"
+fi
+
+backend_pid=""
+frontend_pid=""
+
+cleanup() {
+  local status="${1:-0}"
+  trap - EXIT INT TERM
+  [[ -z "$backend_pid" ]] || kill "$backend_pid" 2>/dev/null || true
+  [[ -z "$frontend_pid" ]] || kill "$frontend_pid" 2>/dev/null || true
+  [[ -z "$backend_pid" ]] || wait "$backend_pid" 2>/dev/null || true
+  [[ -z "$frontend_pid" ]] || wait "$frontend_pid" 2>/dev/null || true
+  exit "$status"
+}
+
+trap 'cleanup $?' EXIT INT TERM
+
+echo "traceux: starting API at http://$TRACE_UX_ADDR"
+(
+  cd "$ROOT_DIR"
+  TRACE_UX_ADDR="$TRACE_UX_ADDR" \
+  TRACE_UX_DATA="$TRACE_UX_DATA" \
+  TRACE_UX_PASSWORD="$TRACE_UX_PASSWORD" \
+  TRACE_UX_SECURE_COOKIES="$TRACE_UX_SECURE_COOKIES" \
+  TRACE_UX_DEV_STATIC="$ROOT_DIR" \
+  exec go run ./server
+) &
+backend_pid=$!
+
+echo "traceux: starting dashboard at http://$TRACE_UX_VITE_HOST:$TRACE_UX_VITE_PORT"
+(
+  cd "$ROOT_DIR/dashboard"
+  TRACE_UX_DEV_API="$TRACE_UX_DEV_API" \
+  exec npm run dev -- --host "$TRACE_UX_VITE_HOST" --port "$TRACE_UX_VITE_PORT"
+) &
+frontend_pid=$!
+
+while true; do
+  if ! kill -0 "$backend_pid" 2>/dev/null; then
+    wait "$backend_pid" || exit $?
+    exit 1
+  fi
+  if ! kill -0 "$frontend_pid" 2>/dev/null; then
+    wait "$frontend_pid" || exit $?
+    exit 1
+  fi
+  sleep 1
+done
