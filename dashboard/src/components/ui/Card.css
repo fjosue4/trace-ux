@@ -4,7 +4,7 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   padding: 1.35rem 1.45rem;
-  transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+  transition: border-color var(--duration-fast) var(--ease-out);
 }
-.card:hover { border-color: var(--line-strong); box-shadow: var(--shadow-md); }
-.card--static:hover { border-color: var(--line); box-shadow: var(--shadow-sm); }
+.card:hover { border-color: var(--line-strong); }
+.card--static:hover { border-color: var(--line); }
