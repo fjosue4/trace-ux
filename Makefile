@@ -1,9 +1,8 @@
 .PHONY: dev build build-tracker build-dashboard test serve-demo clean
 
-# dev: run the Go server against live frontend builds (no re-embed needed).
-# Requires tracker/dist and dashboard/dist to exist (make build-tracker etc).
-dev: build-tracker
-	TRACE_UX_DEV_STATIC=$(CURDIR) TRACE_UX_DATA=$(CURDIR)/data TRACE_UX_ADDR=:8090 go run ./server
+# dev: run the Go API and Vite dashboard together with React HMR.
+dev:
+	./traceux --start
 
 # NOTE: build-dashboard overwrites the tracked placeholder server/static/index.html;
 # that file is a build artifact once the dashboard exists.

@@ -1,0 +1,20 @@
+.add-user-modal__form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.add-user-modal__intro { margin: 0; }
+
+.add-user-modal__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 0.9rem;
+}
+
+.add-user-modal__fields .field:last-child { grid-column: 1 / -1; }
+
+@media (max-width: 460px) {
+  .add-user-modal__fields { grid-template-columns: 1fr; }
+  .add-user-modal__fields .field:last-child { grid-column: auto; }
+}

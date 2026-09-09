@@ -212,13 +212,19 @@ Capacity design point: 30 concurrent sessions ≈ 6–10 tiny requests/sec (a fe
 ## Development
 
 ```bash
-make dev          # Go server on :8090 serving live frontend builds
+./traceux --start # Go API on :8090 + Vite dashboard on :5173 with HMR
+make dev          # same development launcher
 make serve-demo   # demo site on :8081 (edit demo/*.html, set your site key)
 make test         # Go tests (ingest flow, auth, UA parsing, multi-page sessions)
 make build        # production binary: server/trace-ux
 ```
 
-Frontend work: `cd dashboard && npm run dev` (Vite on :5173, proxied to :8090). Tracker work: `cd tracker && npm run build`, then reload any page with the snippet.
+Frontend changes update in the browser as you save through Vite HMR. The launcher
+builds the tracker once at startup; after tracker changes, run `cd tracker && npm
+run build` and reload the tracked page. Production remains a single binary with
+the dashboard and tracker embedded via `make build`. Startup prints the configured
+`TRACE_UX_PASSWORD`; an existing database may still have a different password if
+the admin changed it.
 
 ## Building the release artifact
 

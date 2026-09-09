@@ -206,78 +206,86 @@ export default function Logs() {
         }
       />
 
-      {summary.length > 0 && (
-        <div className="logs-summary">
-          {summary.map((item) => (
-            <Card key={item.label} className="logs-summary__card">
-              <span className="logs-summary__label">{item.label}</span>
-              <strong className={`logs-summary__num${item.severity ? ` logs-summary__num--${item.severity}` : ''}`}>
-                {item.value.toLocaleString()}
-              </strong>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      <Card className="logs-controls">
-        <div className="logs-controls__head">
-          <div>
-            <strong>Filter logs</strong>
-            <p className="muted small">Use a rolling window for monitoring or choose an exact time range.</p>
-          </div>
-          <span className="logs-window-label">
-            <Icon name="clock" size={13} />
-            {rangeLabels[timeRange]}
-          </span>
-        </div>
-        <div className="logs-filters">
-          <Select
-            className="logs-filter logs-filter--site"
-            ariaLabel="Site"
-            value={String(siteSel)}
-            onChange={(value) => setSiteSel(value === 'all' ? 'all' : Number(value))}
-            options={[
-              { value: 'all', label: 'All sites' },
-              ...(sites ?? []).map((site) => ({ value: String(site.id), label: site.name })),
-            ]}
-          />
-          <Select
-            className="logs-filter"
-            ariaLabel="Severity"
-            value={severitySel}
-            onChange={(value) => setSeveritySel(value as SeveritySelection)}
-            options={severityOptions}
-          />
-          <Select
-            className="logs-filter logs-filter--time"
-            ariaLabel="Time range"
-            value={timeRange}
-            onChange={changeTimeRange}
-            options={timeRangeOptions}
-          />
-        </div>
-        {timeRange === 'custom' && (
-          <div className="logs-custom-range">
-            <label>
-              <span>From</span>
-              <Input type="datetime-local" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
-            </label>
-            <label>
-              <span>To</span>
-              <Input type="datetime-local" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
-            </label>
-          </div>
+      <div className={`logs-overview${summary.length > 0 ? '' : ' logs-overview--solo'}`}>
+        {summary.length > 0 && (
+          <Card className="logs-summary">
+            <div className="logs-summary__head">
+              <strong>Log volume</strong>
+              <span className="muted small">{rangeLabels[timeRange]}</span>
+            </div>
+            <div className="logs-summary__items">
+              {summary.map((item) => (
+                <div key={item.label} className="logs-summary__item">
+                  <span className="logs-summary__label">{item.label}</span>
+                  <strong className={`logs-summary__num${item.severity ? ` logs-summary__num--${item.severity}` : ''}`}>
+                    {item.value.toLocaleString()}
+                  </strong>
+                </div>
+              ))}
+            </div>
+          </Card>
         )}
-        <div className="logs-controls__foot">
-          <span className="muted small">
-            {logs ? `${logs.length.toLocaleString()} shown` : 'Loading'} · up to {MAX_VISIBLE_LOGS.toLocaleString()} rows
-            {lastUpdated > 0 && ` · updated ${fmtClock(Math.floor(lastUpdated / 1000))}`}
-          </span>
-          <Button variant="ghost" size="sm" onClick={() => setRefreshNonce((value) => value + 1)}>
-            Refresh
-          </Button>
-        </div>
-      </Card>
+
+        <Card className="logs-controls">
+          <div className="logs-controls__head">
+            <div>
+              <strong>Filter logs</strong>
+              <p className="muted small">Use a rolling window for monitoring or choose an exact time range.</p>
+            </div>
+            <span className="logs-window-label">
+              <Icon name="clock" size={13} />
+              {rangeLabels[timeRange]}
+            </span>
+          </div>
+          <div className="logs-filters">
+            <Select
+              className="logs-filter logs-filter--site"
+              ariaLabel="Site"
+              value={String(siteSel)}
+              onChange={(value) => setSiteSel(value === 'all' ? 'all' : Number(value))}
+              options={[
+                { value: 'all', label: 'All sites' },
+                ...(sites ?? []).map((site) => ({ value: String(site.id), label: site.name })),
+              ]}
+            />
+            <Select
+              className="logs-filter"
+              ariaLabel="Severity"
+              value={severitySel}
+              onChange={(value) => setSeveritySel(value as SeveritySelection)}
+              options={severityOptions}
+            />
+            <Select
+              className="logs-filter logs-filter--time"
+              ariaLabel="Time range"
+              value={timeRange}
+              onChange={changeTimeRange}
+              options={timeRangeOptions}
+            />
+          </div>
+          {timeRange === 'custom' && (
+            <div className="logs-custom-range">
+              <label>
+                <span>From</span>
+                <Input type="datetime-local" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} />
+              </label>
+              <label>
+                <span>To</span>
+                <Input type="datetime-local" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
+              </label>
+            </div>
+          )}
+          <div className="logs-controls__foot">
+            <span className="muted small">
+              {logs ? `${logs.length.toLocaleString()} shown` : 'Loading'} · up to {MAX_VISIBLE_LOGS.toLocaleString()} rows
+              {lastUpdated > 0 && ` · updated ${fmtClock(Math.floor(lastUpdated / 1000))}`}
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => setRefreshNonce((value) => value + 1)}>
+              Refresh
+            </Button>
+          </div>
+        </Card>
+      </div>
 
       {error && <Notice tone="error">{error}</Notice>}
       {!timeWindow.valid && <Notice tone="info">{timeWindow.error}</Notice>}
