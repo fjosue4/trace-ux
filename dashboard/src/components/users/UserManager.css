@@ -1,11 +1,6 @@
 .user-manager { display: flex; flex-direction: column; gap: 0.4rem; }
-.user-manager__create { gap: 0.8rem; align-items: flex-end; margin-bottom: 0.6rem; }
-.user-manager__create .field { min-width: 180px; }
 
 @media (max-width: 640px) {
   .user-manager > .row--between { flex-direction: column; align-items: flex-start; }
   .user-manager > .row--between .btn { align-self: flex-start; }
-  .user-manager__create { flex-direction: column; align-items: stretch; }
-  .user-manager__create .field { width: 100%; min-width: 0; }
-  .user-manager__create > .btn { width: 100%; }
 }

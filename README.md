@@ -222,7 +222,9 @@ make build        # production binary: server/trace-ux
 Frontend changes update in the browser as you save through Vite HMR. The launcher
 builds the tracker once at startup; after tracker changes, run `cd tracker && npm
 run build` and reload the tracked page. Production remains a single binary with
-the dashboard and tracker embedded via `make build`.
+the dashboard and tracker embedded via `make build`. Startup prints the configured
+`TRACE_UX_PASSWORD`; an existing database may still have a different password if
+the admin changed it.
 
 ## Building the release artifact
 

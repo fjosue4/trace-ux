@@ -1,26 +1,66 @@
-.logs-summary {
+.logs-overview {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 0.85rem;
+  grid-template-columns: minmax(340px, 0.9fr) minmax(0, 1.75fr);
+  align-items: stretch;
+  gap: 1.1rem;
   margin-bottom: 1.1rem;
 }
 
-.logs-summary__card {
+.logs-overview--solo { grid-template-columns: 1fr; }
+
+.logs-summary {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+  margin: 0;
 }
 
+.logs-summary__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.logs-summary__items {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: stretch;
+  min-height: 4.1rem;
+}
+
+.logs-summary__item {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0 0.7rem;
+  border-left: 1px solid var(--line);
+}
+
+.logs-summary__item:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.logs-summary__item:last-child { padding-right: 0; }
+
 .logs-summary__label {
+  overflow: hidden;
   color: var(--muted);
-  font-size: 0.68rem;
-  font-weight: 600;
-  letter-spacing: 0.07em;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .logs-summary__num {
-  font-size: 1.65rem;
+  font-size: 1.5rem;
   letter-spacing: -0.02em;
 }
 
@@ -67,7 +107,8 @@
 }
 
 .logs-controls {
-  margin-bottom: 1.1rem;
+  min-width: 0;
+  margin: 0;
 }
 
 .logs-controls__head,
@@ -156,7 +197,8 @@
 .logs-replay:hover { text-decoration: underline; }
 
 @media (max-width: 700px) {
-  .logs-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .logs-overview { grid-template-columns: 1fr; }
+  .logs-summary__items { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .logs-filters { grid-template-columns: 1fr; }
   .logs-controls__head,
   .logs-controls__foot,
@@ -168,4 +210,15 @@
   .logs-window-label { align-self: flex-start; }
   .logs-filter,
   .logs-filter--site { width: 100%; }
+}
+
+@media (max-width: 520px) {
+  .logs-summary__items { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem 0; }
+  .logs-summary__item,
+  .logs-summary__item:first-child,
+  .logs-summary__item:last-child {
+    padding: 0 0.65rem;
+    border-left: 1px solid var(--line);
+  }
+  .logs-summary__item:nth-child(odd) { padding-left: 0; border-left: 0; }
 }

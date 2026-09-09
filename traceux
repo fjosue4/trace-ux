@@ -55,6 +55,10 @@ else
   TRACE_UX_DEV_API="http://$TRACE_UX_ADDR"
 fi
 
+echo "traceux: configured admin username: admin"
+echo "traceux: configured TRACE_UX_PASSWORD: $TRACE_UX_PASSWORD"
+echo "traceux: note: this is the configured/bootstrap password, not a password already changed in the database"
+
 backend_pid=""
 frontend_pid=""
 
