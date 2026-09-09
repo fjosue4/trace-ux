@@ -17,18 +17,20 @@ export const ROLE_OPTIONS: SelectOption[] = [
 
 type Props = {
   user: User;
+  currentUsername: string;
   onEvent: (message: string, tone: 'success' | 'error') => void;
   onChanged: () => void;
 };
 
 // One row of the admin Users table. The row owns its password-editing state
 // and talks to the API itself; the page just refreshes and shows messages.
-export default function UserRow({ user, onEvent, onChanged }: Props) {
+export default function UserRow({ user, currentUsername, onEvent, onChanged }: Props) {
   const [editing, setEditing] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const isCurrentUser = user.username.toLowerCase() === currentUsername.toLowerCase();
 
   async function resetPassword() {
     if (newPassword.length < 8) {
@@ -86,9 +88,10 @@ export default function UserRow({ user, onEvent, onChanged }: Props) {
       </td>
       <td>
         <Select
-          ariaLabel={`Role for ${user.username}`}
+          ariaLabel={`Role for ${user.username}${isCurrentUser ? ' (your own role cannot be changed)' : ''}`}
           value={user.role}
           options={ROLE_OPTIONS}
+          disabled={isCurrentUser}
           onChange={(v) => changeRole(v as Role)}
         />
       </td>

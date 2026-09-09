@@ -1,4 +1,5 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, Site } from '../api';
 import PageHeader from '../components/ui/PageHeader';
 import Button from '../components/ui/Button';
@@ -7,19 +8,16 @@ import Notice from '../components/ui/Notice';
 import Loading from '../components/ui/Loading';
 import EmptyState from '../components/ui/EmptyState';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
+import AddSiteModal from '../components/sites/AddSiteModal';
 import { Icon } from '../components/ui/Icon';
-import { Input } from '../components/ui/fields';
 import SiteRow from '../components/sites/SiteRow';
-import SnippetCard from '../components/sites/SnippetCard';
 import './Sites.css';
 
 export default function Sites() {
+  const navigate = useNavigate();
   const [sites, setSites] = useState<Site[] | null>(null);
   const [error, setError] = useState('');
   const [adding, setAdding] = useState(false);
-  const [name, setName] = useState('');
-  const [url, setUrl] = useState('');
-  const [justCreated, setJustCreated] = useState<Site | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Site | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -34,27 +32,11 @@ export default function Sites() {
     load();
   }, []);
 
-  async function create(e: FormEvent) {
-    e.preventDefault();
-    if (!name.trim() || !url.trim()) return;
-    try {
-      const site = await api.createSite(name.trim(), url.trim());
-      setJustCreated(site);
-      setName('');
-      setUrl('');
-      setAdding(false);
-      load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create site.');
-    }
-  }
-
   async function confirmDelete() {
     if (!pendingDelete) return;
     setDeleting(true);
     try {
       await api.deleteSite(pendingDelete.id);
-      if (justCreated?.id === pendingDelete.id) setJustCreated(null);
       setPendingDelete(null);
       load();
     } catch {
@@ -69,46 +51,12 @@ export default function Sites() {
       <PageHeader
         title="Sites"
         actions={
-          <Button onClick={() => setAdding(!adding)}>
-            <Icon name={adding ? 'x' : 'plus'} size={14} />
-            {adding ? 'Cancel' : 'Add site'}
+          <Button onClick={() => setAdding(true)}>
+            <Icon name="plus" size={14} />
+            Add site
           </Button>
         }
       />
-
-      {justCreated && (
-        <SnippetCard
-          site={justCreated}
-          origin={location.origin}
-          onDismiss={() => setJustCreated(null)}
-        />
-      )}
-
-      {adding && (
-        <Card className="add-site">
-          <form onSubmit={create} className="stack">
-            <div className="row">
-              <Input
-                placeholder="Site name (e.g. Acme Shop)"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoFocus
-              />
-              <Input
-                placeholder="https://your-site.com"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                inputMode="url"
-              />
-              <Button type="submit">Create</Button>
-            </div>
-            <p className="muted small">
-              The URL is the address where you'll paste the snippet — recordings are only accepted
-              from that origin.
-            </p>
-          </form>
-        </Card>
-      )}
 
       {error && <Notice tone="error">{error}</Notice>}
 
@@ -141,6 +89,17 @@ export default function Sites() {
         busy={deleting}
         onConfirm={confirmDelete}
         onClose={() => setPendingDelete(null)}
+      />
+
+      <AddSiteModal
+        open={adding}
+        origin={location.origin}
+        onClose={() => setAdding(false)}
+        onCreated={load}
+        onConfigureSite={(site) => {
+          setAdding(false);
+          navigate(`/site/${site.id}`);
+        }}
       />
     </main>
   );
