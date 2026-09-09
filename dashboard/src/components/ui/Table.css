@@ -4,11 +4,12 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   overflow-x: auto;
-  transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
+  overflow-y: hidden;
+  transition: border-color var(--duration-fast) var(--ease-out);
 }
-.table-wrap:hover { border-color: var(--line-strong); box-shadow: var(--shadow-md); }
+.table-wrap:hover { border-color: var(--line-strong); }
 
-.table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.875rem; }
 
 /* fixed layout: columns obey widths, cells clip with an ellipsis instead of
    pushing the table wider than the page */
@@ -29,21 +30,27 @@
 }
 .table th {
   text-align: left;
-  padding: 0.85rem 1.1rem;
-  font-size: 0.68rem;
+  padding: 0.78rem 1.1rem;
+  font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--muted);
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
+  line-height: 1.2;
 }
-.table td { padding: 0.95rem 1.1rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.table td {
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+  line-height: 1.35;
+}
 .table tbody tr:last-child td { border-bottom: none; }
 
 .table tbody tr { transition: background-color var(--duration-fast) var(--ease-out); }
 .table tr.is-clickable { cursor: pointer; }
-.table tr.is-clickable:hover { background: var(--surface-2); }
+.table tbody tr:hover { background: var(--surface-2); }
 
 /* small pill stat chip (e.g. session length) */
 .table .chip {
@@ -60,5 +67,5 @@
 @media (max-width: 640px) {
   .table-wrap { border-radius: var(--radius); }
   .table { min-width: 760px; }
-  .table th, .table td { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+  .table th, .table td { padding-top: 0.78rem; padding-bottom: 0.78rem; }
 }

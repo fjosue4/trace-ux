@@ -2,6 +2,7 @@ import { ReactNode, useState } from 'react';
 import { motion } from 'motion/react';
 import { Session } from '../../api';
 import { fadeUp, spring } from '../../lib/motion';
+import { formatCountry } from '../../lib/format';
 import Card from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import './replay.css';
@@ -36,6 +37,7 @@ export default function MetaCard({ session }: { session: Session }) {
         <MetaBlock label="Viewport">
           {s.viewport_w}×{s.viewport_h}
         </MetaBlock>
+        <MetaBlock label="Country">{formatCountry(s.country)}</MetaBlock>
         <MetaBlock label="Screen">
           {s.screen_w}×{s.screen_h}
         </MetaBlock>

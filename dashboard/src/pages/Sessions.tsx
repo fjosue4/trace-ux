@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api, Session, SessionFilter, Site } from '../api';
-import { fmtDuration, fmtTime, stripProto, truncate } from '../lib/format';
+import { fmtDuration, fmtTime, formatCountry, stripProto, truncate } from '../lib/format';
 import PageHeader from '../components/ui/PageHeader';
 import Table from '../components/ui/Table';
 import Notice from '../components/ui/Notice';
@@ -23,12 +23,21 @@ export default function Sessions() {
   const [params] = useSearchParams();
   const [sites, setSites] = useState<Site[] | null>(null);
   const [sessions, setSessions] = useState<Session[] | null>(null);
+  const [countries, setCountries] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<SiteSelection>(
     params.get('site') ? Number(params.get('site')) : 'all',
   );
   const [filter, setFilter] = useState<SessionFilter>({});
   const [stats, setStats] = useState<{ active: number; completed: number } | null>(null);
+
+  useEffect(() => {
+    setCountries([]);
+    api
+      .listSessionCountries(selected === 'all' ? null : selected)
+      .then(setCountries)
+      .catch(() => setCountries([]));
+  }, [selected]);
 
   useEffect(() => {
     api
@@ -92,6 +101,7 @@ export default function Sessions() {
       <FiltersBar
         filter={filter}
         onChange={set}
+        countries={countries}
         extra={
           <Select
             className="site-picker"
@@ -128,38 +138,68 @@ export default function Sessions() {
       ) : (
         <Table
           fixed
+          className="sessions-table"
           widths={
             showSite
-              ? ['11%', '11%', '12%', '10%', '8%', '9%', '8%', '9%', '7%', '8%', '64px']
-              : ['12%', '11%', '11%', '8%', '9%', '8%', '9%', '7%', '8%', '64px']
+              ? ['19%', '28%', '18%', '15%', '13%', '64px']
+              : ['19%', '30%', '18%', '15%', '13%', '64px']
           }
           headers={
             showSite
-              ? ['Started', 'Status', 'Site', 'Visitor', 'Referrer', 'Browser', 'OS', 'Device', 'Pages', 'Length', '']
-              : ['Started', 'Status', 'Visitor', 'Referrer', 'Browser', 'OS', 'Device', 'Pages', 'Length', '']
+              ? ['Visit', 'Context', 'Device', 'Country', 'Pages', '']
+              : ['Visit', 'Visitor / referrer', 'Device', 'Country', 'Pages', '']
           }
         >
           {sessions.map((s) => (
             <tr key={s.id} className="is-clickable" onClick={() => navigate(`/replay/${s.id}`)}>
-              <td className="muted">{fmtTime(s.started_at)}</td>
               <td>
-                <Badge tone={s.active ? 'accent' : 'neutral'}>
-                  {s.active ? 'in-progress' : 'completed'}
-                </Badge>
+                <div className="session-cell session-cell--visit">
+                  <span className="session-cell__primary">{fmtTime(s.started_at)}</span>
+                  <span className="session-cell__status">
+                    <Badge tone={s.active ? 'accent' : 'neutral'}>
+                      {s.active ? 'in-progress' : 'completed'}
+                    </Badge>
+                  </span>
+                </div>
               </td>
-              {showSite && <td>{s.site_name ?? '—'}</td>}
-              <td className="mono small muted" title={visitorOf(s)}>
-                {truncate(visitorOf(s) || 'anonymous', 22)}
-              </td>
-              <td title={s.referrer} className="muted small">
-                {s.referrer ? truncate(stripProto(s.referrer), 26) : '—'}
-              </td>
-              <td>{s.browser}</td>
-              <td>{s.os}</td>
-              <td>{s.device}</td>
-              <td>{s.page_count}</td>
               <td>
-                <span className="chip">{fmtDuration(s.duration_ms)}</span>
+                <div className="session-context" title={s.referrer || 'direct'}>
+                  <span className="session-context__icon" aria-hidden>
+                    <Icon name="globe" size={13} />
+                  </span>
+                  <div className="session-cell session-cell--context">
+                    {showSite && <span className="session-cell__primary">{s.site_name ?? '—'}</span>}
+                    <span className={`${showSite ? 'session-cell__meta' : 'session-cell__primary'} mono`} title={visitorOf(s)}>
+                      {truncate(visitorOf(s) || 'anonymous', 26)}
+                    </span>
+                    <span className="session-cell__meta session-cell__meta--truncate">
+                      Referrer {s.referrer ? truncate(stripProto(s.referrer), 28) : 'direct'}
+                    </span>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div className="session-cell" title={[s.device, s.browser, s.os].filter(Boolean).join(' · ')}>
+                  <span className="session-cell__primary">{s.device || '—'}</span>
+                  <span className="session-cell__meta">{s.browser || '—'}</span>
+                  <span className="session-cell__meta">{s.os || '—'}</span>
+                </div>
+              </td>
+              <td>
+                <div className="session-cell session-cell--country" title={s.country || 'Country unavailable'}>
+                  <span className="session-cell__primary">{formatCountry(s.country)}</span>
+                  {s.country && <span className="session-cell__meta mono">{s.country}</span>}
+                </div>
+              </td>
+              <td>
+                <div className="session-cell session-cell--pages">
+                  <span className="session-cell__primary session-cell__primary--plain">
+                    {s.page_count} {s.page_count === 1 ? 'page' : 'pages'}
+                  </span>
+                  <span className="session-cell__meta">
+                    <strong>Length</strong> {fmtDuration(s.duration_ms)}
+                  </span>
+                </div>
               </td>
               <td onClick={(e) => e.stopPropagation()}>
                 <Link

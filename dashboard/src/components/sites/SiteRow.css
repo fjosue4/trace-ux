@@ -1,8 +1,9 @@
 .site-row {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.9rem 1.3rem;
+  gap: 1.1rem;
+  min-height: 72px;
+  padding: 0.95rem 1.35rem;
   transition: background-color var(--duration-fast) var(--ease-out);
 }
 .site-row:hover { background: var(--surface-2); }
@@ -10,27 +11,28 @@
 
 .site-row__icon {
   flex: none;
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   display: grid;
   place-items: center;
-  border-radius: var(--radius);
-  background: var(--accent-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
   color: var(--accent);
 }
 
 .site-row__main { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; flex: 1; }
-.site-row__name { font-weight: 700; font-size: 1rem; color: var(--ink); }
+.site-row__name { font-weight: 700; font-size: 0.95rem; color: var(--ink); }
 .site-row__key { display: inline-flex; align-items: center; gap: 0.2rem; min-width: 0; }
 .site-row__key .mono { font-size: 0.78rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .site-row__key .icon-btn { width: 24px; height: 24px; }
 
-.site-row__stats { display: flex; flex-direction: column; gap: 0.25rem; flex: none; }
+.site-row__stats { display: flex; flex-direction: column; gap: 0.22rem; flex: none; min-width: 154px; }
 .site-stat {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   color: var(--ink-2);
   white-space: nowrap;
 }
@@ -39,6 +41,7 @@
 
 @media (max-width: 760px) {
   .site-row { flex-wrap: wrap; }
+  .site-row__stats { min-width: 0; }
   .site-row__stats { flex-direction: row; gap: 0.9rem; }
   .site-row__actions { margin-left: 52px; }
 }

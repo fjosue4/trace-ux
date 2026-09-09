@@ -7,3 +7,4 @@
   transition: border-color var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out);
 }
 .card:hover { border-color: var(--line-strong); box-shadow: var(--shadow-md); }
+.card--static:hover { border-color: var(--line); box-shadow: var(--shadow-sm); }

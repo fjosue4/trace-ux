@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // ---- Dashboard session endpoints (auth-protected, same-origin) ----
@@ -12,7 +13,14 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	// site_id is optional: without it the list spans every site and rows carry
 	// their site name (the global Sessions page).
-	f := SessionFilter{Browser: q.Get("browser"), OS: q.Get("os"), Device: q.Get("device"), URL: q.Get("url"), Identity: q.Get("visitor")}
+	f := SessionFilter{
+		Browser:  q.Get("browser"),
+		OS:       q.Get("os"),
+		Device:   q.Get("device"),
+		Country:  strings.ToUpper(strings.TrimSpace(q.Get("country"))),
+		URL:      q.Get("url"),
+		Identity: q.Get("visitor"),
+	}
 	if v := q.Get("site_id"); v != "" {
 		siteID, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || siteID <= 0 {
@@ -39,6 +47,45 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, sessions)
+}
+
+// GET /api/sessions/countries?site_id=N — distinct country codes available
+// for the sessions filter. The list is intentionally small and derived from
+// stored session metadata rather than shipping a large country catalogue.
+func (s *Server) handleListSessionCountries(w http.ResponseWriter, r *http.Request) {
+	query := `SELECT DISTINCT country FROM sessions WHERE country != ''`
+	args := []any{}
+	if v := r.URL.Query().Get("site_id"); v != "" {
+		siteID, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || siteID <= 0 {
+			writeErr(w, http.StatusBadRequest, "invalid site_id")
+			return
+		}
+		query += ` AND site_id = ?`
+		args = append(args, siteID)
+	}
+	query += ` ORDER BY country`
+
+	rows, err := s.store.db.Query(query, args...)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer rows.Close()
+	countries := []string{}
+	for rows.Next() {
+		var country string
+		if err := rows.Scan(&country); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		countries = append(countries, country)
+	}
+	if err := rows.Err(); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, countries)
 }
 
 // GET /api/sessions/stats?site_id=N — in-progress vs completed session counts.

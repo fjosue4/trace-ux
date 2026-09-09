@@ -224,7 +224,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "invalid hello metadata")
 			return
 		}
-		err = s.store.SaveHello(site.ID, env.SessionID, s.userAgent(r), s.ipHash(r), &m)
+		err = s.store.SaveHelloWithCountry(site.ID, env.SessionID, s.userAgent(r), s.ipHash(r), s.countryFromRequest(r), &m)
 	case "events":
 		var m ingestEvents
 		if err := json.Unmarshal(body, &m); err != nil {
@@ -458,6 +458,54 @@ func (s *Server) clientIP(r *http.Request) string {
 	return remoteIP.String()
 }
 
+// countryFromRequest reads the country supplied by a trusted reverse proxy.
+// TraceUX deliberately does not ask the browser for geolocation or store raw
+// IP addresses. The proxy must be listed in TRACE_UX_TRUSTED_PROXIES before
+// any of these headers are accepted.
+func (s *Server) countryFromRequest(r *http.Request) string {
+	if r == nil || s.cfg == nil {
+		return ""
+	}
+	remote := strings.TrimSpace(r.RemoteAddr)
+	if host, _, err := net.SplitHostPort(remote); err == nil {
+		remote = host
+	}
+	remoteIP := net.ParseIP(remote)
+	if remoteIP == nil || !trustedProxy(remoteIP, s.cfg.TrustedProxyCIDRs) {
+		return ""
+	}
+
+	for _, header := range []string{
+		"CF-IPCountry",
+		"CloudFront-Viewer-Country",
+		"X-Country-Code",
+		"X-Geo-Country",
+		"X-Forwarded-Country",
+	} {
+		if country := normalizeCountryCode(r.Header.Get(header)); country != "" {
+			return country
+		}
+	}
+	return ""
+}
+
+func normalizeCountryCode(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) != 2 {
+		return ""
+	}
+	code := []byte(strings.ToUpper(value))
+	if string(code) == "XX" {
+		return ""
+	}
+	for _, c := range code {
+		if c < 'A' || c > 'Z' {
+			return ""
+		}
+	}
+	return string(code)
+}
+
 func trustedProxy(ip net.IP, networks []*net.IPNet) bool {
 	for _, network := range networks {
 		if network.Contains(ip) {
@@ -505,6 +553,14 @@ func (s *Store) touchSession(sessionID string) {
 }
 
 func (s *Store) SaveHello(siteID int64, sessionID, ua, ipHash string, m *ingestHello) error {
+	return s.saveHello(siteID, sessionID, ua, ipHash, "", m)
+}
+
+func (s *Store) SaveHelloWithCountry(siteID int64, sessionID, ua, ipHash, country string, m *ingestHello) error {
+	return s.saveHello(siteID, sessionID, ua, ipHash, country, m)
+}
+
+func (s *Store) saveHello(siteID int64, sessionID, ua, ipHash, country string, m *ingestHello) error {
 	now := time.Now().Unix()
 	if err := s.ensureSessionForSite(siteID, sessionID, now); err != nil {
 		return err
@@ -533,12 +589,13 @@ func (s *Store) SaveHello(siteID int64, sessionID, ua, ipHash string, m *ingestH
 		device     = COALESCE(NULLIF(device, ''), ?),
 		user_agent = COALESCE(NULLIF(user_agent, ''), ?),
 		ip_hash    = COALESCE(NULLIF(ip_hash, ''), ?),
+		country    = COALESCE(NULLIF(country, ''), ?),
 		last_seen  = ?
 		WHERE id = ? AND site_id = ?`,
 		m.URL, m.Referrer, m.UTMSource, m.UTMMedium, m.UTMCampaign,
 		m.UserID, m.UserID, m.ClientID, m.ClientID, m.RemoteID, m.RemoteID,
 		m.ViewportW, m.ViewportH, m.ScreenW, m.ScreenH,
-		browser, osName, device, ua, ipHash, now, sessionID, siteID)
+		browser, osName, device, ua, ipHash, country, now, sessionID, siteID)
 	return err
 }
 

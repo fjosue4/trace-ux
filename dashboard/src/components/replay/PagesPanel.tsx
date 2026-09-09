@@ -115,8 +115,6 @@ export default function PagesPanel({ session, activity, logs, eventsReady, first
               <motion.li key={action.key} variants={{ hidden: { opacity: 0, x: -8 }, visible: { opacity: 1, x: 0 } }}>
                 <motion.div
                   className={`page-row action-row action-row--${action.kind}${action.kind === 'log' ? ` action-row--log-${action.severity}` : ''}${activeAction === action.key ? ' is-active' : ''}`}
-                  whileHover={{ x: 3 }}
-                  transition={spring}
                 >
                   <span
                     className={`page-row__num action-row__num${action.kind === 'log' ? ` action-row__num--${action.severity}` : ''}`}

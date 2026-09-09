@@ -13,8 +13,8 @@ import { Field, Input } from '../components/ui/fields';
 import UserManager from '../components/users/UserManager';
 import './Settings.css';
 
-// Signed-in users manage their own account here: profile, appearance and
-// password. Team management stays on the admin-only Users page.
+// Signed-in users manage appearance here. Admins manage account passwords from
+// the full-width Team list; viewers keep the self-service password form.
 export default function Settings() {
   const { user } = useUser();
   const { theme, setTheme } = useTheme();
@@ -87,7 +87,7 @@ export default function Settings() {
       </Card>
 
       {user.role === 'admin' && (
-        <Card>
+        <Card className="settings__team">
           <h3>Team</h3>
           <p className="muted small">
             As an admin you can create users, reset passwords, switch roles and remove accounts.
@@ -96,43 +96,45 @@ export default function Settings() {
         </Card>
       )}
 
-      <Card>
-        <h3>Change password</h3>
-        <form onSubmit={submit} className="stack settings__pw">
-          <Field label="Current password">
-            <Input
-              type="password"
-              value={current}
-              onChange={(e) => setCurrent(e.target.value)}
-              autoComplete="current-password"
-              required
-            />
-          </Field>
-          <Field label="New password" hint="Minimum 8 characters">
-            <Input
-              type="password"
-              value={next}
-              onChange={(e) => setNext(e.target.value)}
-              autoComplete="new-password"
-              required
-            />
-          </Field>
-          <Field label="Repeat new password">
-            <Input
-              type="password"
-              value={confirmPw}
-              onChange={(e) => setConfirmPw(e.target.value)}
-              autoComplete="new-password"
-              required
-            />
-          </Field>
-          {notice && <Notice tone="success">{notice}</Notice>}
-          {error && <Notice tone="error">{error}</Notice>}
-          <Button type="submit" disabled={busy}>
-            {busy ? 'Saving…' : 'Change password'}
-          </Button>
-        </form>
-      </Card>
+      {user.role !== 'admin' && (
+        <Card>
+          <h3>Change password</h3>
+          <form onSubmit={submit} className="stack settings__pw">
+            <Field label="Current password">
+              <Input
+                type="password"
+                value={current}
+                onChange={(e) => setCurrent(e.target.value)}
+                autoComplete="current-password"
+                required
+              />
+            </Field>
+            <Field label="New password" hint="Minimum 8 characters">
+              <Input
+                type="password"
+                value={next}
+                onChange={(e) => setNext(e.target.value)}
+                autoComplete="new-password"
+                required
+              />
+            </Field>
+            <Field label="Repeat new password">
+              <Input
+                type="password"
+                value={confirmPw}
+                onChange={(e) => setConfirmPw(e.target.value)}
+                autoComplete="new-password"
+                required
+              />
+            </Field>
+            {notice && <Notice tone="success">{notice}</Notice>}
+            {error && <Notice tone="error">{error}</Notice>}
+            <Button type="submit" disabled={busy}>
+              {busy ? 'Saving…' : 'Change password'}
+            </Button>
+          </form>
+        </Card>
+      )}
     </main>
   );
 }

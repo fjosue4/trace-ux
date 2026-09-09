@@ -454,7 +454,10 @@
 
 .actions-empty { margin: 0.2rem 0.35rem 0; }
 .actions-list { max-height: 34rem; overflow-y: auto; padding-right: 0.15rem; }
-.action-row { align-items: flex-start; }
+.action-row {
+  align-items: flex-start;
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
 .action-row { cursor: default; }
 .action-row__body { flex: 1 1 auto; }
 .action-row__actions { display: flex; align-items: center; gap: 0.15rem; flex: none; margin-top: 0.02rem; }
