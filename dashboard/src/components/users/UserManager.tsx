@@ -12,7 +12,9 @@ import './UserManager.css';
 
 // Admin-only team management, embedded in Settings. The server enforces admin
 // rights and protects the last admin; this component mirrors those rules.
-export default function UserManager() {
+type Props = { currentUsername: string };
+
+export default function UserManager({ currentUsername }: Props) {
   const [users, setUsers] = useState<User[] | null>(null);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -105,7 +107,7 @@ export default function UserManager() {
       ) : (
         <Table className="users-table" fixed widths={['25%', '18%', '22%', '35%']} headers={['User', 'Role', 'Created', '']}>
           {users.map((u) => (
-            <UserRow key={u.id} user={u} onEvent={onEvent} onChanged={load} />
+            <UserRow key={u.id} user={u} currentUsername={currentUsername} onEvent={onEvent} onChanged={load} />
           ))}
         </Table>
       )}

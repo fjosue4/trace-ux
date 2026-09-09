@@ -92,7 +92,7 @@ export default function Settings() {
           <p className="muted small">
             As an admin you can create users, reset passwords, switch roles and remove accounts.
           </p>
-          <UserManager />
+          <UserManager currentUsername={user.username} />
         </Card>
       )}
 

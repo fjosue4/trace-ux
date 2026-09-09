@@ -175,12 +175,14 @@ func TestLastAdminGuard(t *testing.T) {
 	}
 	adminID := users[0].ID
 
-	// The last admin cannot be demoted or deleted…
+	// An admin cannot change their own role, even when they are the only admin.
 	resp = doReq(t, http.MethodPatch, ts.URL+fmt.Sprintf("/api/users/%d", adminID), admin, `{"role":"viewer"}`)
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("demote last admin: got %d, want 400", resp.StatusCode)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("change own role: got %d, want 403", resp.StatusCode)
 	}
 	resp.Body.Close()
+
+	// The last admin also cannot be deleted.
 	resp = doReq(t, http.MethodDelete, ts.URL+fmt.Sprintf("/api/users/%d", adminID), admin, "")
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("delete last admin: got %d, want 400", resp.StatusCode)
@@ -189,6 +191,11 @@ func TestLastAdminGuard(t *testing.T) {
 
 	// …but with a second admin, both operations are fine.
 	doReq(t, http.MethodPost, ts.URL+"/api/users", admin, `{"username":"root2","password":"root2-pass-1","role":"admin"}`)
+	resp = doReq(t, http.MethodPatch, ts.URL+fmt.Sprintf("/api/users/%d", adminID), admin, `{"role":"viewer"}`)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("change own role with another admin: got %d, want 403", resp.StatusCode)
+	}
+	resp.Body.Close()
 	resp = doReq(t, http.MethodDelete, ts.URL+fmt.Sprintf("/api/users/%d", adminID), admin, "")
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("delete admin with second admin present: %d", resp.StatusCode)

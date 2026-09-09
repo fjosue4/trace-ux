@@ -13,11 +13,15 @@ type Props = {
   title?: string;
   /** When provided, the card can be dismissed (transient banners). */
   onDismiss?: () => void;
+  /** Render without the outer card when the snippet is hosted in a modal. */
+  embedded?: boolean;
+  /** Optional action for the post-create modal. */
+  onConfigureSite?: () => void;
 };
 
 type InstallMethod = 'manual' | 'gtm';
 
-export default function SnippetCard({ site, origin, title, onDismiss }: Props) {
+export default function SnippetCard({ site, origin, title, onDismiss, embedded = false, onConfigureSite }: Props) {
   const [method, setMethod] = useState<InstallMethod>('manual');
   const [copied, setCopied] = useState(false);
 
@@ -43,16 +47,18 @@ export default function SnippetCard({ site, origin, title, onDismiss }: Props) {
     setTimeout(() => setCopied(false), 1500);
   }
 
-  return (
-    <Card className="snippet-card">
-      <div className="row row--between">
-        <h3>{title ?? `${site.name} is ready`}</h3>
-        {onDismiss && (
-          <Button variant="ghost" size="sm" onClick={onDismiss}>
-            Dismiss
-          </Button>
-        )}
-      </div>
+  const content = (
+    <>
+      {!embedded && (
+        <div className="row row--between">
+          <h3>{title ?? `${site.name} is ready`}</h3>
+          {onDismiss && (
+            <Button variant="ghost" size="sm" onClick={onDismiss}>
+              Dismiss
+            </Button>
+          )}
+        </div>
+      )}
 
       <div className="snippet-tabs" role="tablist" aria-label="Installation method">
         <motion.button
@@ -100,6 +106,27 @@ export default function SnippetCard({ site, origin, title, onDismiss }: Props) {
         <Icon name={copied ? 'check' : 'copy'} size={13} />
         {copied ? 'Copied' : 'Copy snippet'}
       </Button>
-    </Card>
+      {embedded && (onConfigureSite || onDismiss) && (
+        <div className="snippet-card__actions">
+          {onConfigureSite && (
+            <Button variant="secondary" size="sm" onClick={onConfigureSite}>
+              <Icon name="settings" size={13} />
+              Configure Site
+            </Button>
+          )}
+          {onDismiss && (
+            <Button variant="ghost" size="sm" onClick={onDismiss}>
+              Close
+            </Button>
+          )}
+        </div>
+      )}
+    </>
+  );
+
+  return embedded ? (
+    <div className="snippet-card snippet-card--embedded">{content}</div>
+  ) : (
+    <Card className="snippet-card">{content}</Card>
   );
 }

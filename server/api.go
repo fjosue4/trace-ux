@@ -553,6 +553,12 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Role != "" {
+		if actor := currentUser(r); actor != nil && actor.ID == id {
+			writeErr(w, http.StatusForbidden, "cannot change your own role")
+			return
+		}
+	}
+	if body.Role != "" {
 		if !validateRole(body.Role) {
 			writeErr(w, http.StatusBadRequest, "role must be admin or viewer")
 			return
