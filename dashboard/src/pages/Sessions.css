@@ -1,8 +1,112 @@
-/* Session rows keep durations aligned for easy scanning. */
-.table td:nth-child(n + 6) { font-variant-numeric: tabular-nums; }
+/* Sessions use one continuous list surface: compact headers, quiet dividers,
+   and stacked facts inside each row, like a modern data table. */
+.sessions-table.table-wrap {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
+}
+.sessions-table .table thead { background: transparent; }
+.sessions-table .table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+.sessions-table .table th {
+  padding-top: 0.82rem;
+  padding-bottom: 0.72rem;
+}
+.sessions-table .table td {
+  padding-top: 0.86rem;
+  padding-bottom: 0.86rem;
+  vertical-align: middle;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+.sessions-table .table th:last-child,
+.sessions-table .table td:last-child { text-align: center; }
+.sessions-table .table th:last-child { text-align: center; }
+.sessions-table .table tbody tr:last-child td { border-bottom: 0; }
+.sessions-table .table tbody tr:hover td { background: var(--surface-2); }
+.session-cell {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+  line-height: 1.25;
+  white-space: normal;
+}
+.session-cell__primary,
+.session-cell__meta {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-cell__primary {
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+.session-cell__meta {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+.session-cell__meta strong { color: var(--ink-2); font-weight: 650; }
+.session-cell--visit .badge { width: fit-content; }
+.session-cell--visit .session-cell__status { margin-top: 0.24rem; }
+.session-cell--visit .session-cell__meta,
+.session-cell--pages .session-cell__primary { font-variant-numeric: tabular-nums; }
+.session-cell--country .session-cell__primary { font-weight: 650; }
+.session-cell--country .session-cell__meta { letter-spacing: 0.04em; }
+.session-cell--pages { justify-items: start; }
+.session-cell--pages .session-cell__primary {
+  display: block;
+}
+.session-cell--pages .session-cell__primary--plain {
+  color: var(--ink);
+}
 
-.play-btn { width: 34px; padding: 0; }
-.play-btn svg { margin-left: 2px; }
+.session-context {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.62rem;
+  min-width: 0;
+}
+.session-context__icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  margin-top: 0.05rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.session-context .session-cell { min-width: 0; }
+
+.play-btn {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 0;
+  overflow: hidden;
+  line-height: 0;
+  border-radius: 50%;
+}
+.play-btn svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  margin: 0;
+}
 
 .session-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1.2rem; }
 .session-stat { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.85rem 1.3rem; }
@@ -32,5 +136,5 @@
   .session-stat { min-width: 0; padding: 0.9rem 1rem; }
   .session-stat__label { align-items: flex-start; line-height: 1.25; }
   .session-stat__num { font-size: 1.35rem; }
-  .play-btn { width: 36px; }
+  .play-btn { width: 36px; min-width: 36px; }
 }

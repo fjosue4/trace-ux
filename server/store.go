@@ -437,6 +437,10 @@ func (s *Store) ListSessions(f SessionFilter) ([]Session, error) {
 		query += ` AND s.device = ?`
 		args = append(args, f.Device)
 	}
+	if f.Country != "" {
+		query += ` AND s.country = ?`
+		args = append(args, f.Country)
+	}
 	if f.URL != "" {
 		// Match any path the session navigated through — pages holds the full
 		// per-page timeline, so filtering covers every hop, not just entry/exit.
@@ -483,6 +487,7 @@ type SessionFilter struct {
 	Browser       string
 	OS            string
 	Device        string
+	Country       string
 	URL           string
 	Identity      string // matches user_id / client_id / remote_id
 	MinDurationMs int64

@@ -177,6 +177,7 @@ Turning **recordings off** for a site stops the capture of visitor event streams
 ## Session behavior
 
 - **2-hour cap** — a single session never records more than 2 hours of active time. The tracker splits a marathon visit into a fresh session at the cap (shipping the final events and duration of the outgoing session), and the server independently caps the stored duration, so buggy or hostile clients can't inflate it. Time with the tab hidden doesn't count; 30 minutes of inactivity or a hidden tab also ends a session.
+- **Country without browser geolocation** — when TraceUX runs behind a trusted reverse proxy, it stores only the normalized country code from common proxy geo headers (`CF-IPCountry`, CloudFront, or `X-Country-Code` variants). Sessions without that header show the country as unknown.
 - **Filter by any visited path** — the URL filter on the sessions list matches the entry URL, the exit URL, *and every page the visitor navigated through*, so searching `pricing` finds sessions that merely passed by the pricing page.
 
 ## Privacy model

@@ -38,6 +38,27 @@ export function stripProto(url: string): string {
   return url.replace(/^https?:\/\//, '');
 }
 
+export function formatCountry(value: string): string {
+  const code = (value || '').trim().toUpperCase();
+  if (!code) return 'Unknown';
+
+  // DisplayNames is optional in older browsers, so keep the ISO code as a
+  // safe fallback without requiring a large country-name bundle.
+  const intlWithDisplayNames = Intl as typeof Intl & {
+    DisplayNames?: new (
+      locales?: string | string[],
+      options?: { type: 'region' },
+    ) => { of: (region: string) => string | undefined };
+  };
+  try {
+    const DisplayNames = intlWithDisplayNames.DisplayNames;
+    const name = DisplayNames && new DisplayNames('en', { type: 'region' }).of(code);
+    return name || code;
+  } catch {
+    return code;
+  }
+}
+
 export function fmtBytes(bytes: number): string {
   if (!bytes || bytes <= 0) return '0 MB';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];

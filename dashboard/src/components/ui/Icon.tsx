@@ -50,7 +50,13 @@ const GLYPHS: Record<IconName, ReactNode> = {
     </>
   ),
   check: <path d="M20 6 9 17l-5-5" />,
-  play: <path d="M8 5.5v13l11-6.5-11-6.5z" fill="currentColor" stroke="none" />,
+  play: (
+    <path
+      d="m11.596 8.697l-6.363 3.692c-.54.313-1.233-.066-1.233-.697V4.308c0-.63.692-1.01 1.233-.696l6.363 3.692a.802.802 0 0 1 0 1.393"
+      fill="currentColor"
+      stroke="none"
+    />
+  ),
   pause: (
     <>
       <path d="M7 5v14" strokeWidth="3" />
@@ -120,7 +126,7 @@ export function Icon({ name, size = 16 }: Props) {
     <svg
       width={size}
       height={size}
-      viewBox="0 0 24 24"
+      viewBox={name === 'play' ? '0 0 16 16' : '0 0 24 24'}
       fill="none"
       stroke="currentColor"
       strokeWidth="2"

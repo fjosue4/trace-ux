@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { stagger } from '../../lib/motion';
 import { SessionFilter } from '../../api';
+import { formatCountry } from '../../lib/format';
 import { Input, Select, SelectOption } from '../ui/fields';
 import './FiltersBar.css';
 
@@ -10,6 +11,7 @@ type Props = {
   onChange: (patch: Partial<SessionFilter>) => void;
   /** Optional leading control (e.g. the site picker on the global page). */
   extra?: ReactNode;
+  countries?: string[];
 };
 
 const DEVICE_OPTIONS: SelectOption[] = [
@@ -31,7 +33,12 @@ const LENGTH_OPTIONS: SelectOption[] = [
   { value: '600000', label: '10m+' },
 ];
 
-export default function FiltersBar({ filter, onChange, extra }: Props) {
+export default function FiltersBar({ filter, onChange, extra, countries = [] }: Props) {
+  const countryOptions: SelectOption[] = [
+    { value: '', label: 'Any country' },
+    ...countries.map((country) => ({ value: country, label: formatCountry(country) })),
+  ];
+
   return (
     <motion.div className="filters" variants={stagger} initial="hidden" animate="visible">
       {extra}
@@ -54,6 +61,13 @@ export default function FiltersBar({ filter, onChange, extra }: Props) {
         value={filter.os || ''}
         options={OS_OPTIONS}
         onChange={(v) => onChange({ os: v || undefined })}
+      />
+
+      <Select
+        ariaLabel="Country"
+        value={filter.country || ''}
+        options={countryOptions}
+        onChange={(v) => onChange({ country: v || undefined })}
       />
 
       <Select

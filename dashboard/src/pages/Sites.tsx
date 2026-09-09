@@ -126,7 +126,7 @@ export default function Sites() {
           }
         />
       ) : (
-        <Card className="site-list">
+        <Card className="site-list card--static">
           {sites.map((s) => (
             <SiteRow key={s.id} site={s} origin={location.origin} onDelete={setPendingDelete} />
           ))}

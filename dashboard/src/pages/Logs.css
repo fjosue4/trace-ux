@@ -95,22 +95,20 @@
 }
 
 .logs-filters {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1.1fr);
   align-items: center;
-  flex-wrap: wrap;
   gap: 0.7rem;
 }
 
 .logs-filter {
-  min-width: 150px;
+  width: auto;
+  min-width: 0;
 }
 
 .logs-filter--site {
-  min-width: 210px;
-}
-
-.logs-filter--time {
-  min-width: 185px;
+  width: auto;
+  min-width: 0;
 }
 
 .logs-custom-range {
@@ -159,6 +157,7 @@
 
 @media (max-width: 700px) {
   .logs-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .logs-filters { grid-template-columns: 1fr; }
   .logs-controls__head,
   .logs-controls__foot,
   .logs-live-control {
@@ -168,6 +167,5 @@
 
   .logs-window-label { align-self: flex-start; }
   .logs-filter,
-  .logs-filter--site,
-  .logs-filter--time { width: 100%; }
+  .logs-filter--site { width: 100%; }
 }

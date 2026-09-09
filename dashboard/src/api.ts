@@ -119,6 +119,7 @@ export type Session = {
   browser: string;
   os: string;
   device: string;
+  country: string;
   viewport_w: number;
   viewport_h: number;
   screen_w: number;
@@ -293,11 +294,15 @@ export const api = {
     if (f.browser) q.set('browser', f.browser);
     if (f.os) q.set('os', f.os);
     if (f.device) q.set('device', f.device);
+    if (f.country) q.set('country', f.country);
     if (f.url) q.set('url', f.url);
     if (f.identity) q.set('visitor', f.identity);
     if (f.min_duration_ms) q.set('min_duration_ms', String(f.min_duration_ms));
     return request<Session[]>(`/api/sessions?${q}`);
   },
+
+  listSessionCountries: (siteId: number | null) =>
+    request<string[]>(`/api/sessions/countries${siteId ? `?site_id=${siteId}` : ''}`),
 
   getSession: (id: string) =>
     request<{ session: Session; pages: SessionPage[]; custom_events: CustomEvent[]; logs: Log[] }>(
@@ -390,6 +395,7 @@ export type SessionFilter = {
   browser?: string;
   os?: string;
   device?: string;
+  country?: string;
   url?: string;
   identity?: string; // matches userId / clientId / remoteId
   min_duration_ms?: number;

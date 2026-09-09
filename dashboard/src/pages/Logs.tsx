@@ -313,6 +313,7 @@ export default function Logs() {
             </Notice>
           )}
           <Table
+            className="logs-table"
             fixed
             widths={['14%', '9%', '34%', '13%', '17%', '13%']}
             headers={['Time', 'Severity', 'Message', 'Site', 'Page', 'Recording']}

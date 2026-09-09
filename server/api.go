@@ -180,6 +180,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/sites/{id}", s.auth(s.requireAdmin(s.handleDeleteSite)))
 
 	mux.HandleFunc("GET /api/sessions", s.auth(s.handleListSessions))
+	mux.HandleFunc("GET /api/sessions/countries", s.auth(s.handleListSessionCountries))
 	mux.HandleFunc("GET /api/sessions/stats", s.auth(s.handleSessionStats))
 	mux.HandleFunc("GET /api/sessions/{id}", s.auth(s.handleGetSession))
 	mux.HandleFunc("GET /api/sessions/{id}/events", s.auth(s.handleSessionEvents))
