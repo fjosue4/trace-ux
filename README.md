@@ -18,11 +18,11 @@ With Smartlook shutting down, many teams are looking for a replacement that offe
 
 ### Sessions dashboard
 
-![TraceUX sessions dashboard](docs/images/trace-ux-sessions.png)
+<img width="1895" height="891" alt="image" src="https://github.com/user-attachments/assets/6fff39bc-22ba-4cb0-835c-445e337c0f85" />
 
 ### Session replay
 
-![TraceUX session replay](docs/images/trace-ux-session-replay.png)
+<img width="1901" height="886" alt="image" src="https://github.com/user-attachments/assets/85811ddb-4f22-4f20-8cc4-be2ae6cc885f" />
 
 ## Quickstart
 
