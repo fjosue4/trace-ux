@@ -6,7 +6,7 @@ Self-hosted, open-source session replay for your websites — a lean, privacy-fi
 
 With Smartlook shutting down, TraceUX provides a self-hosted path for teams that still need session replay and product feedback without handing their data to another hosted analytics platform. It records how real visitors use your site (DOM event streams, not video), stores them on **your own server**, and plays them back in a clean dashboard. One binary, one SQLite file, one Docker container.
 
-> **Status: v0.2 — session replay core + multi-user access.** Working: multi-page session capture, full replay player, input masking, UTM/referrer attribution, per-site keys, retention, user accounts with admin-managed passwords, 2-hour session cap, filter sessions by any visited path, and recording-linked logs. Roadmap: show logs inside the replay timeline.
+> **Status: v0.2 — session replay core + multi-user access.** Working: multi-page session capture, full replay player, input masking, UTM/referrer attribution, per-site keys, retention, user accounts with admin-managed passwords, 2-hour session cap, filter sessions by any visited path, recording-linked logs, and backend endpoint performance percentiles. Roadmap: GraphQL resolver tracing and backend traces inside the replay timeline.
 
 **Live landing page:** [trace-ux.builtbyfrank.dev](https://trace-ux.builtbyfrank.dev)
 
@@ -113,6 +113,8 @@ No external database, no queue, no other services — SQLite lives in `/var/lib/
 | `TRACE_UX_DEMO_REPLAY_TTL` | `900`  | Demo replay lifetime in seconds (60–3600)             |
 | `TRACE_UX_DEV_STATIC`    | —         | Dev only: serve frontend builds from disk             |
 
+Each site opens to a tabbed hub: **Overview** keeps the latest recordings, logs, feedback, and summary counts together; **Site** manages the registered URL, installation snippet, and backend performance connection; **Recordings**, **Feedback**, and **Logs** hold their respective settings without one long scrolling form.
+
 ## Users & access
 
 The dashboard supports real accounts; the **admin** (the `TRACE_UX_PASSWORD` account) manages them alone, under **Settings → Team** (hidden from viewers):
@@ -157,6 +159,23 @@ Logs can be enabled per site from the site's **Logs** configuration. Choose the 
 Log storage has two independent per-site caps: 15 days by default and 1,000,000 rows by default. The oldest rows are removed during the regular retention sweep; either cap can be changed or disabled from the same Logs configuration. Logs are also removed automatically when their related recording is removed, and are not yet shown inside the replay timeline.
 
 Because browser console output can contain sensitive values, enable this only when the site's logging policy allows it. TraceUX stores a bounded, formatted message rather than raw console argument objects.
+
+### Performance
+
+The **Performance** page shows backend endpoint latency as p50, p95 and p99, with request counts, error rate, a latency trend, and filters for site, environment, service and version. Metrics are stored as minute-level histograms so the dashboard stays small while retaining useful slow-tail measurements.
+
+To connect a backend, open a site and choose **Site → Backend performance → Create key**. The key belongs in the application server that measures request duration; it is not used by the browser tracking snippet and does not instrument backend code by itself. Store the raw value as a backend secret, then send observations to the server over HTTPS — no Google account, OAuth, or Tag Manager is required:
+
+```bash
+curl -X POST "https://your-server/api/performance/ingest/YOUR_SITE_KEY" \
+  -H "Content-Type: application/json" \
+  -H "X-TraceUX-Performance-Key: YOUR_BACKEND_KEY" \
+  -d '{"observations":[
+    {"environment":"production","service":"api","version":"1.4.0","endpoint":"GET /orders","duration_ms":184,"status_code":200}
+  ]}'
+```
+
+The backend integration is intentionally server-to-server. The site key identifies the site in the URL; the performance key authenticates the request in `X-TraceUX-Performance-Key` (or `Authorization: Bearer`). TraceUX stores only a hash of each performance key. The full value is shown only at creation, while the Site tab lists active keys using only their first and last four characters. Administrators can create multiple keys and remove them individually. The current endpoint is the stable ingestion contract for the upcoming language-specific backend agent.
 
 ## Feedback & surveys
 

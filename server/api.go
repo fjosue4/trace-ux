@@ -191,6 +191,16 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/logs", s.auth(s.handleListLogs))
 	mux.HandleFunc("GET /api/logs/stats", s.auth(s.handleLogStats))
 
+	// Backend endpoint latency and percentile metrics.
+	mux.HandleFunc("GET /api/performance", s.auth(s.handlePerformance))
+	mux.HandleFunc("POST /api/performance/ingest/{siteKey}", s.handlePerformanceIngest)
+	mux.HandleFunc("GET /api/sites/{id}/performance-keys", s.auth(s.handleListPerformanceKeys))
+	mux.HandleFunc("POST /api/sites/{id}/performance-keys", s.auth(s.requireAdmin(s.handleCreatePerformanceKey)))
+	mux.HandleFunc("DELETE /api/sites/{id}/performance-keys/{keyId}", s.auth(s.requireAdmin(s.handleDeletePerformanceKey)))
+	// Backward-compatible singular route; new dashboard flows use the plural
+	// key collection so keys can coexist and be revoked independently.
+	mux.HandleFunc("POST /api/sites/{id}/performance-key", s.auth(s.requireAdmin(s.handleRotatePerformanceKey)))
+
 	// Feedback & surveys from tracked sites.
 	mux.HandleFunc("GET /api/feedback", s.auth(s.handleListFeedback))
 	mux.HandleFunc("GET /api/feedback/summary", s.auth(s.handleFeedbackSummary))

@@ -351,6 +351,14 @@ func (s *Store) RetentionSweep(defaultDays int) (int64, error) {
 			}
 		}
 	}
+	// Backend latency uses the server retention window. Its rows are already
+	// minute-level aggregates, so one global delete keeps the APM store bounded
+	// without coupling it to the browser recording settings.
+	if n, err := s.DeleteOldPerformanceMetrics(defaultDays); err != nil {
+		return total, err
+	} else {
+		total += n
+	}
 	return total, nil
 }
 

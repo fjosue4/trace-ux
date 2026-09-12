@@ -90,9 +90,16 @@
 
 .player-stage {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   min-height: 180px;
   overflow: hidden;
   background: var(--player-shell);
+}
+
+.player-stage > .empty {
+  width: min(100%, 34rem);
 }
 
 /* rrweb-player ships a floating root; the custom chrome below owns the layout. */
@@ -116,9 +123,6 @@
   .player-stage {
     flex: 1 1 auto;
     min-height: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
   }
   .player-host {
     width: 100%;
