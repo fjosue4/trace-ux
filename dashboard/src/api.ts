@@ -36,6 +36,12 @@ export type SiteAppearance = {
   radius?: number;
   spacing?: number;
 };
+export type AnnouncementAppearance = {
+  theme?: 'light' | 'dark';
+  button_bg?: string; button_text?: string; button_label?: string; panel_bg?: string;
+  panel_text?: string; accent?: string; action_bg?: string; action_text?: string;
+  radius?: number; max_width?: number;
+};
 
 // When does the feedback widget show up for a visitor?
 export type FeedbackTrigger = {
@@ -45,6 +51,13 @@ export type FeedbackTrigger = {
 };
 
 export type SiteSettings = {
+  // The corner the single launcher anchors to. updates_position and
+  // feedback_position predate the merge of the two widgets; the server mirrors
+  // this value into both, and the dashboard writes all three together.
+  widget_position?: string; // right | left
+  updates_enabled?: boolean;
+  updates_position?: string;
+  updates_appearance?: AnnouncementAppearance;
   feedback_enabled: boolean;
   feedback_position: string; // right | left
   survey_id: string;
@@ -95,12 +108,24 @@ export type SystemHealth = {
   store: { sites: number; sessions: number; feedback: number };
 };
 
+// Metadata for the custom widget launcher icon. The image itself is served
+// from the public, cached endpoint the URL points at, never inlined here.
+export type WidgetIcon = {
+  mime: string;
+  etag: string;
+  width: number;
+  height: number;
+  updated_at: number;
+};
+
 export type SiteDetail = {
   site: Site;
   sessions: Session[];
   feedback: Feedback[];
   stats: SiteStats;
   performance_keys: PerformanceKey[];
+  widget_icon: WidgetIcon | null;
+  widget_icon_url: string;
 };
 
 export type Session = {
@@ -173,6 +198,13 @@ export type FeedbackSummary = {
   survey_id: string;
   count: number;
   average: number;
+};
+
+export type AnnouncementStatus = 'draft' | 'published' | 'archived';
+export type Announcement = {
+  id: number; site_id: number; site_name?: string; title: string; summary: string; body: string;
+  release_label: string; link_url: string; status: AnnouncementStatus; published_at: number;
+  created_at: number; updated_at: number; reactions: number; comments: number; reads: number;
 };
 
 export type Log = {
@@ -299,8 +331,10 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     credentials: 'same-origin',
-    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
     ...init,
+    // JSON is the default for bodies, but a caller sending binary (the widget
+    // icon upload) supplies its own Content-Type and must win.
+    headers: init?.body ? { 'Content-Type': 'application/json', ...init?.headers } : init?.headers,
   });
   if (res.status === 401) {
     throw new ApiError(401, 'unauthorized');
@@ -428,6 +462,17 @@ export const api = {
 
   // Site management.
   getSiteDetail: (id: number) => request<SiteDetail>(`/api/sites/${id}`),
+
+  // The icon is posted as raw bytes: the server decides the format by decoding
+  // the image, so there is nothing useful to declare in a multipart wrapper.
+  uploadWidgetIcon: (id: number, file: File) =>
+    request<WidgetIcon>(`/api/sites/${id}/widget-icon`, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': 'application/octet-stream' },
+    }),
+  deleteWidgetIcon: (id: number) =>
+    request<{ ok: boolean }>(`/api/sites/${id}/widget-icon`, { method: 'DELETE' }),
   updateSiteRecording: (id: number, enabled: boolean) =>
     request<{ ok: boolean; recording_enabled: boolean }>(`/api/sites/${id}`, {
       method: 'PATCH',
@@ -470,6 +515,12 @@ export const api = {
   },
   deleteFeedback: (id: number) =>
     request<{ ok: boolean }>(`/api/feedback/${id}`, { method: 'DELETE' }),
+  listAnnouncements: (siteId: number | null) => request<Announcement[]>(`/api/announcements${siteId ? `?site_id=${siteId}` : ''}`),
+  createAnnouncement: (input: Partial<Announcement> & { site_id: number; title: string }) => request<Announcement>('/api/announcements', { method: 'POST', body: JSON.stringify(input) }),
+  updateAnnouncement: (id: number, input: Partial<Announcement>) => request<{ ok: boolean }>(`/api/announcements/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  publishAnnouncement: (id: number) => request<{ ok: boolean }>(`/api/announcements/${id}/publish`, { method: 'POST' }),
+  archiveAnnouncement: (id: number) => request<{ ok: boolean }>(`/api/announcements/${id}/archive`, { method: 'POST' }),
+  deleteAnnouncement: (id: number) => request<{ ok: boolean }>(`/api/announcements/${id}`, { method: 'DELETE' }),
 };
 
 export type SessionFilter = {

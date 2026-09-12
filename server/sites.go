@@ -35,6 +35,20 @@ type SiteAppearance struct {
 	Spacing     int    `json:"spacing,omitempty"`
 }
 
+type AnnouncementAppearance struct {
+	Theme       string `json:"theme,omitempty"`
+	ButtonBg    string `json:"button_bg,omitempty"`
+	ButtonText  string `json:"button_text,omitempty"`
+	ButtonLabel string `json:"button_label,omitempty"`
+	PanelBg     string `json:"panel_bg,omitempty"`
+	PanelText   string `json:"panel_text,omitempty"`
+	Accent      string `json:"accent,omitempty"`
+	ActionBg    string `json:"action_bg,omitempty"`
+	ActionText  string `json:"action_text,omitempty"`
+	Radius      int    `json:"radius,omitempty"`
+	MaxWidth    int    `json:"max_width,omitempty"`
+}
+
 func DefaultSiteAppearance() *SiteAppearance {
 	return &SiteAppearance{
 		ButtonBg:    "#1a1d29",
@@ -58,23 +72,35 @@ type FeedbackTrigger struct {
 }
 
 type SiteSettings struct {
-	FeedbackEnabled       bool             `json:"feedback_enabled"`
-	FeedbackPosition      string           `json:"feedback_position"` // right | left
-	SurveyID              string           `json:"survey_id"`
-	SurveyTitle           string           `json:"survey_title"`
-	SurveyType            string           `json:"survey_type"` // stars | nps | custom
-	Questions             []SurveyQuestion `json:"questions,omitempty"`
-	Appearance            *SiteAppearance  `json:"appearance,omitempty"`
-	MaxConcurrentSessions int              `json:"max_concurrent_sessions,omitempty"` // 0 = unlimited
-	RetentionSessionsDays int              `json:"retention_sessions_days,omitempty"` // 0 = server default
-	RetentionFeedbackDays int              `json:"retention_feedback_days,omitempty"` // 0 = server default
-	AllowDeleteRecordings bool             `json:"allow_delete_recordings"`
-	FeedbackTrigger       *FeedbackTrigger `json:"feedback_trigger,omitempty"`
-	Logs                  LogSettings      `json:"logs"`
+	// WidgetPosition is the corner the single launcher anchors to. The
+	// per-section UpdatesPosition/FeedbackPosition below predate the merge of
+	// the two widgets and are kept only so rows written by an older build
+	// still resolve; ParseSiteSettings derives this field from them, and the
+	// dashboard mirrors this value back into both on save.
+	WidgetPosition        string                  `json:"widget_position"` // right | left
+	UpdatesEnabled        bool                    `json:"updates_enabled"`
+	UpdatesPosition       string                  `json:"updates_position"`
+	UpdatesAppearance     *AnnouncementAppearance `json:"updates_appearance,omitempty"`
+	FeedbackEnabled       bool                    `json:"feedback_enabled"`
+	FeedbackPosition      string                  `json:"feedback_position"` // right | left
+	SurveyID              string                  `json:"survey_id"`
+	SurveyTitle           string                  `json:"survey_title"`
+	SurveyType            string                  `json:"survey_type"` // stars | nps | custom
+	Questions             []SurveyQuestion        `json:"questions,omitempty"`
+	Appearance            *SiteAppearance         `json:"appearance,omitempty"`
+	MaxConcurrentSessions int                     `json:"max_concurrent_sessions,omitempty"` // 0 = unlimited
+	RetentionSessionsDays int                     `json:"retention_sessions_days,omitempty"` // 0 = server default
+	RetentionFeedbackDays int                     `json:"retention_feedback_days,omitempty"` // 0 = server default
+	AllowDeleteRecordings bool                    `json:"allow_delete_recordings"`
+	FeedbackTrigger       *FeedbackTrigger        `json:"feedback_trigger,omitempty"`
+	Logs                  LogSettings             `json:"logs"`
 }
 
 func DefaultSiteSettings() SiteSettings {
 	return SiteSettings{
+		WidgetPosition:        "right",
+		UpdatesEnabled:        true,
+		UpdatesPosition:       "right",
 		FeedbackEnabled:       true,
 		FeedbackPosition:      "right",
 		SurveyID:              "default",
@@ -96,6 +122,10 @@ func ParseSiteSettings(configText string) SiteSettings {
 	if s.FeedbackPosition == "" {
 		s.FeedbackPosition = "right"
 	}
+	if s.UpdatesPosition == "" {
+		s.UpdatesPosition = "right"
+	}
+	normalizeWidgetPosition(&s)
 	if s.SurveyID == "" {
 		s.SurveyID = "default"
 	}
@@ -114,11 +144,90 @@ func ParseSiteSettings(configText string) SiteSettings {
 	if s.Logs.MaxRows < 0 || s.Logs.MaxRows > maxLogRows {
 		s.Logs.MaxRows = defaultLogMaxRows
 	}
+	sanitizeAppearance(&s)
 	return s
+}
+
+// normalizeWidgetPosition settles the single corner the launcher anchors to.
+// Rows written before the two widgets merged carry only the per-section
+// positions, so an operator who had moved either one to the left keeps that
+// choice. The legacy fields are then kept in step: one launcher cannot be in
+// two corners, and the backwards-compatible config blocks must not disagree
+// with the widget block.
+func normalizeWidgetPosition(s *SiteSettings) {
+	if s.WidgetPosition != "right" && s.WidgetPosition != "left" {
+		if s.UpdatesPosition == "left" || s.FeedbackPosition == "left" {
+			s.WidgetPosition = "left"
+		} else {
+			s.WidgetPosition = "right"
+		}
+	}
+	s.UpdatesPosition = s.WidgetPosition
+	s.FeedbackPosition = s.WidgetPosition
+}
+
+// sanitizeAppearance drops any stored color that is not a hex triplet. The PUT
+// handler validates on the way in, but rows written by an older build (whose
+// announcement-color check accepted any 4- or 7-character string starting with
+// '#') must not reach the tracker's <style> block either.
+func sanitizeAppearance(s *SiteSettings) {
+	if a := s.Appearance; a != nil {
+		for _, c := range []*string{&a.ButtonBg, &a.ButtonText, &a.PanelBg, &a.PanelText, &a.Accent, &a.Primary, &a.PrimaryText} {
+			if *c != "" && !validHexColor(*c) {
+				*c = ""
+			}
+		}
+	}
+	if a := s.UpdatesAppearance; a != nil {
+		for _, c := range []*string{&a.ButtonBg, &a.ButtonText, &a.PanelBg, &a.PanelText, &a.Accent, &a.ActionBg, &a.ActionText} {
+			if *c != "" && !validHexColor(*c) {
+				*c = ""
+			}
+		}
+	}
+}
+
+// validHexColor accepts #rgb and #rrggbb only. Widget colors are interpolated
+// straight into the <style> block the tracker injects into visitors' pages, so
+// anything that is not literally a hex triplet is rejected here rather than
+// escaped downstream.
+func validHexColor(c string) bool {
+	if len(c) != 4 && len(c) != 7 {
+		return false
+	}
+	if c[0] != '#' {
+		return false
+	}
+	for _, r := range c[1:] {
+		ok := (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
+		if !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // ValidateSiteSettings guards the values the dashboard PUTs.
 func ValidateSiteSettings(s SiteSettings) error {
+	if s.WidgetPosition != "" && s.WidgetPosition != "right" && s.WidgetPosition != "left" {
+		return fmt.Errorf("widget_position must be right or left")
+	}
+	if s.UpdatesPosition != "right" && s.UpdatesPosition != "left" {
+		return fmt.Errorf("updates_position must be right or left")
+	}
+	if a := s.UpdatesAppearance; a != nil {
+		if a.Theme != "" && a.Theme != "light" && a.Theme != "dark" {
+			return fmt.Errorf("announcement theme must be light or dark")
+		}
+		if len(a.ButtonLabel) > 40 || (a.Radius != 0 && (a.Radius < 6 || a.Radius > 40)) || (a.MaxWidth != 0 && (a.MaxWidth < 300 || a.MaxWidth > 560)) {
+			return fmt.Errorf("invalid announcements appearance")
+		}
+		for _, c := range []string{a.ButtonBg, a.ButtonText, a.PanelBg, a.PanelText, a.Accent, a.ActionBg, a.ActionText} {
+			if c != "" && !validHexColor(c) {
+				return fmt.Errorf("announcement colors must be hex, e.g. #2f7d4a")
+			}
+		}
+	}
 	if s.FeedbackPosition != "right" && s.FeedbackPosition != "left" {
 		return fmt.Errorf("feedback_position must be right or left")
 	}
@@ -153,28 +262,13 @@ func ValidateSiteSettings(s SiteSettings) error {
 	// Appearance applies to every survey type: colors must be hex, geometry
 	// bounded, label short.
 	if a := s.Appearance; a != nil {
-		validColor := func(c string) bool {
-			if len(c) != 4 && len(c) != 7 {
-				return false
-			}
-			if c[0] != '#' {
-				return false
-			}
-			for _, r := range c[1:] {
-				ok := (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')
-				if !ok {
-					return false
-				}
-			}
-			return true
-		}
 		colors := map[string]string{
 			"button_bg": a.ButtonBg, "button_text": a.ButtonText,
 			"panel_bg": a.PanelBg, "panel_text": a.PanelText,
 			"accent": a.Accent, "primary": a.Primary, "primary_text": a.PrimaryText,
 		}
 		for name, c := range colors {
-			if c != "" && !validColor(c) {
+			if c != "" && !validHexColor(c) {
 				return fmt.Errorf("appearance.%s must be a hex color like #1a1d29", name)
 			}
 		}

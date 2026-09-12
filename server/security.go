@@ -67,7 +67,21 @@ func (s *Server) initSecurity() {
 		s.ingestIPLimiter = newRequestLimiter(120, minute)
 		s.ingestSiteLimiter = newRequestLimiter(2_000, minute)
 		s.demoClaimLimiter = newRequestLimiter(12, minute)
-		s.demoReplayLimiter = newRequestLimiter(120, minute)
+		// Replaying a shared link is paged: the viewer fetches the metadata
+		// once and then walks the event stream a page at a time, so a single
+		// large recording can cost a dozen requests and a reload costs another.
+		// 120/min exhausted itself on one long session; the sensitive endpoint
+		// here is the claim above (which mints tokens), not reading one that
+		// was already issued.
+		s.demoReplayLimiter = newRequestLimiter(600, minute)
+		// The /api/updates/* endpoints are unauthenticated and reachable by
+		// anyone who reads a site key out of a page's tracker snippet, so both
+		// reads and writes are capped per source address and per site.
+		// Reads mirror the browser-ingest budget so a shared office NAT does
+		// not trip the limit; writes are far rarer and much cheaper to cap.
+		s.updatesReadLimiter = newRequestLimiter(120, minute)
+		s.updatesWriteLimiter = newRequestLimiter(30, minute)
+		s.updatesSiteLimiter = newRequestLimiter(2_000, minute)
 	})
 }
 
@@ -117,6 +131,22 @@ func (s *Server) sameOrigin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// contentSecurityPolicy is computed once: hashing the dashboard's inline
+// bootstrap script lets script-src drop 'unsafe-inline'. style-src keeps it
+// because the SPA and the replay player both set element styles inline.
+func (s *Server) contentSecurityPolicy() string {
+	s.cspOnce.Do(func() {
+		scriptSrc := "script-src 'self' 'unsafe-inline'"
+		if s.cfg != nil {
+			scriptSrc = scriptSrcDirective(*s.cfg)
+		}
+		s.csp = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; " +
+			scriptSrc + "; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+			"font-src 'self' data:; connect-src 'self'; form-action 'self'"
+	})
+	return s.csp
+}
+
 func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -126,7 +156,7 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		// permission prompt while loading a recorded resource.
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), local-network=(), loopback-network=(), local-network-access=()")
 		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; form-action 'self'")
+		w.Header().Set("Content-Security-Policy", s.contentSecurityPolicy())
 		if s.cfg != nil && s.cfg.SecureCookies {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000")
 		}

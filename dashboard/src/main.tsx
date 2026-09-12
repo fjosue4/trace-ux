@@ -23,6 +23,7 @@ import Feedback from './pages/Feedback';
 import Logs from './pages/Logs';
 import Settings from './pages/Settings';
 import SystemHealth from './pages/SystemHealth';
+import Announcements from './pages/Announcements';
 
 const router = createBrowserRouter([
   {
@@ -35,6 +36,7 @@ const router = createBrowserRouter([
       { path: 'performance', element: <Performance /> },
       { path: 'site/:siteId', element: <SiteDetail /> },
       { path: 'feedback', element: <Feedback /> },
+      { path: 'announcements', element: <Announcements /> },
       { path: 'logs', element: <Logs /> },
       { path: 'replay/:sessionId', element: <Replay /> },
       { path: 'share/:token', element: <ShareReplay /> },

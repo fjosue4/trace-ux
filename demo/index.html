@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Acme Demo Shop — Home</title>
+  <title>TraceUX — Complete UX Bundle Demo</title>
   <style>
     * { box-sizing: border-box; }
     body { font-family: -apple-system, system-ui, sans-serif; margin: 0; color: #1a1a2e; }
@@ -10,7 +10,11 @@
     header a { color: #7aa2f7; margin-left: 1rem; }
     main { max-width: 860px; margin: 2rem auto; padding: 0 1rem; }
     .hero { background: #e8eaf6; border-radius: 12px; padding: 2.5rem; text-align: center; }
-    .hero h1 { margin: 0 0 .5rem; }
+    .hero h1 { margin: 0 0 .5rem; font-size: clamp(2rem, 5vw, 3.25rem); line-height: 1.05; }
+    .hero p { max-width: 680px; margin: .75rem auto; line-height: 1.6; }
+    .eyebrow { color: #0f3460; font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .hero__actions { display: flex; justify-content: center; align-items: center; gap: .75rem; flex-wrap: wrap; margin-top: 1.5rem; }
+    .hero__link { color: #0f3460; font-weight: 700; padding: .7rem .5rem; }
     button { background: #0f3460; color: #fff; border: 0; padding: .7rem 1.4rem;
              border-radius: 8px; font-size: 1rem; cursor: pointer; }
     button:active { transform: scale(.98); }
@@ -18,15 +22,38 @@
     .card { border: 1px solid #ddd; border-radius: 10px; padding: 1rem; }
     .card h3 { margin-top: 0; }
     .price { font-weight: 700; color: #0f3460; }
-    form { margin-top: 2rem; display: grid; gap: .6rem; max-width: 340px; }
-    input, textarea { padding: .55rem; border: 1px solid #bbb; border-radius: 6px; font-size: 1rem; }
+    form { margin-top: 2rem; display: grid; gap: .6rem; max-width: 420px; }
+    input, select, textarea { padding: .55rem; border: 1px solid #bbb; border-radius: 6px; font-size: 1rem; }
     .secret { display: none; } /* should never appear in recordings */
+    .bundle { margin-top: 3.5rem; padding: 2.25rem; border: 1px solid #d8dbea; border-radius: 16px; background: #f8f9ff; }
+    .bundle__intro { max-width: 650px; }
+    .bundle h2 { margin: .35rem 0 .6rem; font-size: clamp(1.6rem, 4vw, 2.35rem); }
+    .bundle__intro p { color: #545a73; line-height: 1.6; }
+    .bundle-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: .85rem; margin-top: 1.5rem; }
+    .bundle-card { background: #fff; border: 1px solid #e1e3ef; border-radius: 12px; padding: 1rem; }
+    .bundle-card__number { color: #0f3460; font-size: .7rem; font-weight: 800; letter-spacing: .08em; }
+    .bundle-card h3 { margin: .45rem 0; font-size: 1rem; }
+    .bundle-card p { color: #62677d; font-size: .9rem; line-height: 1.5; margin: 0; }
+    .loop { margin-top: 2.5rem; padding: 1.5rem 0 0; border-top: 1px solid #d8dbea; }
+    .loop h2 { margin: 0 0 1rem; font-size: 1.35rem; }
+    .loop-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; }
+    .loop-step { display: flex; gap: .65rem; align-items: flex-start; }
+    .loop-step__dot { flex: 0 0 1.7rem; height: 1.7rem; display: grid; place-items: center; border-radius: 999px; background: #0f3460; color: #fff; font-size: .75rem; font-weight: 800; }
+    .loop-step strong { display: block; font-size: .9rem; }
+    .loop-step span { display: block; color: #62677d; font-size: .82rem; line-height: 1.4; margin-top: .2rem; }
+    @media (max-width: 760px) {
+      .bundle-grid, .loop-steps { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 480px) {
+      .bundle { padding: 1.25rem; }
+      .bundle-grid, .loop-steps { grid-template-columns: 1fr; }
+    }
     footer { text-align: center; color: #888; padding: 2rem; font-size: .85rem; }
   </style>
 </head>
 <body>
   <header>
-    <strong>Acme Demo Shop</strong>
+    <strong>TraceUX demo · Acme Shop</strong>
     <nav>
       <a href="index.html">Home</a>
       <a href="pricing.html">Pricing</a>
@@ -36,10 +63,13 @@
 
   <main>
     <div class="hero">
-      <h1>Welcome to the TraceUX demo store</h1>
-      <p>Click around, add items, fill the form — then watch yourself in the TraceUX dashboard.</p>
-      <!-- trace-ux-track-id: shows up as seekable activity in the replay -->
-      <button trace-ux-track-id="hero-add-to-cart" onclick="alert('Added to cart!')">Add to cart</button>
+      <p class="eyebrow">The complete UX bundle · live demo</p>
+      <h1>See what users do, hear what they think, and tell them what’s new.</h1>
+      <p>Explore this small storefront, then open the TraceUX launcher to browse announcements or send feedback. Every interaction becomes useful product context.</p>
+      <div class="hero__actions">
+        <button trace-ux-track-id="hero-add-to-cart" onclick="alert('Added to cart!')">Try the replay path</button>
+        <a class="hero__link" href="#traceux-bundle">Explore the bundle ↓</a>
+      </div>
     </div>
 
     <div class="cards">
@@ -51,11 +81,59 @@
         <button trace-ux-track-id="buy-headphones" onclick="alert('Added to cart!')">Buy</button></div>
     </div>
 
+    <section class="bundle" id="traceux-bundle" aria-labelledby="bundle-title">
+      <div class="bundle__intro">
+        <p class="eyebrow">One self-hosted product surface</p>
+        <h2 id="bundle-title">From first click to product follow-up</h2>
+        <p>TraceUX connects the full loop: capture a visit, understand the moment, ask for feedback, and close the loop with an announcement that visitors can react to.</p>
+      </div>
+      <div class="bundle-grid">
+        <article class="bundle-card">
+          <span class="bundle-card__number">01 · CAPTURE</span>
+          <h3>Session replay</h3>
+          <p>Reconstruct DOM event streams, page paths, activity markers, and the visitor context behind a journey.</p>
+        </article>
+        <article class="bundle-card">
+          <span class="bundle-card__number">02 · LISTEN</span>
+          <h3>Contextual feedback</h3>
+          <p>Collect stars, NPS, or custom answers in the same widget and jump from a response straight to its replay.</p>
+        </article>
+        <article class="bundle-card">
+          <span class="bundle-card__number">03 · SHIP</span>
+          <h3>Announcements</h3>
+          <p>Publish drafts, releases, maintenance notes, and product news through a branded What's new feed.</p>
+        </article>
+        <article class="bundle-card">
+          <span class="bundle-card__number">04 · CLOSE THE LOOP</span>
+          <h3>Per-update feedback</h3>
+          <p>See reads, likes, and comments for each announcement instead of losing release feedback in a generic inbox.</p>
+        </article>
+      </div>
+      <div class="loop">
+        <h2>A simple product feedback loop</h2>
+        <div class="loop-steps">
+          <div class="loop-step"><span class="loop-step__dot">1</span><div><strong>Watch</strong><span>Replay the journey.</span></div></div>
+          <div class="loop-step"><span class="loop-step__dot">2</span><div><strong>Ask</strong><span>Collect feedback in context.</span></div></div>
+          <div class="loop-step"><span class="loop-step__dot">3</span><div><strong>Ship</strong><span>Tell users what changed.</span></div></div>
+          <div class="loop-step"><span class="loop-step__dot">4</span><div><strong>Learn</strong><span>Measure reactions and comments.</span></div></div>
+        </div>
+      </div>
+    </section>
+
     <h2>Tell us what you're looking for</h2>
-    <form onsubmit="event.preventDefault(); alert('Subscribed ' + email.value)">
+    <p>Use the floating TraceUX launcher for the full Feedback and What's new experience, or send a sample response here and watch it land beside the session.</p>
+    <form id="demo-feedback-form">
       <input name="email" type="email" placeholder="you@example.com" required>
+      <select name="rating" aria-label="Rating">
+        <option value="5">5 — Very useful</option>
+        <option value="4">4 — Useful</option>
+        <option value="3">3 — It’s okay</option>
+        <option value="2">2 — Needs work</option>
+        <option value="1">1 — Not useful yet</option>
+      </select>
       <textarea name="notes" placeholder="What are you shopping for?"></textarea>
-      <button type="submit" trace-ux-track-id="subscribe">Subscribe</button>
+      <button type="submit" trace-ux-track-id="submit-feedback">Send feedback</button>
+      <small id="demo-feedback-status" aria-live="polite"></small>
     </form>
 
     <!-- trace-ux-block: excluded entirely from recordings (e.g. payment fields) -->
@@ -64,12 +142,13 @@
     <p>Secret discount code for newsletter subscribers: <span trace-ux-mask>TRX-2026</span></p>
   </main>
 
-  <footer>Demo site for the TraceUX open-source session replay tool.</footer>
+  <footer>TraceUX demo — session replay, feedback, announcements, and per-update engagement.</footer>
 
   <!-- The TraceUX snippet. Replace the data-site key with the one from your dashboard.
        For local testing the server runs on http://localhost:8090.
-       The recording toggle, feedback widget and survey questions are configured
-       per site from the dashboard (Sites → site page → Configuration).
+       The recording toggle, unified Feedback + What's new widget, survey
+       questions, and announcement styling are configured per site from the
+       dashboard (Sites → site page → Configuration).
        data-user-id / data-client-id tag the session for visitor filtering;
        they can also be attached later via window.TraceUX.identify({...}) -->
   <script async src="http://localhost:8090/t.js" data-site="738910233a784965256ae0249840c33b"
@@ -77,6 +156,21 @@
   <script>
     // Example: identity is usually only known after login.
     // setTimeout(() => window.TraceUX.identify({ userId: 'u-42' }), 3000);
+
+    document.querySelector('#demo-feedback-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const status = document.querySelector('#demo-feedback-status');
+      const rating = Number(form.elements.rating.value);
+      const comment = form.elements.notes.value.trim();
+      if (window.TraceUX && typeof window.TraceUX.feedback === 'function') {
+        window.TraceUX.feedback({ rating, comment, surveyId: 'demo-home' });
+        status.textContent = 'Thanks — the response is now linked to this session.';
+        form.reset();
+      } else {
+        status.textContent = 'The tracker is still loading. Try again in a moment.';
+      }
+    });
   </script>
 </body>
 </html>

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react';
+import { CSSProperties, useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, FeedbackTrigger, Log, LogSeverity, PerformanceKey, SiteAppearance, SiteDetail as SiteDetailData, SiteSettings, SurveyQuestion } from '../api';
+import { AnnouncementAppearance, api, FeedbackTrigger, Log, LogSeverity, PerformanceKey, SiteAppearance, SiteDetail as SiteDetailData, SiteSettings, SurveyQuestion } from '../api';
 import { fmtDuration, fmtTime, stripProto, truncate } from '../lib/format';
 import { useUser } from '../App';
 import PageHeader from '../components/ui/PageHeader';
@@ -15,15 +15,18 @@ import { Field, Input, Select } from '../components/ui/fields';
 import SnippetCard from '../components/sites/SnippetCard';
 import './SiteDetail.css';
 
-type SiteTab = 'overview' | 'site' | 'recordings' | 'feedback' | 'logs';
+type SiteTab = 'overview' | 'site' | 'recordings' | 'feedback' | 'announcements' | 'styles' | 'logs';
 
-const siteTabs: { id: SiteTab; label: string; icon: 'activity' | 'settings' | 'film' | 'message' | 'code' }[] = [
+const siteTabs: { id: SiteTab; label: string; icon: 'activity' | 'settings' | 'film' | 'message' | 'megaphone' | 'code' }[] = [
   { id: 'overview', label: 'Overview', icon: 'activity' },
   { id: 'site', label: 'Site', icon: 'settings' },
   { id: 'recordings', label: 'Recordings', icon: 'film' },
   { id: 'feedback', label: 'Feedback', icon: 'message' },
+  { id: 'announcements', label: 'Announcements', icon: 'megaphone' },
+  { id: 'styles', label: 'Styles', icon: 'settings' },
   { id: 'logs', label: 'Logs', icon: 'code' },
 ];
+const announcementAccents = ['#2f7d4a', '#2563eb', '#7c3aed', '#db2777', '#ea580c', '#0891b2'];
 
 // Site hub: recording toggle, overall feedback health, the latest recordings
 // and feedback, and the widget/survey configuration — all managed here, all
@@ -46,8 +49,19 @@ export default function SiteDetail() {
   const [performanceExampleCopied, setPerformanceExampleCopied] = useState(false);
   const [latestLogs, setLatestLogs] = useState<Log[]>([]);
   const [activeTab, setActiveTab] = useState<SiteTab>('overview');
+  const [iconBusy, setIconBusy] = useState(false);
+  const [iconError, setIconError] = useState<string | null>(null);
 
   const id = Number(siteId);
+
+  // Mirrors buildWidgetConfig on the server: with only one section switched on
+  // the launcher names it rather than showing a generic label.
+  const launcherPlaceholder =
+    draft?.updates_enabled && !draft?.feedback_enabled
+      ? "What's new"
+      : draft?.feedback_enabled && !draft?.updates_enabled
+        ? 'Feedback'
+        : 'Help & updates';
 
   const load = useCallback(() => {
     api
@@ -71,6 +85,32 @@ export default function SiteDetail() {
     setPerformanceKeyCopied(false);
     setPerformanceExampleCopied(false);
   }, [id]);
+
+  async function uploadIcon(file: File) {
+    setIconBusy(true);
+    setIconError(null);
+    try {
+      await api.uploadWidgetIcon(id, file);
+      load();
+    } catch (e) {
+      setIconError(e instanceof Error ? e.message : 'Could not upload that image.');
+    } finally {
+      setIconBusy(false);
+    }
+  }
+
+  async function removeIcon() {
+    setIconBusy(true);
+    setIconError(null);
+    try {
+      await api.deleteWidgetIcon(id);
+      load();
+    } catch {
+      setIconError('Could not remove the icon.');
+    } finally {
+      setIconBusy(false);
+    }
+  }
 
   async function toggleRecording(enabled: boolean) {
     try {
@@ -180,6 +220,10 @@ export default function SiteDetail() {
     setDraft((d) => (d ? { ...d, appearance: { ...d.appearance, ...patch } } : d));
   }
 
+  function patchAnnouncementAppearance(patch: Partial<AnnouncementAppearance>) {
+    setDraft((d) => (d ? { ...d, updates_appearance: { ...d.updates_appearance, ...patch } } : d));
+  }
+
   function patchTrigger(patch: Partial<FeedbackTrigger>) {
     setDraft((d) =>
       d
@@ -239,7 +283,7 @@ export default function SiteDetail() {
       {!recordingOn && (
         <Notice tone="info">
           Recording is <strong>off</strong> for this site — visitors' sessions are not captured,
-          but the feedback widget keeps working.
+          but the feedback section keeps working.
         </Notice>
       )}
 
@@ -472,7 +516,7 @@ export default function SiteDetail() {
           {feedback.length === 0 ? (
             <EmptyState
               title="No feedback yet"
-              description="Enable the feedback widget in the Feedback tab to start collecting responses."
+              description="Enable the feedback section in the Feedback tab to start collecting responses."
             />
           ) : (
             <div className="hub-list">
@@ -505,7 +549,7 @@ export default function SiteDetail() {
 
       {isAdmin && draft && activeTab !== 'overview' && activeTab !== 'site' && (
         <Card className="hub-config">
-          <h2>Manage {activeTab === 'recordings' ? 'recordings' : activeTab === 'feedback' ? 'feedback' : 'logs'}</h2>
+          <h2>Manage {activeTab}</h2>
           <p className="muted small">
             Served to the tracker automatically — the snippet never carries these settings.
           </p>
@@ -615,30 +659,94 @@ export default function SiteDetail() {
             </>
           )}
 
+          {activeTab === 'announcements' && (
+            <>
+              <div className="hub-config__title">Announcements section</div>
+              <div className="hub-config__row"><Switch checked={draft.updates_enabled ?? true} onChange={(v) => patchDraft({ updates_enabled: v })} label="Show the announcements section" /></div>
+              <div className="hub-config__grid">
+              </div>
+              <Notice tone="info">Announcements share one launcher with Feedback. The panel shows a “What’s new” tab whenever this is on; look, icon and label live in the Styles tab.</Notice>
+            </>
+          )}
+
+          {activeTab === 'styles' && (
+            <>
+              <div className="hub-config__title">Widget styles</div>
+              <Notice tone="info">Announcements and feedback share one launcher and one panel. These styles apply to the whole widget; each section is switched on in its own tab.</Notice>
+                <div className="announcement-customizer">
+                  <div className="announcement-customizer__controls">
+                    <h3>Choose a look</h3><p className="muted small">Theme colors are paired automatically for accessible contrast.</p>
+                    <Field label="Theme"><div className="announcement-themes">{(['light','dark'] as const).map(theme=><button key={theme} type="button" className={`announcement-theme${(draft.updates_appearance?.theme||'light')===theme?' is-selected':''}`} onClick={()=>patchAnnouncementAppearance({theme})}><span className={`announcement-theme__sample is-${theme}`}><i/><i/></span><strong>{theme[0].toUpperCase()+theme.slice(1)}</strong></button>)}</div></Field>
+                    <Field label="Accent color"><div className="announcement-swatches">{announcementAccents.map(color=><button type="button" key={color} aria-label={`Use ${color}`} title={color} className={(draft.updates_appearance?.accent||'#2f7d4a')===color?'is-selected':''} style={{background:color}} onClick={()=>patchAnnouncementAppearance({accent:color})}/>)}</div><div className="announcement-custom-color"><input type="color" aria-label="Custom accent color" value={draft.updates_appearance?.accent||'#2f7d4a'} onChange={(e)=>patchAnnouncementAppearance({accent:e.target.value})}/><Input aria-label="Accent hex color" value={draft.updates_appearance?.accent||'#2f7d4a'} maxLength={7} onChange={(e)=>patchAnnouncementAppearance({accent:e.target.value})}/></div></Field>
+                    <div className="hub-config__grid announcement-customizer__fields">
+                      <Field label="Corner radius" hint="6–40 px"><Input type="number" min={6} max={40} value={draft.updates_appearance?.radius ?? 18} onChange={(e)=>patchAnnouncementAppearance({radius:Number(e.target.value)})}/></Field>
+                      <Field label="Launcher label" hint="Text on the button"><Input value={draft.updates_appearance?.button_label ?? ''} placeholder={launcherPlaceholder} maxLength={40} onChange={(e)=>patchAnnouncementAppearance({button_label:e.target.value})}/></Field>
+                      <Field label="Position" hint="Corner the launcher sits in">
+                        <Select
+                          value={draft.widget_position || 'right'}
+                          onChange={(v) => patchDraft({ widget_position: v, updates_position: v, feedback_position: v })}
+                          options={[
+                            { value: 'right', label: 'Bottom right' },
+                            { value: 'left', label: 'Bottom left' },
+                          ]}
+                        />
+                      </Field>
+                      <Field label="Maximum width" hint="300–560 px"><Input type="number" min={300} max={560} value={draft.updates_appearance?.max_width ?? 440} onChange={(e)=>patchAnnouncementAppearance({max_width:Number(e.target.value)})}/></Field>
+                    </div>
+                    <Field label="Launcher icon" hint="PNG, JPEG or GIF · up to 256 KB · any size, rendered at 48×48">
+                      <div className="widget-icon">
+                        <div className="widget-icon__preview">
+                          {detail.widget_icon_url ? <img src={detail.widget_icon_url} alt="" /> : <Icon name="megaphone" size={18} />}
+                        </div>
+                        <div className="widget-icon__actions">
+                          <label className="widget-icon__pick">
+                            <input
+                              type="file"
+                              accept="image/png,image/jpeg,image/gif"
+                              disabled={iconBusy}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                e.target.value = '';
+                                if (file) void uploadIcon(file);
+                              }}
+                            />
+                            <span>{detail.widget_icon_url ? 'Replace image' : 'Upload image'}</span>
+                          </label>
+                          {detail.widget_icon_url && (
+                            <button type="button" className="widget-icon__remove" disabled={iconBusy} onClick={() => void removeIcon()}>Remove</button>
+                          )}
+                          <p className="muted small">
+                            {detail.widget_icon
+                              ? `${detail.widget_icon.width}×${detail.widget_icon.height} ${detail.widget_icon.mime.replace('image/', '').toUpperCase()} · replaces the text label on the launcher`
+                              : 'Without an icon the launcher shows the label above.'}
+                          </p>
+                        </div>
+                      </div>
+                      {iconError && <Notice tone="error">{iconError}</Notice>}
+                    </Field>
+                    <button className="announcement-reset" type="button" onClick={()=>patchAnnouncementAppearance({theme:'light',button_label:'',accent:'#2f7d4a',radius:18,max_width:440})}><Icon name="x" size={13}/> Reset to defaults</button>
+                  </div>
+                  <div className={`announcement-live-preview is-${draft.updates_appearance?.theme||'light'}`} style={{'--preview-accent':draft.updates_appearance?.accent||'#2f7d4a','--preview-radius':`${draft.updates_appearance?.radius??18}px`} as CSSProperties}>
+                    <div className="announcement-live-preview__label">Live preview</div><div className="announcement-live-preview__panel"><header><strong>Announcements</strong><button type="button" aria-label="Close"><Icon name="x" size={14}/></button></header><main><span>NEW RELEASE</span><h3>Everything you need, closer at hand</h3><p>We refreshed the workspace with faster navigation and a clearer way to discover what’s new.</p><div><button type="button"><svg aria-hidden viewBox="0 0 1024 1024"><path d="M923 283.6a260 260 0 0 0-56.9-82.8 264.4 264.4 0 0 0-84-55.5A265.3 265.3 0 0 0 679.7 125c-49.3 0-97.4 13.5-139.2 39q-15 9.15-28.5 20.1-13.5-10.95-28.5-20.1c-41.8-25.5-89.9-39-139.2-39-35.5 0-69.9 6.8-102.4 20.3-31.4 13-59.7 31.7-84 55.5a258.4 258.4 0 0 0-56.9 82.8c-13.9 32.3-21 66.6-21 101.9 0 33.3 6.8 68 20.3 103.3 11.3 29.5 27.5 60.1 48.2 91 32.8 48.9 77.9 99.9 133.9 151.6 92.8 85.7 184.7 144.9 188.6 147.3l23.7 15.2c10.5 6.7 24 6.7 34.5 0l23.7-15.2c3.9-2.5 95.7-61.6 188.6-147.3 56-51.7 101.1-102.7 133.9-151.6 20.7-30.9 37-61.5 48.2-91 13.5-35.3 20.3-70 20.3-103.3.1-35.3-7-68.6-20.9-101.9M512 814.8S156 586.7 156 385.5C156 283.6 240.3 201 344.3 201c73.1 0 136.5 40.8 167.7 100.4C543.2 241.8 606.6 201 679.7 201c104 0 188.3 82.6 188.3 184.5 0 201.2-356 429.3-356 429.3" fill="currentColor"/></svg> Like · 12</button></div></main></div><div className="announcement-live-preview__launcher">{draft.updates_appearance?.button_label||launcherPlaceholder} <b>1</b></div>
+                  </div>
+                </div>
+            </>
+          )}
+
           {activeTab === 'feedback' && (
             <>
-          <div className="hub-config__title">Feedback widget</div>
+          <div className="hub-config__title">Feedback section</div>
           <div className="hub-config__row">
             <Switch
               checked={draft.feedback_enabled}
               onChange={(v) => patchDraft({ feedback_enabled: v })}
-              label="Feedback widget"
+              label="Feedback section"
             />
           </div>
 
           {draft.feedback_enabled && (
             <>
               <div className="hub-config__grid">
-                <Field label="Widget position">
-                  <Select
-                    value={draft.feedback_position}
-                    onChange={(v) => patchDraft({ feedback_position: v })}
-                    options={[
-                      { value: 'right', label: 'Bottom right' },
-                      { value: 'left', label: 'Bottom left' },
-                    ]}
-                  />
-                </Field>
                 <Field label="Survey id" hint="Groups responses together">
                   <Input value={draft.survey_id} onChange={(e) => patchDraft({ survey_id: e.target.value })} />
                 </Field>
@@ -659,7 +767,7 @@ export default function SiteDetail() {
                     ]}
                   />
                 </Field>
-                <Field label="Show widget">
+                <Field label="Show section">
                   <Select
                     value={trigger.mode}
                     onChange={(v) => patchTrigger({ mode: v as FeedbackTrigger['mode'] })}
@@ -675,7 +783,7 @@ export default function SiteDetail() {
               {trigger.mode === 'page' && (
                 <Field
                   label="Page patterns"
-                  hint="Comma separated, * wildcards — e.g. /checkout*, /pricing. The widget appears only on matching pages."
+                  hint="Comma separated, * wildcards — e.g. /checkout*, /pricing. The feedback section appears only on matching pages."
                 >
                   <Input
                     value={(trigger.pages ?? []).join(', ')}
@@ -688,7 +796,7 @@ export default function SiteDetail() {
               {trigger.mode === 'action' && (
                 <Field
                   label="Tracked actions"
-                  hint="Comma separated trace-ux-track-id names — the widget opens when the visitor clicks one."
+                  hint="Comma separated trace-ux-track-id names — the widget opens on the feedback section when the visitor clicks one."
                 >
                   <Input
                     value={(trigger.actions ?? []).join(', ')}
@@ -782,8 +890,9 @@ export default function SiteDetail() {
                 </div>
               )}
 
-              <h4>Appearance</h4>
-              <div className="hub-config__grid">
+              <h4>Shared appearance</h4>
+              <Notice tone="info">Feedback shares one launcher with Announcements. The panel shows a “Feedback” tab whenever this is on; look, icon and label live in the Styles tab.</Notice>
+              <div className="hub-config__grid feedback-legacy-appearance">
                 <Field label="Button label">
                   <Input
                     value={draft.appearance?.button_label ?? 'Feedback'}
@@ -859,7 +968,7 @@ export default function SiteDetail() {
                 </Field>
               </div>
               <button
-                className="icon-btn"
+                className="icon-btn feedback-legacy-appearance"
                 title="Reset appearance to defaults"
                 onClick={() => patchAppearance({
                   button_bg: '#1a1d29', button_text: '#ffffff', button_label: 'Feedback',
@@ -869,7 +978,7 @@ export default function SiteDetail() {
               >
                 <Icon name="x" size={13} />
               </button>
-              <span className="muted small"> Reset appearance</span>
+              <span className="muted small feedback-legacy-appearance"> Reset appearance</span>
             </>
           )}
 

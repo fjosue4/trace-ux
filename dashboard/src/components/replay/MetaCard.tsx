@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { Session } from '../../api';
 import { fadeUp, spring } from '../../lib/motion';
@@ -7,13 +7,67 @@ import Card from '../ui/Card';
 import { Icon } from '../ui/Icon';
 import './replay.css';
 
-// Attribute/device facts about the session being replayed, as a label/value grid.
+const COLLAPSE_KEY = 'trace_ux_replay_meta_collapsed';
+
+// Attribute/device facts about the session being replayed. It sits under the
+// player as a compact two-row strip rather than in the sidebar, so the actions
+// feed gets the full column height — and it collapses away entirely when the
+// viewer wants more room for the recording.
 export default function MetaCard({ session }: { session: Session }) {
   const s = session;
   const utm = [s.utm_source, s.utm_medium, s.utm_campaign].filter(Boolean).join(' / ');
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(COLLAPSE_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
+    } catch {
+      /* storage blocked; the choice just does not persist */
+    }
+  }, [collapsed]);
+
+  // Collapsed, the panel is gone entirely — no card, no padding, no reserved
+  // height — so the player gets the space back. All that is left is the
+  // control that brings it out again.
+  if (collapsed) {
+    return (
+      <motion.button
+        type="button"
+        className="replay-meta-show"
+        aria-expanded={false}
+        title="Show session details"
+        onClick={() => setCollapsed(false)}
+        whileTap={{ scale: 0.96 }}
+        transition={spring}
+      >
+        <Icon name="maximize" size={11} />
+        Session details
+      </motion.button>
+    );
+  }
 
   return (
     <Card className="replay-meta">
+      <div className="replay-meta__bar">
+        <span className="replay-meta__title">Session details</span>
+        <motion.button
+          type="button"
+          className="icon-btn replay-meta__toggle"
+          aria-expanded
+          aria-label="Hide session details"
+          title="Hide session details (gives the space back to the player)"
+          onClick={() => setCollapsed(true)}
+          whileTap={{ scale: 0.9 }}
+          transition={spring}
+        >
+          <Icon name="minimize" size={12} />
+        </motion.button>
+      </div>
       <div className="meta-grid">
         <MetaBlock label="Entry" wide>
           <span className="meta-value-row">

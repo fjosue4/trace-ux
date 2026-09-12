@@ -27,13 +27,19 @@ type Server struct {
 	secret []byte       // HMAC salt for ip_hash (auth cookies are DB-backed now)
 	static http.Handler // SPA + assets
 
-	securityOnce      sync.Once
-	loginIPLimiter    *requestLimiter
-	loginUserLimiter  *requestLimiter
-	ingestIPLimiter   *requestLimiter
-	ingestSiteLimiter *requestLimiter
-	demoClaimLimiter  *requestLimiter
-	demoReplayLimiter *requestLimiter
+	securityOnce        sync.Once
+	loginIPLimiter      *requestLimiter
+	loginUserLimiter    *requestLimiter
+	ingestIPLimiter     *requestLimiter
+	ingestSiteLimiter   *requestLimiter
+	demoClaimLimiter    *requestLimiter
+	demoReplayLimiter   *requestLimiter
+	updatesReadLimiter  *requestLimiter
+	updatesWriteLimiter *requestLimiter
+	updatesSiteLimiter  *requestLimiter
+
+	cspOnce sync.Once
+	csp     string
 }
 
 type Config struct {
@@ -178,6 +184,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("PATCH /api/sites/{id}", s.auth(s.requireAdmin(s.handleUpdateSite)))
 	mux.HandleFunc("PUT /api/sites/{id}/settings", s.auth(s.requireAdmin(s.handlePutSiteSettings)))
 	mux.HandleFunc("DELETE /api/sites/{id}", s.auth(s.requireAdmin(s.handleDeleteSite)))
+	// Custom launcher icon for the unified widget.
+	mux.HandleFunc("PUT /api/sites/{id}/widget-icon", s.auth(s.requireAdmin(s.handleUploadWidgetIcon)))
+	mux.HandleFunc("DELETE /api/sites/{id}/widget-icon", s.auth(s.requireAdmin(s.handleDeleteWidgetIcon)))
 
 	mux.HandleFunc("GET /api/sessions", s.auth(s.handleListSessions))
 	mux.HandleFunc("GET /api/sessions/countries", s.auth(s.handleListSessionCountries))
@@ -205,12 +214,24 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/feedback", s.auth(s.handleListFeedback))
 	mux.HandleFunc("GET /api/feedback/summary", s.auth(s.handleFeedbackSummary))
 	mux.HandleFunc("DELETE /api/feedback/{id}", s.auth(s.requireAdmin(s.handleDeleteFeedback)))
+	mux.HandleFunc("GET /api/announcements", s.auth(s.handleListAnnouncements))
+	mux.HandleFunc("POST /api/announcements", s.auth(s.requireAdmin(s.handleCreateAnnouncement)))
+	mux.HandleFunc("PATCH /api/announcements/{id}", s.auth(s.requireAdmin(s.handleUpdateAnnouncement)))
+	mux.HandleFunc("DELETE /api/announcements/{id}", s.auth(s.requireAdmin(s.handleDeleteAnnouncement)))
+	mux.HandleFunc("POST /api/announcements/{id}/publish", s.auth(s.requireAdmin(s.handlePublishAnnouncement)))
+	mux.HandleFunc("POST /api/announcements/{id}/archive", s.auth(s.requireAdmin(s.handleArchiveAnnouncement)))
+	mux.HandleFunc("DELETE /api/announcements/comments/{id}", s.auth(s.requireAdmin(s.handleDeleteAnnouncementComment)))
 
 	// Public tracker-facing endpoints. Cross-origin access is granted per
 	// site via the URL the admin registers (see cors below).
 	mux.HandleFunc("GET /api/config/{siteKey}", s.handleConfig)
+	mux.HandleFunc("GET /api/widget-icon/{siteKey}", s.handlePublicWidgetIcon)
 	mux.HandleFunc("POST /api/ingest/{siteKey}", s.handleIngest)
 	mux.HandleFunc("POST /api/demo/claim/{siteKey}", s.handleDemoClaim)
+	mux.HandleFunc("GET /api/updates/{siteKey}", s.handlePublicAnnouncements)
+	mux.HandleFunc("POST /api/updates/{siteKey}/{id}/reaction", s.handleAnnouncementReaction)
+	mux.HandleFunc("POST /api/updates/{siteKey}/{id}/comments", s.handleAnnouncementComment)
+	mux.HandleFunc("POST /api/updates/{siteKey}/{id}/read", s.handleAnnouncementRead)
 	mux.HandleFunc("GET /api/demo/replay/{token}", s.handleDemoReplay)
 	mux.HandleFunc("GET /api/demo/replay/{token}/events", s.handleDemoReplayEvents)
 
@@ -227,7 +248,7 @@ func (s *Server) routes() http.Handler {
 // CORS to that origin. The dashboard API is same-origin and needs no grant.
 func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		isPublic := strings.HasPrefix(r.URL.Path, "/api/ingest/") || strings.HasPrefix(r.URL.Path, "/api/config/") || strings.HasPrefix(r.URL.Path, "/api/demo/claim/")
+		isPublic := strings.HasPrefix(r.URL.Path, "/api/ingest/") || strings.HasPrefix(r.URL.Path, "/api/config/") || strings.HasPrefix(r.URL.Path, "/api/demo/claim/") || strings.HasPrefix(r.URL.Path, "/api/updates/")
 		if !isPublic {
 			next.ServeHTTP(w, r)
 			return
@@ -273,6 +294,8 @@ func (s *Server) originAllowed(path, origin string) bool {
 	} else if after, ok := strings.CutPrefix(path, "/api/ingest/"); ok {
 		key, _, _ = strings.Cut(after, "/")
 	} else if after, ok := strings.CutPrefix(path, "/api/demo/claim/"); ok {
+		key, _, _ = strings.Cut(after, "/")
+	} else if after, ok := strings.CutPrefix(path, "/api/updates/"); ok {
 		key, _, _ = strings.Cut(after, "/")
 	}
 	if key == "" {
@@ -712,8 +735,40 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "unknown site key")
 		return
 	}
+	feedbackAppearance := site.Settings.Appearance
+	if a := site.Settings.UpdatesAppearance; a != nil {
+		panelBg, panelText := "#ffffff", "#142018"
+		if a.Theme == "dark" {
+			panelBg, panelText = "#121b16", "#eef5f0"
+		}
+		accent := a.Accent
+		if accent == "" {
+			accent = "#2f7d4a"
+		}
+		radius := a.Radius
+		if radius == 0 {
+			radius = 18
+		}
+		feedbackAppearance = &SiteAppearance{ButtonBg: accent, ButtonText: "#ffffff", ButtonLabel: "Feedback", PanelBg: panelBg, PanelText: panelText, Accent: accent, Primary: accent, PrimaryText: "#ffffff", Radius: radius, Spacing: 16}
+	}
+
+	// The launcher icon lives behind its own cached endpoint rather than
+	// inline in this response: /api/config is sent uncached on every page
+	// load, so a base64 image here would be re-downloaded every navigation.
+	// The ETag rides in the URL so a replaced icon busts the cache.
+	iconURL := ""
+	if icon, err := s.store.GetWidgetIcon(site.ID, false); err == nil && icon != nil {
+		iconURL = "/api/widget-icon/" + url.PathEscape(site.SiteKey) + "?v=" + icon.ETag
+	}
+
+	widget := buildWidgetConfig(site, iconURL)
+
 	// The dashboard owns these settings per site; the tracker consumes them.
+	// "widget" is the unified shape; "feedback" and "updates" are kept so a
+	// tracker cached from before the merge keeps working (t.js is cached for
+	// 60s, so the two overlap briefly after a deploy).
 	writeJSON(w, http.StatusOK, map[string]any{
+		"widget":               widget,
 		"sample_rate":          1.0,
 		"checkout_interval_ms": 30000,
 		"mask_inputs":          true,
@@ -726,13 +781,18 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		},
 		"feedback": map[string]any{
 			"enabled":    site.Settings.FeedbackEnabled,
-			"position":   site.Settings.FeedbackPosition,
+			"position":   widget.Position,
 			"survey_id":  site.Settings.SurveyID,
 			"title":      site.Settings.SurveyTitle,
 			"type":       site.Settings.SurveyType,
 			"questions":  site.Settings.Questions,
-			"appearance": site.Settings.Appearance,
+			"appearance": feedbackAppearance,
 			"trigger":    site.Settings.FeedbackTrigger,
+		},
+		"updates": map[string]any{
+			"enabled":    site.Settings.UpdatesEnabled,
+			"position":   widget.Position,
+			"appearance": site.Settings.UpdatesAppearance,
 		},
 	})
 }

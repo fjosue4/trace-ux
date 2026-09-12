@@ -499,7 +499,7 @@ func TestSiteManagementAndConfig(t *testing.T) {
 	}
 
 	// Custom survey config round-trips to the public config endpoint.
-	cfg := `{"feedback_enabled":true,"feedback_position":"left","survey_id":"csat","survey_title":"Rate us","survey_type":"custom","questions":[
+	cfg := `{"feedback_enabled":true,"widget_position":"left","survey_id":"csat","survey_title":"Rate us","survey_type":"custom","questions":[
 		{"id":"ease","label":"How easy was it?","type":"rating","max":10},
 		{"id":"found","label":"Found what you needed?","type":"choice","options":["Yes","No"]},
 		{"id":"notes","label":"Anything else?","type":"text","optional":true}]}`
@@ -519,12 +519,22 @@ func TestSiteManagementAndConfig(t *testing.T) {
 			Type      string           `json:"type"`
 			Questions []SurveyQuestion `json:"questions"`
 		} `json:"feedback"`
+		Updates struct {
+			Position string `json:"position"`
+		} `json:"updates"`
+		Widget WidgetConfig `json:"widget"`
 	}
 	json.NewDecoder(resp.Body).Decode(&pub)
 	resp.Body.Close()
-	if !pub.RecordingEnabled || !pub.Feedback.Enabled || pub.Feedback.Position != "left" ||
+	if !pub.RecordingEnabled || !pub.Feedback.Enabled ||
 		pub.Feedback.SurveyID != "csat" || pub.Feedback.Type != "custom" || len(pub.Feedback.Questions) != 3 {
 		t.Fatalf("public config wrong: %+v", pub)
+	}
+	// One launcher, one corner: the widget block and both backwards-compatible
+	// blocks must report the same position.
+	if pub.Widget.Position != "left" || pub.Feedback.Position != "left" || pub.Updates.Position != "left" {
+		t.Fatalf("position widget=%q feedback=%q updates=%q, want all left",
+			pub.Widget.Position, pub.Feedback.Position, pub.Updates.Position)
 	}
 
 	// Invalid settings are rejected.
