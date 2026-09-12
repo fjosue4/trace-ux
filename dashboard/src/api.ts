@@ -390,6 +390,7 @@ export const api = {
     if (f.device) q.set('device', f.device);
     if (f.country) q.set('country', f.country);
     if (f.url) q.set('url', f.url);
+    if (f.action) q.set('action', f.action);
     if (f.identity) q.set('visitor', f.identity);
     if (f.min_duration_ms) q.set('min_duration_ms', String(f.min_duration_ms));
     return request<Session[]>(`/api/sessions?${q}`);
@@ -529,6 +530,7 @@ export type SessionFilter = {
   device?: string;
   country?: string;
   url?: string;
+  action?: string; // matches a custom event name recorded in the session
   identity?: string; // matches userId / clientId / remoteId
   min_duration_ms?: number;
 };
