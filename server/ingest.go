@@ -580,10 +580,16 @@ func (s *Store) saveHello(siteID int64, sessionID, ua, ipHash, country string, m
 		user_id      = CASE WHEN ? != '' THEN ? ELSE user_id END,
 		client_id    = CASE WHEN ? != '' THEN ? ELSE client_id END,
 		remote_id    = CASE WHEN ? != '' THEN ? ELSE remote_id END,
-		viewport_w = COALESCE(NULLIF(viewport_w, 0), ?),
-		viewport_h = COALESCE(NULLIF(viewport_h, 0), ?),
-		screen_w   = COALESCE(NULLIF(screen_w, 0), ?),
-		screen_h   = COALESCE(NULLIF(screen_h, 0), ?),
+		-- Attribution above is set-if-empty: the first page of a visit owns it.
+		-- Window geometry is the opposite — it is a live property, so a visitor
+		-- who resizes mid-visit (or whose later page loads report a different
+		-- size) must not leave the session stamped with its opening dimensions.
+		-- The replay derives its aspect from these, so a stale value here shows
+		-- up as a mis-scaled player and a cursor that misses what it clicked.
+		viewport_w = CASE WHEN ? > 0 THEN ? ELSE viewport_w END,
+		viewport_h = CASE WHEN ? > 0 THEN ? ELSE viewport_h END,
+		screen_w   = CASE WHEN ? > 0 THEN ? ELSE screen_w END,
+		screen_h   = CASE WHEN ? > 0 THEN ? ELSE screen_h END,
 		browser    = COALESCE(NULLIF(browser, ''), ?),
 		os         = COALESCE(NULLIF(os, ''), ?),
 		device     = COALESCE(NULLIF(device, ''), ?),
@@ -594,7 +600,8 @@ func (s *Store) saveHello(siteID int64, sessionID, ua, ipHash, country string, m
 		WHERE id = ? AND site_id = ?`,
 		m.URL, m.Referrer, m.UTMSource, m.UTMMedium, m.UTMCampaign,
 		m.UserID, m.UserID, m.ClientID, m.ClientID, m.RemoteID, m.RemoteID,
-		m.ViewportW, m.ViewportH, m.ScreenW, m.ScreenH,
+		m.ViewportW, m.ViewportW, m.ViewportH, m.ViewportH,
+		m.ScreenW, m.ScreenW, m.ScreenH, m.ScreenH,
 		browser, osName, device, ua, ipHash, country, now, sessionID, siteID)
 	return err
 }

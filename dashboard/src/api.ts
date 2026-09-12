@@ -51,6 +51,10 @@ export type FeedbackTrigger = {
 };
 
 export type SiteSettings = {
+  // The corner the single launcher anchors to. updates_position and
+  // feedback_position predate the merge of the two widgets; the server mirrors
+  // this value into both, and the dashboard writes all three together.
+  widget_position?: string; // right | left
   updates_enabled?: boolean;
   updates_position?: string;
   updates_appearance?: AnnouncementAppearance;
@@ -104,12 +108,24 @@ export type SystemHealth = {
   store: { sites: number; sessions: number; feedback: number };
 };
 
+// Metadata for the custom widget launcher icon. The image itself is served
+// from the public, cached endpoint the URL points at, never inlined here.
+export type WidgetIcon = {
+  mime: string;
+  etag: string;
+  width: number;
+  height: number;
+  updated_at: number;
+};
+
 export type SiteDetail = {
   site: Site;
   sessions: Session[];
   feedback: Feedback[];
   stats: SiteStats;
   performance_keys: PerformanceKey[];
+  widget_icon: WidgetIcon | null;
+  widget_icon_url: string;
 };
 
 export type Session = {
@@ -315,8 +331,10 @@ export class ApiError extends Error {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, {
     credentials: 'same-origin',
-    headers: init?.body ? { 'Content-Type': 'application/json' } : undefined,
     ...init,
+    // JSON is the default for bodies, but a caller sending binary (the widget
+    // icon upload) supplies its own Content-Type and must win.
+    headers: init?.body ? { 'Content-Type': 'application/json', ...init?.headers } : init?.headers,
   });
   if (res.status === 401) {
     throw new ApiError(401, 'unauthorized');
@@ -444,6 +462,17 @@ export const api = {
 
   // Site management.
   getSiteDetail: (id: number) => request<SiteDetail>(`/api/sites/${id}`),
+
+  // The icon is posted as raw bytes: the server decides the format by decoding
+  // the image, so there is nothing useful to declare in a multipart wrapper.
+  uploadWidgetIcon: (id: number, file: File) =>
+    request<WidgetIcon>(`/api/sites/${id}/widget-icon`, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': 'application/octet-stream' },
+    }),
+  deleteWidgetIcon: (id: number) =>
+    request<{ ok: boolean }>(`/api/sites/${id}/widget-icon`, { method: 'DELETE' }),
   updateSiteRecording: (id: number, enabled: boolean) =>
     request<{ ok: boolean; recording_enabled: boolean }>(`/api/sites/${id}`, {
       method: 'PATCH',

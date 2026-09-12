@@ -1,18 +1,57 @@
 # TraceUX
 
-Self-hosted, open-source session replay for your websites — a lean, privacy-first alternative to Smartlook with an experience you control.
+The complete UX bundle for products that want to understand, hear, and update their users.
+
+Self-hosted session replay, in-product feedback, and announcements with
+per-release reactions and comments — in one small binary, on your server, with
+an experience you control.
 
 ## **Try TraceUX live:** [Open the Live Demo →](https://trace-ux.builtbyfrank.dev/)
 
-With Smartlook shutting down, TraceUX provides a self-hosted path for teams that still need session replay and product feedback without handing their data to another hosted analytics platform. It records how real visitors use your site (DOM event streams, not video), stores them on **your own server**, and plays them back in a clean dashboard. One binary, one SQLite file, one Docker container.
+TraceUX closes the loop between what users do, what they say, and what you ship:
+watch a real visit, ask for feedback in context, publish an update, and see the
+reaction to that update. No separate replay vendor, survey tool, changelog
+service, or analytics warehouse required.
 
-> **Status: v0.2 — session replay core + multi-user access.** Working: multi-page session capture, full replay player, input masking, UTM/referrer attribution, per-site keys, retention, user accounts with admin-managed passwords, 2-hour session cap, filter sessions by any visited path, recording-linked logs, and backend endpoint performance percentiles. Roadmap: GraphQL resolver tracing and backend traces inside the replay timeline.
+With Smartlook shutting down, TraceUX provides a self-hosted path for teams
+that need product insight without handing their data to another hosted
+analytics platform. It records how real visitors use your site (DOM event
+streams, not video), stores them on **your own server**, and brings replay,
+feedback, and announcements into one dashboard. One binary, one SQLite file,
+one Docker container.
+
+> **Current bundle:** session replay, in-app feedback, public announcements,
+> per-announcement reads/reactions/comments, browser logs, backend performance
+> percentiles, multi-user access, and a unified visitor widget.
 
 **Live landing page:** [trace-ux.builtbyfrank.dev](https://trace-ux.builtbyfrank.dev)
 
+## The complete UX bundle
+
+TraceUX gives a small product team one practical loop instead of four
+disconnected tools:
+
+| Capability | What it answers |
+| --- | --- |
+| **Session replay** | What did the visitor actually do, and where did the journey break? |
+| **In-product feedback** | What did the visitor think at that exact moment? |
+| **Announcements** | What do we need to tell users about the product? |
+| **Per-announcement feedback** | Did users read, like, or comment on this specific update? |
+| **Logs & performance** | What browser and backend signals explain the experience? |
+
+All of these surfaces are organized by site in the dashboard. The tracker
+ships one unified **Help & updates** launcher: visitors can open **What's new**
+or **Feedback** without juggling separate widgets, and each response can be
+connected back to the session that produced it.
+
 ## Why
 
-With Smartlook shutting down, many teams are looking for a replacement that offers a familiar session-replay workflow while keeping data under their control. Existing self-hosted options are often heavy: full analytics suites that need 8 GB+ RAM, multi-service Docker stacks, or paid plugins. TraceUX is built for **a tiny VPS**: a single static binary (~20 MB, ~30 MB RAM) with SQLite and the dashboard embedded. Backups are copying one folder.
+With Smartlook shutting down, many teams are looking for a replacement that
+offers a familiar session-replay workflow while keeping data under their
+control. Existing self-hosted options are often heavy: full analytics suites
+that need 8 GB+ RAM, multi-service Docker stacks, or paid plugins. TraceUX is
+built for **a tiny VPS**: a single static binary (~20 MB, ~30 MB RAM) with
+SQLite and the dashboard embedded. Backups are copying one folder.
 
 ## Screenshots
 
@@ -58,7 +97,10 @@ Then:
 3. **Manual:** paste it into the `<head>` of every page on your site.
    **Google Tag Manager:** create a *Custom HTML* tag with the snippet from the GTM tab (it sets `data-site` via `setAttribute`, because GTM's script injection drops the attribute), trigger it on *All Pages* and publish.
 
-   Sessions start appearing within seconds.
+   Sessions start appearing within seconds. The same tracker powers the
+   unified **Help & updates** launcher: enable Feedback and Announcements from
+   the site's dashboard settings, then publish an announcement or collect a
+   response without changing the snippet.
 
 ## Install on a VPS (one script)
 
@@ -113,7 +155,11 @@ No external database, no queue, no other services — SQLite lives in `/var/lib/
 | `TRACE_UX_DEMO_REPLAY_TTL` | `900`  | Demo replay lifetime in seconds (60–3600)             |
 | `TRACE_UX_DEV_STATIC`    | —         | Dev only: serve frontend builds from disk             |
 
-Each site opens to a tabbed hub: **Overview** keeps the latest recordings, logs, feedback, and summary counts together; **Site** manages the registered URL, installation snippet, and backend performance connection; **Recordings**, **Feedback**, and **Logs** hold their respective settings without one long scrolling form.
+Each site opens to a tabbed hub: **Overview** keeps the latest recordings,
+logs, feedback, and summary counts together; **Site** manages the registered
+URL, installation snippet, and backend performance connection; **Recordings**,
+**Feedback**, **Announcements**, **Styles**, and **Logs** keep each part of the
+bundle easy to configure without one long scrolling form.
 
 ## Users & access
 
@@ -179,7 +225,10 @@ The backend integration is intentionally server-to-server. The site key identifi
 
 ## Feedback & surveys
 
-Collect feedback from visitors right on your tracked sites — each response is linked to the session recording, so you can watch the moment behind the score.
+Collect feedback from visitors right on your tracked sites — each response is
+linked to the session recording, so you can watch the moment behind the score.
+Feedback and announcements share one visitor-facing launcher, so listening and
+communicating feel like one product surface instead of two unrelated widgets.
 
 **Everything is configured per site from the dashboard** (open a site from the Sites list): toggle recordings on/off, enable the widget, pick its corner, set the survey id/title, and choose the question set — built-in stars (1–5), NPS (0–10), or **fully custom questions** (rating, choice, or text; required or optional). The tracker picks the configuration up automatically from the server; the snippet carries no settings.
 
@@ -192,6 +241,37 @@ window.TraceUX.feedback({ rating: 5, comment: 'Loved it', surveyId: 'checkout' }
 Responses land in the dashboard's **Feedback** page (per-survey summaries, comments, device info, one-click jump into the replay). Each site's hub page shows the latest 5 recordings, the latest 5 feedback responses, and the overall positive-feedback percentage. Admins can delete individual responses (e.g. spam).
 
 Turning **recordings off** for a site stops the capture of visitor event streams server-side — the feedback widget and lightweight session metadata keep working.
+
+## Announcements and per-release feedback
+
+Publish product communication without sending visitors to a separate changelog:
+
+- **Draft, preview, publish, and archive** announcements from the dashboard.
+- Add a release label, short summary, detailed body, and an optional safe
+  http(s) link.
+- Deliver published announcements through the site's **What's new** tab.
+- Show an unread count and a lightweight in-page preview when a new update
+  arrives; the widget polls gently and backs off when rate limited.
+- Let visitors mark an announcement as read, react with a like, and leave a
+  comment.
+- Keep **reads, reactions, and comments attached to each announcement**, so
+  release feedback is not mixed into a general survey stream.
+- See per-announcement read, reaction, and comment counts from the
+  authenticated dashboard's announcement cards.
+
+The announcements section is enabled per site and shares the same configurable
+launcher as Feedback. Admins can set the position, light/dark theme, accent,
+radius, width, label, and custom launcher icon from **Styles**. If a site only
+uses one section, the launcher opens directly into that section; when both are
+enabled, visitors get a two-tab **What's new / Feedback** panel.
+
+This gives TraceUX a simple product-feedback loop:
+
+```
+visitor journey → session replay → contextual feedback → shipped announcement
+                                      ↑                         ↓
+                                      └──── per-update reaction/comment ────┘
+```
 
 ## Session behavior
 
@@ -223,8 +303,12 @@ Turning **recordings off** for a site stops the capture of visitor event streams
 
 - **`tracker/`** — TypeScript SDK wrapping [`@rrweb/record`](https://rrweb.io/). Records DOM mutations as compact event streams; batches and ships them compressed (2 KB threshold, `CompressionStream`), surviving page navigations via `sessionStorage` (session id, page index, active time all persist).
 - **`server/`** — Go + `modernc.org/sqlite` (pure Go, no CGO). Events are stored as gzipped blobs per chunk (not one row per event), keeping SQLite fast and the file small. Retention job sweeps expired sessions every 6 h.
-- **`dashboard/`** — Vite + React + `rrweb-player`. Chunks stream back decompressed in pages as you watch.
-- **`demo/`** — a pretend customer site with the snippet installed, for testing.
+- **`dashboard/`** — Vite + React + `rrweb-player`. Chunks stream back
+  decompressed in pages as you watch; site hubs also configure feedback,
+  announcements, widget styles, logs, and performance keys.
+- **`demo/`** — a pretend customer site with the snippet installed, for
+  testing replay, feedback, multi-page navigation, and the unified
+  announcements widget.
 
 Capacity design point: 30 concurrent sessions ≈ 6–10 tiny requests/sec (a few % of one core). The same design comfortably reaches thousands of concurrent sessions on a 2–4 GB VPS before needing a queue/ClickHouse — at which point that's the next milestone, for any language.
 
@@ -283,4 +367,11 @@ Multi-stage: frontend bundles built with esbuild/Vite, then a `CGO_ENABLED=0` Go
 
 ## License
 
-[AGPL-3.0](LICENSE) — same as Plausible and Matomo. Use it, host it, modify it; if you offer it as a service, share your changes.
+TraceUX is available under the [TraceUX Community Source License v1.0](LICENSE).
+You may use, clone, modify, collaborate on, and host it without a license fee.
+Shared or hosted versions must retain TraceUX branding and notices, and
+modified versions must provide their corresponding source. White-labeling,
+rebranding, or selling or distributing TraceUX as a separate product under
+another brand is not permitted.
+
+This is a source-available license, not an OSI-approved open-source license.

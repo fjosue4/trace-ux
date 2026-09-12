@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -32,12 +33,25 @@ func (s *Server) handleGetSite(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Metadata only — the dashboard renders the preview from the public icon
+	// endpoint rather than carrying the blob through this response.
+	widgetIcon, err := s.store.GetWidgetIcon(id, false)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	iconURL := ""
+	if widgetIcon != nil {
+		iconURL = "/api/widget-icon/" + url.PathEscape(site.SiteKey) + "?v=" + widgetIcon.ETag
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"site":             site,
 		"sessions":         sessions,
 		"feedback":         feedback,
 		"stats":            stats,
 		"performance_keys": performanceKeys,
+		"widget_icon":      widgetIcon,
+		"widget_icon_url":  iconURL,
 	})
 }
 
@@ -119,6 +133,7 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 		return nil
 	}
 	for key, target := range map[string]any{
+		"widget_position":         &settings.WidgetPosition,
 		"updates_enabled":         &settings.UpdatesEnabled,
 		"updates_position":        &settings.UpdatesPosition,
 		"feedback_enabled":        &settings.FeedbackEnabled,
@@ -162,10 +177,26 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		settings.FeedbackTrigger = &t
 	}
+	// Validate what the caller actually sent, before any position promotion —
+	// normalizing first would quietly coerce a bad value into a valid corner
+	// instead of reporting it.
 	if err := ValidateSiteSettings(settings); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+
+	// Position is one widget-level setting now. A payload that still sends it
+	// per section (an older dashboard) is honoured by promoting whichever key
+	// it supplied; normalize then mirrors the result back across both, so the
+	// stored settings, the PUT response and the config endpoint all agree.
+	if _, ok := raw["widget_position"]; !ok {
+		if _, ok := raw["updates_position"]; ok {
+			settings.WidgetPosition = settings.UpdatesPosition
+		} else if _, ok := raw["feedback_position"]; ok {
+			settings.WidgetPosition = settings.FeedbackPosition
+		}
+	}
+	normalizeWidgetPosition(&settings)
 	site, _, _, _, err := s.store.GetSiteDetail(id)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())

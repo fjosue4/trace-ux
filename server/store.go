@@ -292,6 +292,19 @@ var migrations = []string{
 		PRIMARY KEY (announcement_id, visitor_key)
 	);
 	`,
+	// v13: optional custom launcher icon for the unified widget. Kept in its
+	// own table so the blob never rides along with the per-request site reads.
+	`
+	CREATE TABLE IF NOT EXISTS site_widget_icons (
+		site_id    INTEGER PRIMARY KEY REFERENCES sites(id) ON DELETE CASCADE,
+		mime       TEXT    NOT NULL,
+		bytes      BLOB    NOT NULL,
+		etag       TEXT    NOT NULL,
+		width      INTEGER NOT NULL DEFAULT 0,
+		height     INTEGER NOT NULL DEFAULT 0,
+		updated_at INTEGER NOT NULL
+	);
+	`,
 }
 
 func (s *Store) migrate() error {

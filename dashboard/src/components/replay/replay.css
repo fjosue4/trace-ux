@@ -112,11 +112,20 @@
   border-radius: 0;
 }
 .player-host .rr-player__frame { overflow: hidden; }
-.player-host iframe { display: block; border: 0; max-width: 100%; }
+/* No max-width here. rrweb lays the replay iframe out at the *recorded*
+   viewport width and rrweb-player shrinks it with a scale() transform;
+   clamping the iframe instead makes the recorded page reflow to the
+   dashboard's width, so responsive breakpoints fire and every element moves
+   out from under the replayed cursor. .rr-player__frame already clips it. */
+.player-host iframe { display: block; border: 0; }
 
 @media (min-width: 961px) {
   .player-frame {
-    height: 100%;
+    /* Grow into whatever the details strip is not using, so collapsing the
+       strip actually hands its height to the recording. height:100% would
+       instead keep the frame at the full column height and overflow. */
+    flex: 1 1 auto;
+    min-height: 0;
     display: flex;
     flex-direction: column;
   }
@@ -540,3 +549,173 @@
 }
 .meta-oneline { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .meta-copy { width: 22px; height: 22px; flex: none; }
+
+/* ---- actions feed: search, scrolling, active row ---- */
+.actions-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0.9rem 0 0.45rem;
+}
+.actions-head h4 {
+  margin: 0;
+  flex: none;
+}
+.actions-search {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.78rem;
+}
+.actions-search::placeholder { color: var(--text-dim); }
+.actions-search:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* The feed scrolls inside its own box so following playback never drags the
+   whole page around under the viewer. */
+.actions-list {
+  max-height: min(46vh, 420px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  .actions-list { scroll-behavior: auto; }
+}
+
+/* The whole row seeks, so it has to read as a control. */
+.action-row {
+  cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+}
+.action-row:hover { background: var(--surface-2); }
+.action-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+/* The playhead's current action: a full 1px accent border so the row reads as
+   one object while the feed scrolls past it. */
+.action-row.is-active {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+}
+.action-row__button { cursor: pointer; }
+
+.action-row__severity--page {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.action-row--page .action-row__num {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.action-row--page .action-row__message { font-weight: 600; }
+
+/* ---- session details: a two-row strip under the player, collapsible ---- */
+.replay-meta {
+  margin-top: 0.7rem;
+  flex: none;
+}
+.replay-meta__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.replay-meta__title {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+.replay-meta__toggle { margin-left: auto; }
+
+/* The collapsed affordance: a slim ghost button, no card around it, so the
+   details section costs ~26px instead of a full panel. */
+.replay-meta-show {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  height: 26px;
+  margin-top: 0.5rem;
+  padding: 0 0.6rem;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease, background-color 0.14s ease;
+}
+.replay-meta-show:hover {
+  color: var(--text);
+  background: var(--surface-2);
+  border-color: var(--line-strong, var(--line));
+}
+.replay-meta-show:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Row 1: entry + referrer. Row 2: the six short device/geometry facts.
+   Keyed to the strip's own width, not the viewport's: this column is narrow
+   whenever the sidebar is open, and a viewport breakpoint would keep six
+   columns in a 250px space and hyphenate every value. */
+.replay-meta { container-type: inline-size; }
+.replay-meta .meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 0.9rem;
+  margin-top: 0.6rem;
+}
+/* Nothing spans in the strip. The eight standard fields divide evenly into
+   four-column rows, so both rows run the full width instead of leaving a gap
+   at the end of the second. */
+.replay-meta .meta-block--wide { grid-column: auto; }
+.replay-meta .meta-block__value { overflow-wrap: normal; word-break: normal; }
+
+@container (min-width: 560px) {
+  /* Four even rows of two become two even rows of four. The first column is
+     widest because it carries the entry URL — the one value here that is long
+     enough to need the room. */
+  .replay-meta .meta-grid { grid-template-columns: 1.5fr repeat(3, minmax(0, 1fr)); }
+}
+.replay-meta .meta-block__label { font-size: 0.62rem; }
+.replay-meta .meta-block__value { font-size: 0.8rem; }
+.replay-meta .meta-clamp2 {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The sidebar is now the actions feed alone, so let it use the full height. */
+@media (min-width: 961px) {
+  .replay-side-col > .replay-side {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+  }
+  .replay-side-col .actions-list {
+    flex: 1;
+    max-height: none;
+  }
+  .replay-main {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+}

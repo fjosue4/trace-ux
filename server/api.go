@@ -27,13 +27,19 @@ type Server struct {
 	secret []byte       // HMAC salt for ip_hash (auth cookies are DB-backed now)
 	static http.Handler // SPA + assets
 
-	securityOnce      sync.Once
-	loginIPLimiter    *requestLimiter
-	loginUserLimiter  *requestLimiter
-	ingestIPLimiter   *requestLimiter
-	ingestSiteLimiter *requestLimiter
-	demoClaimLimiter  *requestLimiter
-	demoReplayLimiter *requestLimiter
+	securityOnce        sync.Once
+	loginIPLimiter      *requestLimiter
+	loginUserLimiter    *requestLimiter
+	ingestIPLimiter     *requestLimiter
+	ingestSiteLimiter   *requestLimiter
+	demoClaimLimiter    *requestLimiter
+	demoReplayLimiter   *requestLimiter
+	updatesReadLimiter  *requestLimiter
+	updatesWriteLimiter *requestLimiter
+	updatesSiteLimiter  *requestLimiter
+
+	cspOnce sync.Once
+	csp     string
 }
 
 type Config struct {
@@ -178,6 +184,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("PATCH /api/sites/{id}", s.auth(s.requireAdmin(s.handleUpdateSite)))
 	mux.HandleFunc("PUT /api/sites/{id}/settings", s.auth(s.requireAdmin(s.handlePutSiteSettings)))
 	mux.HandleFunc("DELETE /api/sites/{id}", s.auth(s.requireAdmin(s.handleDeleteSite)))
+	// Custom launcher icon for the unified widget.
+	mux.HandleFunc("PUT /api/sites/{id}/widget-icon", s.auth(s.requireAdmin(s.handleUploadWidgetIcon)))
+	mux.HandleFunc("DELETE /api/sites/{id}/widget-icon", s.auth(s.requireAdmin(s.handleDeleteWidgetIcon)))
 
 	mux.HandleFunc("GET /api/sessions", s.auth(s.handleListSessions))
 	mux.HandleFunc("GET /api/sessions/countries", s.auth(s.handleListSessionCountries))
@@ -216,6 +225,7 @@ func (s *Server) routes() http.Handler {
 	// Public tracker-facing endpoints. Cross-origin access is granted per
 	// site via the URL the admin registers (see cors below).
 	mux.HandleFunc("GET /api/config/{siteKey}", s.handleConfig)
+	mux.HandleFunc("GET /api/widget-icon/{siteKey}", s.handlePublicWidgetIcon)
 	mux.HandleFunc("POST /api/ingest/{siteKey}", s.handleIngest)
 	mux.HandleFunc("POST /api/demo/claim/{siteKey}", s.handleDemoClaim)
 	mux.HandleFunc("GET /api/updates/{siteKey}", s.handlePublicAnnouncements)
@@ -741,8 +751,24 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		feedbackAppearance = &SiteAppearance{ButtonBg: accent, ButtonText: "#ffffff", ButtonLabel: "Feedback", PanelBg: panelBg, PanelText: panelText, Accent: accent, Primary: accent, PrimaryText: "#ffffff", Radius: radius, Spacing: 16}
 	}
+
+	// The launcher icon lives behind its own cached endpoint rather than
+	// inline in this response: /api/config is sent uncached on every page
+	// load, so a base64 image here would be re-downloaded every navigation.
+	// The ETag rides in the URL so a replaced icon busts the cache.
+	iconURL := ""
+	if icon, err := s.store.GetWidgetIcon(site.ID, false); err == nil && icon != nil {
+		iconURL = "/api/widget-icon/" + url.PathEscape(site.SiteKey) + "?v=" + icon.ETag
+	}
+
+	widget := buildWidgetConfig(site, iconURL)
+
 	// The dashboard owns these settings per site; the tracker consumes them.
+	// "widget" is the unified shape; "feedback" and "updates" are kept so a
+	// tracker cached from before the merge keeps working (t.js is cached for
+	// 60s, so the two overlap briefly after a deploy).
 	writeJSON(w, http.StatusOK, map[string]any{
+		"widget":               widget,
 		"sample_rate":          1.0,
 		"checkout_interval_ms": 30000,
 		"mask_inputs":          true,
@@ -755,7 +781,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		},
 		"feedback": map[string]any{
 			"enabled":    site.Settings.FeedbackEnabled,
-			"position":   site.Settings.FeedbackPosition,
+			"position":   widget.Position,
 			"survey_id":  site.Settings.SurveyID,
 			"title":      site.Settings.SurveyTitle,
 			"type":       site.Settings.SurveyType,
@@ -765,7 +791,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		},
 		"updates": map[string]any{
 			"enabled":    site.Settings.UpdatesEnabled,
-			"position":   site.Settings.UpdatesPosition,
+			"position":   widget.Position,
 			"appearance": site.Settings.UpdatesAppearance,
 		},
 	})

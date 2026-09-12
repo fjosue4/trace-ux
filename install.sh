@@ -85,21 +85,25 @@ detect_arch() {
 
 install_release() {
   local base="https://github.com/${GITHUB_REPO}/releases"
-  local url
+  local release
   if [[ -n "$TRACE_UX_VERSION" ]]; then
-    url="${base}/download/v${TRACE_UX_VERSION}/trace_ux_linux_${ARCH}.tar.gz"
+    release="${base}/download/v${TRACE_UX_VERSION}"
   else
-    url="${base}/latest/download/trace_ux_linux_${ARCH}.tar.gz"
+    release="${base}/latest/download"
   fi
+  local url="${release}/trace_ux_linux_${ARCH}.tar.gz"
   local tmp; tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
 
   info "downloading TraceUX (${ARCH})${TRACE_UX_VERSION:+ v$TRACE_UX_VERSION}"
   fetch "$url" "${tmp}/trace-ux.tar.gz"
-  # Verify against the published checksums before anything touches the disk.
-  if fetch "${base}/latest/download/checksums.txt" "${tmp}/checksums.txt" 2>/dev/null; then
-    (cd "$tmp" && grep "trace_ux_linux_${ARCH}.tar.gz" checksums.txt | sha256sum -c - >/dev/null) \
-      || fail "checksum mismatch — download aborted"
+  # Verify against the checksums published for THIS release. Reading them from
+  # /latest would compare a pinned download against a different build.
+  if fetch "${release}/checksums.txt" "${tmp}/checksums.txt" 2>/dev/null; then
+    (cd "$tmp" \
+      && grep -q "trace_ux_linux_${ARCH}.tar.gz" checksums.txt \
+      && grep "trace_ux_linux_${ARCH}.tar.gz" checksums.txt | sha256sum -c - >/dev/null) \
+      || fail "checksum verification failed — download aborted"
   else
     warn "checksums.txt not published for this release; skipping verification"
   fi

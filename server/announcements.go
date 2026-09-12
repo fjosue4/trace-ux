@@ -2,6 +2,8 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -80,13 +82,25 @@ func validateAnnouncement(a Announcement) error {
 	if len(a.Summary) > 300 || len(a.Body) > 10000 || len(a.ReleaseLabel) > 60 || len(a.LinkURL) > 500 {
 		return errBadJSON
 	}
-	if a.LinkURL != "" {
-		u, e := url.Parse(a.LinkURL)
-		if e != nil || (u.Scheme != "http" && u.Scheme != "https") {
-			return errBadJSON
-		}
+	if a.LinkURL != "" && !validAnnouncementLink(a.LinkURL) {
+		return errBadJSON
 	}
 	return nil
+}
+
+// validAnnouncementLink accepts only absolute http(s) URLs built from
+// characters that are safe to interpolate into the tracker widget's markup.
+// net/url happily parses `https://example.com/?a=" onfocus="alert(1)`, which
+// would break out of the href attribute the widget renders, so quotes, angle
+// brackets, backticks, backslashes and whitespace are rejected outright.
+func validAnnouncementLink(raw string) bool {
+	for _, c := range raw {
+		if c <= ' ' || c == 0x7f || strings.ContainsRune(`"'<>`+"`"+`\`, c) {
+			return false
+		}
+	}
+	u, err := url.Parse(raw)
+	return err == nil && u.Host != "" && (u.Scheme == "http" || u.Scheme == "https")
 }
 
 func (s *Server) handleListAnnouncements(w http.ResponseWriter, r *http.Request) {
@@ -195,101 +209,146 @@ func (s *Server) publicSite(r *http.Request) (Site, bool) {
 	site, e := s.store.GetSiteByKey(r.PathValue("siteKey"))
 	return site, e == nil && site.ID > 0
 }
+
+// allowPublicUpdates rate limits the unauthenticated /api/updates/* surface.
+// Site keys are published in every tracker snippet, so these endpoints are
+// effectively open to the internet and must be capped per caller and per site.
+func (s *Server) allowPublicUpdates(w http.ResponseWriter, r *http.Request, siteID int64, write bool) bool {
+	s.initSecurity()
+	limiter := s.updatesReadLimiter
+	if write {
+		limiter = s.updatesWriteLimiter
+	}
+	if !limiter.allow("ip:"+s.clientIP(r)) || !s.updatesSiteLimiter.allow(fmt.Sprintf("updates-site:%d", siteID)) {
+		writeRateLimited(w, "too many announcement requests")
+		return false
+	}
+	return true
+}
+
 func (s *Server) handlePublicAnnouncements(w http.ResponseWriter, r *http.Request) {
 	site, ok := s.publicSite(r)
 	if !ok {
 		writeErr(w, 404, "unknown site")
 		return
 	}
-	rows, e := s.store.ListAnnouncements(site.ID, true)
-	if e != nil {
-		writeErr(w, 500, e.Error())
+	if !s.allowPublicUpdates(w, r, site.ID, false) {
 		return
 	}
-	v := publicVisitor(r)
-	for i := range rows {
-		if v != "" {
+	rows, e := s.store.ListAnnouncements(site.ID, true)
+	if e != nil {
+		log.Printf("updates: list announcements for site %d: %v", site.ID, e)
+		writeErr(w, 500, "could not load announcements")
+		return
+	}
+	if v := publicVisitor(r); v != "" {
+		for i := range rows {
 			_ = s.store.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM announcement_reactions WHERE announcement_id=? AND visitor_key=?),EXISTS(SELECT 1 FROM announcement_reads WHERE announcement_id=? AND visitor_key=?)`, rows[i].ID, v, rows[i].ID, v).Scan(&rows[i].Liked, &rows[i].Read)
 		}
-		cs, _ := s.store.db.Query(`SELECT id,body,created_at FROM announcement_comments WHERE announcement_id=? AND status='visible' ORDER BY created_at DESC LIMIT 20`, rows[i].ID)
-		comments := []AnnouncementComment{}
-		if cs != nil {
-			for cs.Next() {
-				var c AnnouncementComment
-				_ = cs.Scan(&c.ID, &c.Body, &c.CreatedAt)
-				comments = append(comments, c)
-			}
-			cs.Close()
-		}
-		_ = comments
 	}
 	writeJSON(w, 200, rows)
 }
-func (s *Server) publicAnnouncement(w http.ResponseWriter, r *http.Request) (int64, string, bool) {
+
+// publicRequest is the validated shape of a POST to /api/updates/{siteKey}/{id}/*.
+type publicRequest struct {
+	AnnouncementID int64
+	VisitorKey     string
+	Body           string
+	Liked          *bool
+}
+
+func (s *Server) publicAnnouncement(w http.ResponseWriter, r *http.Request) (publicRequest, bool) {
 	site, ok := s.publicSite(r)
 	id, e := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	v := ""
+	if !ok || e != nil || id <= 0 {
+		writeErr(w, 404, "announcement not found")
+		return publicRequest{}, false
+	}
+	if !s.allowPublicUpdates(w, r, site.ID, true) {
+		return publicRequest{}, false
+	}
 	var body struct {
 		VisitorKey string `json:"visitor_key"`
 		Body       string `json:"body"`
 		Liked      *bool  `json:"liked"`
 	}
-	if !ok || e != nil || readJSON(w, r, &body) != nil {
-		return 0, "", false
+	if readJSON(w, r, &body) != nil {
+		return publicRequest{}, false
 	}
-	v = strings.TrimSpace(body.VisitorKey)
+	v := strings.TrimSpace(body.VisitorKey)
 	if len(v) < 8 || len(v) > 100 {
 		writeErr(w, 400, "invalid visitor_key")
-		return 0, "", false
+		return publicRequest{}, false
 	}
 	var exists int
 	if s.store.db.QueryRow(`SELECT COUNT(*) FROM announcements WHERE id=? AND site_id=? AND status='published'`, id, site.ID).Scan(&exists) != nil || exists == 0 {
 		writeErr(w, 404, "announcement not found")
-		return 0, "", false
+		return publicRequest{}, false
 	}
-	r.Header.Set("X-Announcement-Body", body.Body)
-	if body.Liked != nil {
-		r.Header.Set("X-Announcement-Liked", strconv.FormatBool(*body.Liked))
-	}
-	return id, v, true
+	return publicRequest{AnnouncementID: id, VisitorKey: v, Body: body.Body, Liked: body.Liked}, true
 }
 func (s *Server) handleAnnouncementReaction(w http.ResponseWriter, r *http.Request) {
-	id, v, ok := s.publicAnnouncement(w, r)
+	req, ok := s.publicAnnouncement(w, r)
 	if !ok {
 		return
 	}
-	if r.Header.Get("X-Announcement-Liked") == "false" {
-		_, _ = s.store.db.Exec(`DELETE FROM announcement_reactions WHERE announcement_id=? AND visitor_key=?`, id, v)
+	if req.Liked != nil && !*req.Liked {
+		_, _ = s.store.db.Exec(`DELETE FROM announcement_reactions WHERE announcement_id=? AND visitor_key=?`, req.AnnouncementID, req.VisitorKey)
 	} else {
-		_, _ = s.store.db.Exec(`INSERT OR IGNORE INTO announcement_reactions VALUES(?,?,?)`, id, v, time.Now().Unix())
+		_, _ = s.store.db.Exec(`INSERT OR IGNORE INTO announcement_reactions(announcement_id,visitor_key,created_at) VALUES(?,?,?)`, req.AnnouncementID, req.VisitorKey, time.Now().Unix())
 	}
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 func (s *Server) handleAnnouncementRead(w http.ResponseWriter, r *http.Request) {
-	id, v, ok := s.publicAnnouncement(w, r)
+	req, ok := s.publicAnnouncement(w, r)
 	if !ok {
 		return
 	}
-	_, _ = s.store.db.Exec(`INSERT INTO announcement_reads VALUES(?,?,?) ON CONFLICT(announcement_id,visitor_key) DO UPDATE SET read_at=excluded.read_at`, id, v, time.Now().Unix())
+	_, _ = s.store.db.Exec(`INSERT INTO announcement_reads(announcement_id,visitor_key,read_at) VALUES(?,?,?) ON CONFLICT(announcement_id,visitor_key) DO UPDATE SET read_at=excluded.read_at`, req.AnnouncementID, req.VisitorKey, time.Now().Unix())
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
+
+// Comments are the only unauthenticated endpoint that stores caller-supplied
+// text, so they carry hard row caps on top of the request rate limit: a single
+// visitor key cannot flood one announcement, and one announcement cannot grow
+// without bound no matter how many keys an attacker rotates through.
+const (
+	maxCommentsPerVisitor      = 10
+	maxCommentsPerAnnouncement = 5_000
+)
+
 func (s *Server) handleAnnouncementComment(w http.ResponseWriter, r *http.Request) {
-	id, v, ok := s.publicAnnouncement(w, r)
+	req, ok := s.publicAnnouncement(w, r)
 	if !ok {
 		return
 	}
-	body := strings.TrimSpace(r.Header.Get("X-Announcement-Body"))
+	body := strings.TrimSpace(req.Body)
 	if body == "" || len(body) > 1000 {
 		writeErr(w, 400, "comment must be 1-1000 characters")
 		return
 	}
-	res, e := s.store.db.Exec(`INSERT INTO announcement_comments(announcement_id,visitor_key,body,created_at) VALUES(?,?,?,?)`, id, v, body, time.Now().Unix())
+	var byVisitor, total int64
+	if e := s.store.db.QueryRow(`SELECT
+		COUNT(*) FILTER (WHERE visitor_key=?),
+		COUNT(*)
+		FROM announcement_comments WHERE announcement_id=?`, req.VisitorKey, req.AnnouncementID).Scan(&byVisitor, &total); e != nil {
+		log.Printf("updates: count comments for announcement %d: %v", req.AnnouncementID, e)
+		writeErr(w, 500, "could not save comment")
+		return
+	}
+	if byVisitor >= maxCommentsPerVisitor || total >= maxCommentsPerAnnouncement {
+		writeErr(w, 429, "comment limit reached for this announcement")
+		return
+	}
+	now := time.Now().Unix()
+	res, e := s.store.db.Exec(`INSERT INTO announcement_comments(announcement_id,visitor_key,body,created_at) VALUES(?,?,?,?)`, req.AnnouncementID, req.VisitorKey, body, now)
 	if e != nil {
-		writeErr(w, 500, e.Error())
+		log.Printf("updates: insert comment for announcement %d: %v", req.AnnouncementID, e)
+		writeErr(w, 500, "could not save comment")
 		return
 	}
 	cid, _ := res.LastInsertId()
-	writeJSON(w, 201, AnnouncementComment{ID: cid, Body: body, CreatedAt: time.Now().Unix()})
+	writeJSON(w, 201, AnnouncementComment{ID: cid, Body: body, CreatedAt: now})
 }
 
 var _ = sql.ErrNoRows

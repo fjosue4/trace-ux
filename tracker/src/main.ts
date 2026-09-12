@@ -8,6 +8,7 @@
  * localStorage.trace_ux_optout=1 disables tracking entirely.
  */
 import { record } from '@rrweb/record';
+import { mountUnifiedWidget, type WidgetCfg, type WidgetHandle } from './widget';
 import type { eventWithTime } from '@rrweb/types';
 
 type SurveyQuestionCfg = {
@@ -58,6 +59,8 @@ type TraceUXConfig = {
   logs?: LogCfg;
   feedback?: FeedbackCfg;
   updates?: { enabled: boolean; position?: string; appearance?: { theme?:'light'|'dark'; button_bg?:string; button_text?:string; button_label?:string; panel_bg?:string; panel_text?:string; accent?:string; action_bg?:string; action_text?:string; radius?:number; max_width?:number } };
+  /** Unified widget block: one launcher for announcements + feedback. */
+  widget?: WidgetCfg;
 };
 
 type PendingLog = {
@@ -390,19 +393,60 @@ interface StorageLike {
   function onRouteChange() {
     trackPage();
     try {
-      mountFeedbackIfConfigured();
+      mountWidgetIfConfigured();
     } catch {
       /* widget must never break the host page */
     }
   }
 
+  // Every way a page's URL can change without a document load. pushState and
+  // popstate alone miss two common cases: in-page anchors (`<a href="#x">`
+  // fires hashchange, not popstate) and routers that use replaceState for
+  // filters and tab state.
+  let lastTrackedURL = location.href;
+  function onURLMaybeChanged() {
+    if (location.href === lastTrackedURL) return; // same URL: not a navigation
+    lastTrackedURL = location.href;
+    onRouteChange();
+  }
+
   const origPushState = history.pushState.bind(history);
   history.pushState = (...args) => {
     const result = origPushState(...args);
-    onRouteChange();
+    onURLMaybeChanged();
     return result;
   };
-  window.addEventListener('popstate', onRouteChange);
+  const origReplaceState = history.replaceState.bind(history);
+  history.replaceState = (...args) => {
+    const result = origReplaceState(...args);
+    onURLMaybeChanged();
+    return result;
+  };
+  window.addEventListener('popstate', onURLMaybeChanged);
+  window.addEventListener('hashchange', onURLMaybeChanged);
+
+  // The visit's window geometry is not fixed at page load: people maximise,
+  // snap windows side by side, and open or dock devtools mid-visit. rrweb
+  // records each change as a ViewportResize so the replay can follow it, and
+  // the session's own metadata has to keep up too — otherwise the dashboard
+  // and the replay's aspect are stuck describing the window the visit opened
+  // in. Trailing-edge debounce so a drag-resize sends one update, not one per
+  // frame.
+  let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+  let lastSentViewport = `${window.innerWidth}x${window.innerHeight}`;
+  window.addEventListener(
+    'resize',
+    () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const now = `${window.innerWidth}x${window.innerHeight}`;
+        if (now === lastSentViewport) return;
+        lastSentViewport = now;
+        sendHello();
+      }, 400);
+    },
+    { passive: true },
+  );
 
   // ---- recording ----
   function startRecording() {
@@ -471,7 +515,7 @@ interface StorageLike {
     track(name, trackId) {
       sendCustom(name || 'event', trackId || '');
       try {
-        mountFeedbackIfConfigured(name || 'event');
+        mountWidgetIfConfigured(name || 'event');
       } catch {
         /* widget must never break the host page */
       }
@@ -508,7 +552,7 @@ interface StorageLike {
         const trackId = el.getAttribute('trace-ux-track-id') || '';
         sendCustom('click', trackId);
         try {
-          mountFeedbackIfConfigured(trackId);
+          mountWidgetIfConfigured(trackId);
         } catch {
           /* widget must never break the host page */
         }
@@ -517,265 +561,13 @@ interface StorageLike {
     { capture: true, passive: true },
   );
 
-  // ---- in-app feedback widget ----
-  // Enabled and fully configured per site from the TraceUX dashboard (served
-  // via /api/config/{key}). Rendered inside a shadow root so host-page CSS
-  // cannot break it, and its own neutral look works on any site.
-  function mountFeedbackWidget(fb: FeedbackCfg, autoOpen = false): { open: () => void } {
-    const side = fb.position === 'left' ? 'left:20px' : 'right:20px';
-    const origin = fb.position === 'left' ? 'bottom left' : 'bottom right';
-    const surveyId = fb.survey_id || 'default';
-    const ap = {
-      buttonBg: fb.appearance?.button_bg || '#1a1d29',
-      buttonText: fb.appearance?.button_text || '#ffffff',
-      buttonLabel: fb.appearance?.button_label || 'Feedback',
-      panelBg: fb.appearance?.panel_bg || '#ffffff',
-      panelText: fb.appearance?.panel_text || '#1a1d29',
-      accent: fb.appearance?.accent || '#f5a623',
-      primary: fb.appearance?.primary || '#1a1d29',
-      primaryText: fb.appearance?.primary_text || '#ffffff',
-      radius: fb.appearance?.radius ?? 14,
-      spacing: fb.appearance?.spacing ?? 16,
-    };
-    const questions: SurveyQuestionCfg[] =
-      fb.type === 'custom' && fb.questions && fb.questions.length
-        ? fb.questions
-        : [
-            {
-              id: 'rating',
-              label: fb.title || 'How was your experience?',
-              type: 'rating',
-              max: fb.type === 'nps' ? 10 : 5,
-            },
-            { id: 'comment', label: 'Anything else?', type: 'text', optional: true },
-          ];
+  let unifiedWidget: WidgetHandle | null = null;
 
-    const host = document.createElement('div');
-    host.id = 'trace-ux-feedback-root';
-    const shadow = host.attachShadow({ mode: 'open' });
-    shadow.innerHTML = `
-      <style>
-        :host {
-          all: initial;
-          --fb-btn-bg: ${ap.buttonBg}; --fb-btn-text: ${ap.buttonText};
-          --fb-panel-bg: ${ap.panelBg}; --fb-panel-text: ${ap.panelText};
-          --fb-accent: ${ap.accent}; --fb-primary: ${ap.primary}; --fb-primary-text: ${ap.primaryText};
-          --fb-radius: ${ap.radius}px; --fb-space: ${ap.spacing}px;
-        }
-        * { box-sizing: border-box; font-family: -apple-system, 'Segoe UI', system-ui, sans-serif; }
-        .btn {
-          position: fixed; bottom: var(--fb-space); ${side};
-          z-index: 2147483000; display: flex; align-items: center; gap: 8px;
-          padding: 10px 16px; border: 0; border-radius: 999px; cursor: pointer;
-          background: var(--fb-btn-bg); color: var(--fb-btn-text); font-size: 14px; font-weight: 600;
-          box-shadow: 0 6px 20px rgba(0,0,0,.25);
-          transition: transform .15s ease, box-shadow .15s ease;
-        }
-        .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 26px rgba(0,0,0,.3); }
-        .panel {
-          position: fixed; bottom: calc(var(--fb-space) + 56px); ${side};
-          z-index: 2147483000; width: 300px; max-height: 70vh; overflow-y: auto;
-          padding: var(--fb-space); background: var(--fb-panel-bg); color: var(--fb-panel-text);
-          border-radius: var(--fb-radius);
-          box-shadow: 0 12px 40px rgba(0,0,0,.3);
-          transform-origin: ${origin};
-        }
-        .panel.fb-in { animation: fb-in .2s cubic-bezier(.2,.7,.2,1); }
-        .panel.fb-out { animation: fb-out .13s ease-in forwards; }
-        @keyframes fb-in { from { opacity: 0; transform: translateY(10px) scale(.96); } }
-        @keyframes fb-out { to { opacity: 0; transform: translateY(8px) scale(.97); } }
-        .panel h3 { margin: 0 0 12px; font-size: 15px; }
-        .panel h3:empty { display: none; }
-        .q { margin-bottom: var(--fb-space); }
-        .q-label { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
-        .q.invalid .q-label { color: #d0453e; }
-        .q.invalid textarea, .q.invalid .choices { border-color: #d0453e; }
-        .stars { display: flex; gap: 6px; }
-        .stars button {
-          flex: 1; border: 0; background: none; cursor: pointer; font-size: 30px;
-          color: color-mix(in srgb, var(--fb-panel-text) 18%, transparent);
-          padding: 2px 0; line-height: 1;
-          transition: transform .12s ease, color .12s ease;
-        }
-        .stars button:hover { transform: scale(1.25); }
-        .stars button.on { color: var(--fb-accent); animation: fb-pop .18s ease; }
-        @keyframes fb-pop { 50% { transform: scale(1.35); } }
-        .nps { display: flex; gap: 4px; }
-        .nps button {
-          flex: 1; padding: 7px 0; border: 1px solid color-mix(in srgb, var(--fb-panel-text) 20%, transparent);
-          border-radius: 6px; background: transparent; cursor: pointer; font-size: 13px; color: var(--fb-panel-text);
-          transition: background-color .12s ease, color .12s ease, border-color .12s ease;
-        }
-        .nps button.on { background: var(--fb-primary); color: var(--fb-primary-text); border-color: var(--fb-primary); }
-        .choices { display: flex; gap: 6px; flex-wrap: wrap; border: 1px solid transparent; border-radius: 8px; }
-        .choices button {
-          padding: 7px 12px; border: 1px solid color-mix(in srgb, var(--fb-panel-text) 20%, transparent);
-          border-radius: 999px; background: transparent; cursor: pointer; font-size: 13px; color: var(--fb-panel-text);
-          transition: background-color .12s ease, color .12s ease, border-color .12s ease;
-        }
-        .choices button.on { background: var(--fb-primary); color: var(--fb-primary-text); border-color: var(--fb-primary); }
-        textarea {
-          width: 100%; height: 64px; resize: none;
-          border: 1px solid color-mix(in srgb, var(--fb-panel-text) 20%, transparent);
-          border-radius: calc(var(--fb-radius) / 2); padding: 8px;
-          font-size: 13px; font-family: inherit; background: transparent; color: var(--fb-panel-text);
-        }
-        textarea::placeholder { color: color-mix(in srgb, var(--fb-panel-text) 45%, transparent); }
-        .submit {
-          width: 100%; padding: 9px 0; border: 0; cursor: pointer;
-          border-radius: calc(var(--fb-radius) / 2);
-          background: var(--fb-primary); color: var(--fb-primary-text); font-size: 14px; font-weight: 600;
-          transition: transform .12s ease, filter .12s ease;
-        }
-        .submit:hover { filter: brightness(1.12); }
-        .submit:active { transform: scale(.98); }
-        .submit:disabled { opacity: .5; }
-        .thanks { text-align: center; padding: 8px 0 4px; font-size: 15px; font-weight: 600; }
-        [hidden] { display: none !important; }
-        @media (prefers-reduced-motion: reduce) {
-          .panel.fb-in, .panel.fb-out, .stars button.on { animation: none; }
-          .btn, .stars button, .nps button, .choices button, .submit { transition: none; }
-          .btn:hover { transform: none; }
-        }
-      </style>
-      <button class="btn" aria-expanded="false"></button>
-      <div class="panel" hidden>
-        <h3></h3>
-        <div class="qs"></div>
-        <button class="submit">Send feedback</button>
-      </div>
-    `;
-
-    const btn = shadow.querySelector('.btn') as HTMLButtonElement;
-    const panel = shadow.querySelector('.panel') as HTMLDivElement;
-    btn.textContent = ap.buttonLabel;
-    (shadow.querySelector('h3') as HTMLHeadingElement).textContent =
-      questions[0] && questions[0].type === 'rating' ? '' : fb.title || 'Feedback';
-    const qsRoot = shadow.querySelector('.qs') as HTMLDivElement;
-    const submit = shadow.querySelector('.submit') as HTMLButtonElement;
-
-    const answers = new Map<string, string>();
-    const wraps: Record<string, HTMLDivElement> = {};
-
-    questions.forEach((q) => {
-      const wrap = document.createElement('div');
-      wrap.className = 'q';
-      wraps[q.id] = wrap;
-      const label = document.createElement('div');
-      label.className = 'q-label';
-      label.textContent = q.label;
-      wrap.appendChild(label);
-
-      if (q.type === 'rating') {
-        const max = q.max === 10 ? 10 : 5;
-        const row = document.createElement('div');
-        row.className = max === 10 ? 'nps' : 'stars';
-        const btns: HTMLButtonElement[] = [];
-        const values: number[] = [];
-        for (let v = max === 10 ? 0 : 1; v <= max; v++) values.push(v);
-        values.forEach((v) => {
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.textContent = max === 10 ? String(v) : '★';
-          b.addEventListener('click', () => {
-            answers.set(q.id, String(v));
-            btns.forEach((other, i) =>
-              other.classList.toggle('on', max === 10 ? values[i] === v : values[i] <= v),
-            );
-          });
-          btns.push(b);
-          row.appendChild(b);
-        });
-        wrap.appendChild(row);
-      } else if (q.type === 'choice') {
-        const row = document.createElement('div');
-        row.className = 'choices';
-        (q.options || []).forEach((opt) => {
-          const b = document.createElement('button');
-          b.type = 'button';
-          b.textContent = opt;
-          b.addEventListener('click', () => {
-            answers.set(q.id, opt);
-            row.querySelectorAll('.choice').forEach((c) => c.classList.remove('on'));
-            b.classList.add('on');
-          });
-          row.appendChild(b);
-        });
-        wrap.appendChild(row);
-      } else {
-        const ta = document.createElement('textarea');
-        ta.placeholder = q.optional ? 'Optional' : '';
-        ta.addEventListener('input', () => {
-          if (ta.value.trim()) answers.set(q.id, ta.value.trim());
-          else answers.delete(q.id);
-        });
-        wrap.appendChild(ta);
-      }
-      qsRoot.appendChild(wrap);
-    });
-
-    let closeTimer: ReturnType<typeof setTimeout> | undefined;
-    function open() {
-      clearTimeout(closeTimer);
-      panel.classList.remove('fb-out');
-      panel.classList.add('fb-in');
-      setTimeout(() => panel.classList.remove('fb-in'), 220);
-      panel.hidden = false;
-      btn.setAttribute('aria-expanded', 'true');
-    }
-    function close() {
-      if (panel.hidden) return;
-      panel.classList.remove('fb-in');
-      panel.classList.add('fb-out');
-      closeTimer = setTimeout(() => {
-        panel.hidden = true;
-        panel.classList.remove('fb-out');
-      }, 130);
-      btn.setAttribute('aria-expanded', 'false');
-    }
-    btn.addEventListener('click', () => {
-      if (panel.hidden) open();
-      else close();
-    });
-    document.addEventListener('click', (e) => {
-      if (!panel.hidden && !(e.composedPath() as Node[]).includes(host)) close();
-    });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') close();
-    });
-
-    submit.addEventListener('click', () => {
-      // Required questions must have an answer.
-      const missing = questions.filter((q) => !q.optional && !answers.has(q.id));
-      if (missing.length) {
-        missing.forEach((q) => wraps[q.id]?.classList.add('invalid'));
-        return;
-      }
-      submit.disabled = true;
-      const answerList = questions
-        .filter((q) => answers.has(q.id))
-        .map((q) => ({ id: q.id, label: q.label, value: answers.get(q.id) as string }));
-      const ratingAnswer = questions.find((q) => q.type === 'rating' && answers.has(q.id));
-      const textAnswer = questions.find((q) => q.type === 'text' && answers.has(q.id));
-      window.TraceUX?.feedback({
-        rating: ratingAnswer ? Number(answers.get(ratingAnswer.id)) : 0,
-        comment: textAnswer ? (answers.get(textAnswer.id) as string) : '',
-        surveyId,
-        answers: answerList,
-      });
-      panel.innerHTML = '<div class="thanks">Thanks for your feedback!</div>';
-      setTimeout(close, 1800);
-    });
-
-    document.body.appendChild(host);
-    if (autoOpen) open();
-    return { open };
-  }
-
-  // Trigger configuration (from the dashboard): 'always' mounts immediately,
-  // 'page' waits for a matching URL pattern, 'action' waits for a matching
-  // tracked action (trace-ux-track-id click or window.TraceUX.track).
-  let feedbackWidget: { open: () => void } | null = null;
+  // ---- unified widget (announcements + feedback) ----
+  //
+  // One launcher, one panel. The panel shows a tab strip only when the site
+  // has both sections switched on; with just one enabled it opens straight
+  // into that section. See widget.ts.
   function matchesPages(patterns: string[]): boolean {
     const path = location.pathname;
     const href = location.href;
@@ -784,73 +576,61 @@ interface StorageLike {
       return re.test(path) || re.test(href);
     });
   }
-  function mountFeedbackIfConfigured(triggerAction?: string) {
-    if (feedbackWidget) {
-      if (triggerAction) feedbackWidget.open();
-      return;
-    }
-    if (!cfg.feedback || !cfg.feedback.enabled) return;
+
+  // The feedback trigger still decides whether the Feedback section is offered:
+  // 'always' everywhere, 'page' on matching URLs, 'action' only once a tracked
+  // action fires (which then opens the panel on that section).
+  function feedbackAvailable(triggerAction?: string): boolean {
+    if (!cfg.feedback?.enabled) return false;
     const trigger = cfg.feedback.trigger;
     const mode = trigger?.mode || 'always';
-    if (mode === 'action') {
-      if (triggerAction && (trigger?.actions || []).includes(triggerAction)) {
-        feedbackWidget = mountFeedbackWidget(cfg.feedback, true);
-      }
+    if (mode === 'action') return !!triggerAction && (trigger?.actions || []).includes(triggerAction);
+    if (mode === 'page') return matchesPages(trigger?.pages || []);
+    return true;
+  }
+
+  function mountWidgetIfConfigured(triggerAction?: string) {
+    const widgetCfg = cfg.widget;
+    if (!widgetCfg) return;
+
+    if (unifiedWidget) {
+      // Already mounted: a tracked action just needs to open the right section.
+      if (triggerAction && feedbackAvailable(triggerAction)) unifiedWidget.open('feedback');
       return;
     }
-    if (mode === 'page' && !matchesPages(trigger?.pages || [])) return;
-    feedbackWidget = mountFeedbackWidget(cfg.feedback, false);
-  }
 
-  try {
-    mountFeedbackIfConfigured();
-  } catch {
-    /* widget must never break the host page */
-  }
+    const feedbackNow = feedbackAvailable(triggerAction);
+    const updatesNow = !!widgetCfg.updates_enabled;
+    if (!feedbackNow && !updatesNow) return;
 
-  // Announcements are intentionally isolated from recording. A failed feed
-  // request never affects feedback or the host page.
-  async function mountAnnouncementsWidget() {
-    if (!cfg.updates?.enabled) return;
-    const announcementSiteKey = siteKey as string;
-    let visitor = '';
     try {
-      const key = `trace_ux_visitor_${announcementSiteKey}`;
-      visitor = localStorage.getItem(key) || newId();
-      if (visitor) localStorage.setItem(key, visitor);
-    } catch { visitor = newId(); }
-    const res = await fetch(`${origin}/api/updates/${encodeURIComponent(announcementSiteKey)}?visitor=${encodeURIComponent(visitor)}`);
-    if (!res.ok) return;
-    const updates = await res.json() as Array<{id:number;title:string;summary:string;body:string;release_label:string;link_url:string;published_at:number;reactions:number;comments:number;liked?:boolean;read?:boolean}>;
-    const host = document.createElement('div'); host.id = 'trace-ux-announcements-root'; const shadow = host.attachShadow({mode:'open'});
-    const left = cfg.updates.position === 'left'; const unread = updates.filter(u=>!u.read).length; let unreadCount = unread;
-    const darkTheme = cfg.updates.appearance?.theme === 'dark';
-    const accent = cfg.updates.appearance?.accent || '#2f7d4a';
-    const ua = { buttonBg:accent, buttonText:'#ffffff', buttonLabel:cfg.updates.appearance?.button_label||'Announcements', panelBg:darkTheme?'#121b16':'#ffffff', panelText:darkTheme?'#eef5f0':'#142018', accent, actionBg:accent, actionText:'#ffffff', radius:cfg.updates.appearance?.radius||18, maxWidth:cfg.updates.appearance?.max_width||440 };
-    shadow.innerHTML = `<style>
-      :host{all:initial}*{box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.au-btn{position:fixed;z-index:2147483000;bottom:${cfg.feedback?.enabled?'68px':'16px'};${left?'left':'right'}:20px;border:0;border-radius:999px;padding:11px 16px;background:#142019;color:#fff;font-weight:650;font-size:14px;box-shadow:0 8px 28px #0004;cursor:pointer}.au-dot{display:inline-grid;place-items:center;margin-left:7px;min-width:18px;height:18px;padding:0 5px;border-radius:10px;background:#66c983;color:#08140c;font-size:11px}.au-panel{position:fixed;z-index:2147483000;bottom:${cfg.feedback?.enabled?'120px':'68px'};${left?'left':'right'}:20px;width:clamp(300px,34vw,440px);max-width:calc(100vw - 24px);max-height:min(700px,78vh);overflow:auto;background:#fff;color:#142018;border:1px solid #14201816;border-radius:18px;box-shadow:0 24px 60px #0004}.au-head{position:sticky;top:0;background:#fff;padding:18px 20px 14px;border-bottom:1px solid #14201816;display:flex;justify-content:space-between;align-items:center}.au-head strong{font-size:17px}.au-close{border:0;background:#f1f4ef;border-radius:50%;width:30px;height:30px;cursor:pointer}.au-list{padding:8px}.au-item{width:100%;text-align:left;border:0;border-bottom:1px solid #14201812;background:#fff;padding:16px 14px;cursor:pointer}.au-label{color:#2f7d4a;font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.08em}.au-item h3,.au-detail h2{margin:6px 0;font-size:16px}.au-item p,.au-detail p{margin:0;color:#59665d;font-size:13px;line-height:1.55}.au-meta{display:flex;gap:12px;color:#7b867e;font-size:11px;margin-top:10px}.au-detail{padding:20px}.au-back,.au-like,.au-send{border:0;border-radius:9px;padding:8px 11px;cursor:pointer;font-weight:650}.au-back{background:#f1f4ef}.au-like,.au-send{background:#142019;color:#fff}.au-body{white-space:pre-wrap;margin:16px 0!important;color:#34423a!important}.au-comment{display:flex;gap:7px;margin-top:18px}.au-comment input{flex:1;min-width:0;border:1px solid #14201826;border-radius:9px;padding:9px}.au-empty{padding:35px 20px;text-align:center;color:#6b786f}[hidden]{display:none!important}@media(max-width:560px){.au-panel{left:12px!important;right:12px!important;bottom:12px;width:auto;max-width:none;max-height:88vh;border-radius:20px}.au-btn{bottom:16px}}@media(prefers-reduced-motion:no-preference){.au-panel{animation:au-in .18s ease-out}@keyframes au-in{from{opacity:0;transform:translateY(8px)}}}</style><button class="au-btn" aria-expanded="${unread > 0}">Announcements${unread?`<span class="au-dot">${unread}</span>`:''}</button><section class="au-panel" ${unread ? '' : 'hidden'}><header class="au-head"><strong>Announcements</strong><button class="au-close" aria-label="Close">×</button></header><div class="au-content"></div></section>`;
-    const polish = document.createElement('style');
-    polish.textContent = `.au-btn{background:${ua.buttonBg}!important;color:${ua.buttonText}!important}.au-panel,.au-head,.au-item{background:${ua.panelBg}!important;color:${ua.panelText}!important}.au-panel{width:clamp(300px,34vw,${ua.maxWidth}px)!important;border-radius:${ua.radius}px!important}.au-label{color:${ua.accent}!important}.au-like,.au-send{background:${ua.actionBg}!important;color:${ua.actionText}!important}.au-like{display:inline-flex!important;align-items:center!important;gap:5px!important}.au-close{display:grid!important;place-items:center!important;background:color-mix(in srgb,${ua.panelText} 8%,${ua.panelBg})!important;color:${ua.panelText}!important;border:1px solid color-mix(in srgb,${ua.panelText} 12%,transparent)!important}.au-close svg{display:block}.au-back{background:color-mix(in srgb,${ua.panelText} 8%,${ua.panelBg})!important;color:${ua.panelText}!important;border:1px solid color-mix(in srgb,${ua.panelText} 14%,transparent)!important;margin-bottom:4px}.au-back:hover{filter:brightness(.96)}.au-thanks{width:100%;padding:11px 13px;border-radius:9px;background:#e9f5ed;color:#24663b;font-size:13px;font-weight:650;text-align:center}`;
-    polish.textContent += `.au-panel{bottom:${cfg.feedback?.enabled?'68px':'16px'}!important;transform-origin:bottom ${left?'left':'right'};animation:none!important}.au-panel.au-enter{animation:au-expand .22s cubic-bezier(.2,.8,.2,1)!important}.au-panel.au-leave{animation:au-collapse .16s ease-in forwards!important}@keyframes au-expand{from{opacity:0;transform:translateY(8px) scale(.88)}to{opacity:1;transform:none}}@keyframes au-collapse{to{opacity:0;transform:translateY(8px) scale(.88)}}@media(prefers-reduced-motion:reduce){.au-panel.au-enter,.au-panel.au-leave{animation:none!important}}`;
-    shadow.appendChild(polish);
-    const panel=shadow.querySelector('.au-panel') as HTMLElement, content=shadow.querySelector('.au-content') as HTMLElement, launch=shadow.querySelector('.au-btn') as HTMLButtonElement;
-    if (launch.firstChild) launch.firstChild.textContent = ua.buttonLabel;
-    launch.hidden = !panel.hidden;
-    const closeButton = shadow.querySelector('.au-close') as HTMLButtonElement;
-    closeButton.innerHTML = '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
-    const heartSVG = '<svg aria-hidden="true" width="14" height="14" viewBox="0 0 1024 1024"><path fill="currentColor" d="M923 283.6a260 260 0 0 0-56.9-82.8 264.4 264.4 0 0 0-84-55.5A265.3 265.3 0 0 0 679.7 125c-49.3 0-97.4 13.5-139.2 39q-15 9.15-28.5 20.1-13.5-10.95-28.5-20.1c-41.8-25.5-89.9-39-139.2-39-35.5 0-69.9 6.8-102.4 20.3-31.4 13-59.7 31.7-84 55.5a258.4 258.4 0 0 0-56.9 82.8c-13.9 32.3-21 66.6-21 101.9 0 33.3 6.8 68 20.3 103.3 11.3 29.5 27.5 60.1 48.2 91 32.8 48.9 77.9 99.9 133.9 151.6 92.8 85.7 184.7 144.9 188.6 147.3l23.7 15.2c10.5 6.7 24 6.7 34.5 0l23.7-15.2c3.9-2.5 95.7-61.6 188.6-147.3 56-51.7 101.1-102.7 133.9-151.6 20.7-30.9 37-61.5 48.2-91 13.5-35.3 20.3-70 20.3-103.3.1-35.3-7-68.6-20.9-101.9M512 814.8S156 586.7 156 385.5C156 283.6 240.3 201 344.3 201c73.1 0 136.5 40.8 167.7 100.4C543.2 241.8 606.6 201 679.7 201c104 0 188.3 82.6 188.3 184.5 0 201.2-356 429.3-356 429.3"/></svg>';
-    new MutationObserver(()=>{const like=content.querySelector('.au-like');if(!like)return;like.childNodes.forEach(node=>{if(node.nodeType===Node.TEXT_NODE&&node.textContent){const clean=node.textContent.replace(/^\s*[♡♥]\s*/, ' ');if(clean!==node.textContent)node.textContent=clean}});if(!like.querySelector('svg'))like.insertAdjacentHTML('afterbegin',heartSVG)}).observe(content,{childList:true,subtree:true});
-    const post=(id:number,path:string,body:object)=>fetch(`${origin}/api/updates/${encodeURIComponent(announcementSiteKey)}/${id}/${path}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({visitor_key:visitor,...body})});
-    function feed(){content.innerHTML='';if(!updates.length){content.innerHTML='<div class="au-empty">No announcements yet.</div>';return}updates.forEach(u=>{const b=document.createElement('button');b.className='au-item';b.innerHTML=`<span class="au-label">${escapeHTML(u.release_label||'Update')}</span><h3>${escapeHTML(u.title)}</h3><p>${escapeHTML(u.summary||u.body.slice(0,140))}</p><span class="au-meta">${u.reactions} likes · ${u.comments} comments</span>`;b.onclick=()=>openDetail(u);content.appendChild(b)})}
-    function openDetail(u:(typeof updates)[number]){if(!u.read){unreadCount=Math.max(0,unreadCount-1);const dot=launch.querySelector('.au-dot');if(dot){if(unreadCount)dot.textContent=String(unreadCount);else dot.remove()}}detail(u)}
-    function detail(u:(typeof updates)[number]){u.read=true;void post(u.id,'read',{});content.innerHTML=`<div class="au-detail"><button class="au-back">← Back</button><div class="au-label">${escapeHTML(u.release_label||'Update')}</div><h2>${escapeHTML(u.title)}</h2><p class="au-body">${escapeHTML(u.body||u.summary)}</p>${u.link_url?`<p><a href="${escapeHTML(u.link_url)}" target="_blank" rel="noopener">Learn more ↗</a></p>`:''}<button class="au-like">${u.liked?'♥ Liked':'♡ Like'} · ${u.reactions}</button><form class="au-comment"><input maxlength="1000" placeholder="Leave a comment" aria-label="Comment"><button class="au-send">Send</button></form></div>`;(content.querySelector('.au-back') as HTMLButtonElement).onclick=feed;const like=content.querySelector('.au-like') as HTMLButtonElement;like.onclick=()=>{u.liked=!u.liked;u.reactions+=u.liked?1:-1;like.textContent=`${u.liked?'♥ Liked':'♡ Like'} · ${u.reactions}`;void post(u.id,'reaction',{liked:u.liked})};const form=content.querySelector('form') as HTMLFormElement;form.onsubmit=async e=>{e.preventDefault();const input=form.querySelector('input') as HTMLInputElement,send=form.querySelector('button') as HTMLButtonElement,body=input.value.trim();if(!body)return;input.disabled=true;send.disabled=true;const response=await post(u.id,'comments',{body}).catch(()=>null);if(!response?.ok){input.disabled=false;send.disabled=false;return}u.comments+=1;form.innerHTML='<div class="au-thanks" role="status">Thanks for your comment.</div>';setTimeout(()=>form.remove(),5000)}}
-    function escapeHTML(v:string){const d=document.createElement('div');d.textContent=v;return d.innerHTML}
-    function openPanel(){panel.classList.remove('au-leave');panel.hidden=false;panel.classList.add('au-enter');launch.hidden=true;launch.setAttribute('aria-expanded','true');setTimeout(()=>panel.classList.remove('au-enter'),240)}
-    function closePanel(){panel.classList.remove('au-enter');panel.classList.add('au-leave');setTimeout(()=>{panel.hidden=true;panel.classList.remove('au-leave');launch.hidden=false;launch.setAttribute('aria-expanded','false')},170)}
-    feed();if(!panel.hidden){panel.classList.add('au-enter');setTimeout(()=>panel.classList.remove('au-enter'),240)}launch.onclick=openPanel;closeButton.onclick=closePanel;document.body.appendChild(host);
+      unifiedWidget = mountUnifiedWidget({
+        origin,
+        siteKey: siteKey as string,
+        config: { ...widgetCfg, feedback_enabled: feedbackNow, enabled: true },
+        survey: {
+          title: cfg.feedback?.title,
+          type: cfg.feedback?.type,
+          survey_id: cfg.feedback?.survey_id,
+          questions: cfg.feedback?.questions,
+        },
+        submitFeedback: (input) => sendFeedback(input),
+        newId,
+      });
+    } catch {
+      /* the widget must never break the host page */
+      unifiedWidget = null;
+      return;
+    }
+    // An action-triggered survey opens immediately, as it did before the merge.
+    if (triggerAction && feedbackNow) unifiedWidget?.open('feedback');
   }
-  void mountAnnouncementsWidget().catch(() => {});
 
+  // ---- bootstrap ----
+  //
+  // Recording comes first and the widget second, deliberately: capture is the
+  // product's job, so nothing about the optional widget may sit between the
+  // page loading and the recorder starting.
   sendHello();
   store.set('trace_ux_sid', sessionId);
   store.set('trace_ux_sid_ts', String(startedAt));
@@ -859,6 +639,12 @@ interface StorageLike {
   startRecording();
   startLogTracking();
   trackPage();
+
+  try {
+    mountWidgetIfConfigured();
+  } catch {
+    /* widget must never break the host page or stop the recording */
+  }
 
   // ---- session lifecycle ----
 
