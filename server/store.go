@@ -575,6 +575,13 @@ func (s *Store) ListSessions(f SessionFilter) ([]Session, error) {
 			(SELECT 1 FROM pages pg WHERE pg.session_id = s.id AND pg.url LIKE ?))`
 		args = append(args, like, like, like)
 	}
+	if f.Action != "" {
+		// Action: the session recorded a custom event with a matching name.
+		like := "%" + f.Action + "%"
+		query += ` AND EXISTS
+			(SELECT 1 FROM custom_events ce WHERE ce.session_id = s.id AND ce.name LIKE ?)`
+		args = append(args, like)
+	}
 	if f.Identity != "" {
 		// Visitor identity: matches any of the three custom IDs.
 		like := "%" + f.Identity + "%"
@@ -615,6 +622,7 @@ type SessionFilter struct {
 	Device        string
 	Country       string
 	URL           string
+	Action        string // matches a custom event name recorded in the session
 	Identity      string // matches user_id / client_id / remote_id
 	MinDurationMs int64
 	Before        int64 // pagination cursor: started_at of the last row shown
