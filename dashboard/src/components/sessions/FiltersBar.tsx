@@ -90,6 +90,13 @@ export default function FiltersBar({ filter, onChange, extra, countries = [] }: 
         value={filter.url || ''}
         onChange={(e) => onChange({ url: e.target.value || undefined })}
       />
+
+      <Input
+        placeholder="Filter by action…"
+        title="Matches the name of any custom event (action) recorded in the session"
+        value={filter.action || ''}
+        onChange={(e) => onChange({ action: e.target.value || undefined })}
+      />
     </motion.div>
   );
 }
