@@ -254,6 +254,44 @@ var migrations = []string{
 	ALTER TABLE performance_keys_v11 RENAME TO performance_keys;
 	CREATE INDEX IF NOT EXISTS idx_performance_keys_site ON performance_keys(site_id);
 	`,
+	// v12: site-scoped announcements and anonymous visitor engagement.
+	`
+	CREATE TABLE IF NOT EXISTS announcements (
+		id INTEGER PRIMARY KEY,
+		site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+		title TEXT NOT NULL,
+		summary TEXT NOT NULL DEFAULT '',
+		body TEXT NOT NULL DEFAULT '',
+		release_label TEXT NOT NULL DEFAULT '',
+		link_url TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published','archived')),
+		published_at INTEGER NOT NULL DEFAULT 0,
+		created_at INTEGER NOT NULL,
+		updated_at INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_announcements_site_status ON announcements(site_id, status, published_at DESC);
+	CREATE TABLE IF NOT EXISTS announcement_reactions (
+		announcement_id INTEGER NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
+		visitor_key TEXT NOT NULL,
+		created_at INTEGER NOT NULL,
+		PRIMARY KEY (announcement_id, visitor_key)
+	);
+	CREATE TABLE IF NOT EXISTS announcement_comments (
+		id INTEGER PRIMARY KEY,
+		announcement_id INTEGER NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
+		visitor_key TEXT NOT NULL,
+		body TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'visible' CHECK (status IN ('visible','hidden')),
+		created_at INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_announcement_comments ON announcement_comments(announcement_id, created_at DESC);
+	CREATE TABLE IF NOT EXISTS announcement_reads (
+		announcement_id INTEGER NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
+		visitor_key TEXT NOT NULL,
+		read_at INTEGER NOT NULL,
+		PRIMARY KEY (announcement_id, visitor_key)
+	);
+	`,
 }
 
 func (s *Store) migrate() error {

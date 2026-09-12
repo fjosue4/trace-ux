@@ -36,6 +36,12 @@ export type SiteAppearance = {
   radius?: number;
   spacing?: number;
 };
+export type AnnouncementAppearance = {
+  theme?: 'light' | 'dark';
+  button_bg?: string; button_text?: string; button_label?: string; panel_bg?: string;
+  panel_text?: string; accent?: string; action_bg?: string; action_text?: string;
+  radius?: number; max_width?: number;
+};
 
 // When does the feedback widget show up for a visitor?
 export type FeedbackTrigger = {
@@ -45,6 +51,9 @@ export type FeedbackTrigger = {
 };
 
 export type SiteSettings = {
+  updates_enabled?: boolean;
+  updates_position?: string;
+  updates_appearance?: AnnouncementAppearance;
   feedback_enabled: boolean;
   feedback_position: string; // right | left
   survey_id: string;
@@ -173,6 +182,13 @@ export type FeedbackSummary = {
   survey_id: string;
   count: number;
   average: number;
+};
+
+export type AnnouncementStatus = 'draft' | 'published' | 'archived';
+export type Announcement = {
+  id: number; site_id: number; site_name?: string; title: string; summary: string; body: string;
+  release_label: string; link_url: string; status: AnnouncementStatus; published_at: number;
+  created_at: number; updated_at: number; reactions: number; comments: number; reads: number;
 };
 
 export type Log = {
@@ -470,6 +486,12 @@ export const api = {
   },
   deleteFeedback: (id: number) =>
     request<{ ok: boolean }>(`/api/feedback/${id}`, { method: 'DELETE' }),
+  listAnnouncements: (siteId: number | null) => request<Announcement[]>(`/api/announcements${siteId ? `?site_id=${siteId}` : ''}`),
+  createAnnouncement: (input: Partial<Announcement> & { site_id: number; title: string }) => request<Announcement>('/api/announcements', { method: 'POST', body: JSON.stringify(input) }),
+  updateAnnouncement: (id: number, input: Partial<Announcement>) => request<{ ok: boolean }>(`/api/announcements/${id}`, { method: 'PATCH', body: JSON.stringify(input) }),
+  publishAnnouncement: (id: number) => request<{ ok: boolean }>(`/api/announcements/${id}/publish`, { method: 'POST' }),
+  archiveAnnouncement: (id: number) => request<{ ok: boolean }>(`/api/announcements/${id}/archive`, { method: 'POST' }),
+  deleteAnnouncement: (id: number) => request<{ ok: boolean }>(`/api/announcements/${id}`, { method: 'DELETE' }),
 };
 
 export type SessionFilter = {

@@ -9,13 +9,14 @@ type Props = {
   open: boolean;
   onClose: () => void;
   title?: string;
+  className?: string;
   children: ReactNode;
   footer?: ReactNode;
 };
 
 // Dialog rendered in a portal above everything; closes on Escape or backdrop
 // click and locks page scroll while open.
-export default function Modal({ open, onClose, title, children, footer }: Props) {
+export default function Modal({ open, onClose, title, className = '', children, footer }: Props) {
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -44,7 +45,7 @@ export default function Modal({ open, onClose, title, children, footer }: Props)
           }}
         >
           <motion.div
-            className="modal"
+            className={`modal ${className}`.trim()}
             role="dialog"
             aria-modal="true"
             aria-label={title}

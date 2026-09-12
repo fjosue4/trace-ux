@@ -35,6 +35,20 @@ type SiteAppearance struct {
 	Spacing     int    `json:"spacing,omitempty"`
 }
 
+type AnnouncementAppearance struct {
+	Theme       string `json:"theme,omitempty"`
+	ButtonBg    string `json:"button_bg,omitempty"`
+	ButtonText  string `json:"button_text,omitempty"`
+	ButtonLabel string `json:"button_label,omitempty"`
+	PanelBg     string `json:"panel_bg,omitempty"`
+	PanelText   string `json:"panel_text,omitempty"`
+	Accent      string `json:"accent,omitempty"`
+	ActionBg    string `json:"action_bg,omitempty"`
+	ActionText  string `json:"action_text,omitempty"`
+	Radius      int    `json:"radius,omitempty"`
+	MaxWidth    int    `json:"max_width,omitempty"`
+}
+
 func DefaultSiteAppearance() *SiteAppearance {
 	return &SiteAppearance{
 		ButtonBg:    "#1a1d29",
@@ -58,23 +72,28 @@ type FeedbackTrigger struct {
 }
 
 type SiteSettings struct {
-	FeedbackEnabled       bool             `json:"feedback_enabled"`
-	FeedbackPosition      string           `json:"feedback_position"` // right | left
-	SurveyID              string           `json:"survey_id"`
-	SurveyTitle           string           `json:"survey_title"`
-	SurveyType            string           `json:"survey_type"` // stars | nps | custom
-	Questions             []SurveyQuestion `json:"questions,omitempty"`
-	Appearance            *SiteAppearance  `json:"appearance,omitempty"`
-	MaxConcurrentSessions int              `json:"max_concurrent_sessions,omitempty"` // 0 = unlimited
-	RetentionSessionsDays int              `json:"retention_sessions_days,omitempty"` // 0 = server default
-	RetentionFeedbackDays int              `json:"retention_feedback_days,omitempty"` // 0 = server default
-	AllowDeleteRecordings bool             `json:"allow_delete_recordings"`
-	FeedbackTrigger       *FeedbackTrigger `json:"feedback_trigger,omitempty"`
-	Logs                  LogSettings      `json:"logs"`
+	UpdatesEnabled        bool                    `json:"updates_enabled"`
+	UpdatesPosition       string                  `json:"updates_position"`
+	UpdatesAppearance     *AnnouncementAppearance `json:"updates_appearance,omitempty"`
+	FeedbackEnabled       bool                    `json:"feedback_enabled"`
+	FeedbackPosition      string                  `json:"feedback_position"` // right | left
+	SurveyID              string                  `json:"survey_id"`
+	SurveyTitle           string                  `json:"survey_title"`
+	SurveyType            string                  `json:"survey_type"` // stars | nps | custom
+	Questions             []SurveyQuestion        `json:"questions,omitempty"`
+	Appearance            *SiteAppearance         `json:"appearance,omitempty"`
+	MaxConcurrentSessions int                     `json:"max_concurrent_sessions,omitempty"` // 0 = unlimited
+	RetentionSessionsDays int                     `json:"retention_sessions_days,omitempty"` // 0 = server default
+	RetentionFeedbackDays int                     `json:"retention_feedback_days,omitempty"` // 0 = server default
+	AllowDeleteRecordings bool                    `json:"allow_delete_recordings"`
+	FeedbackTrigger       *FeedbackTrigger        `json:"feedback_trigger,omitempty"`
+	Logs                  LogSettings             `json:"logs"`
 }
 
 func DefaultSiteSettings() SiteSettings {
 	return SiteSettings{
+		UpdatesEnabled:        true,
+		UpdatesPosition:       "right",
 		FeedbackEnabled:       true,
 		FeedbackPosition:      "right",
 		SurveyID:              "default",
@@ -95,6 +114,9 @@ func ParseSiteSettings(configText string) SiteSettings {
 	}
 	if s.FeedbackPosition == "" {
 		s.FeedbackPosition = "right"
+	}
+	if s.UpdatesPosition == "" {
+		s.UpdatesPosition = "right"
 	}
 	if s.SurveyID == "" {
 		s.SurveyID = "default"
@@ -119,6 +141,22 @@ func ParseSiteSettings(configText string) SiteSettings {
 
 // ValidateSiteSettings guards the values the dashboard PUTs.
 func ValidateSiteSettings(s SiteSettings) error {
+	if s.UpdatesPosition != "right" && s.UpdatesPosition != "left" {
+		return fmt.Errorf("updates_position must be right or left")
+	}
+	if a := s.UpdatesAppearance; a != nil {
+		if a.Theme != "" && a.Theme != "light" && a.Theme != "dark" {
+			return fmt.Errorf("announcement theme must be light or dark")
+		}
+		if len(a.ButtonLabel) > 40 || (a.Radius != 0 && (a.Radius < 6 || a.Radius > 40)) || (a.MaxWidth != 0 && (a.MaxWidth < 300 || a.MaxWidth > 560)) {
+			return fmt.Errorf("invalid announcements appearance")
+		}
+		for _, c := range []string{a.ButtonBg, a.ButtonText, a.PanelBg, a.PanelText, a.Accent, a.ActionBg, a.ActionText} {
+			if c != "" && !((len(c) == 4 || len(c) == 7) && c[0] == '#') {
+				return fmt.Errorf("announcement colors must be hex")
+			}
+		}
+	}
 	if s.FeedbackPosition != "right" && s.FeedbackPosition != "left" {
 		return fmt.Errorf("feedback_position must be right or left")
 	}

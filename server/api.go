@@ -205,12 +205,23 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/feedback", s.auth(s.handleListFeedback))
 	mux.HandleFunc("GET /api/feedback/summary", s.auth(s.handleFeedbackSummary))
 	mux.HandleFunc("DELETE /api/feedback/{id}", s.auth(s.requireAdmin(s.handleDeleteFeedback)))
+	mux.HandleFunc("GET /api/announcements", s.auth(s.handleListAnnouncements))
+	mux.HandleFunc("POST /api/announcements", s.auth(s.requireAdmin(s.handleCreateAnnouncement)))
+	mux.HandleFunc("PATCH /api/announcements/{id}", s.auth(s.requireAdmin(s.handleUpdateAnnouncement)))
+	mux.HandleFunc("DELETE /api/announcements/{id}", s.auth(s.requireAdmin(s.handleDeleteAnnouncement)))
+	mux.HandleFunc("POST /api/announcements/{id}/publish", s.auth(s.requireAdmin(s.handlePublishAnnouncement)))
+	mux.HandleFunc("POST /api/announcements/{id}/archive", s.auth(s.requireAdmin(s.handleArchiveAnnouncement)))
+	mux.HandleFunc("DELETE /api/announcements/comments/{id}", s.auth(s.requireAdmin(s.handleDeleteAnnouncementComment)))
 
 	// Public tracker-facing endpoints. Cross-origin access is granted per
 	// site via the URL the admin registers (see cors below).
 	mux.HandleFunc("GET /api/config/{siteKey}", s.handleConfig)
 	mux.HandleFunc("POST /api/ingest/{siteKey}", s.handleIngest)
 	mux.HandleFunc("POST /api/demo/claim/{siteKey}", s.handleDemoClaim)
+	mux.HandleFunc("GET /api/updates/{siteKey}", s.handlePublicAnnouncements)
+	mux.HandleFunc("POST /api/updates/{siteKey}/{id}/reaction", s.handleAnnouncementReaction)
+	mux.HandleFunc("POST /api/updates/{siteKey}/{id}/comments", s.handleAnnouncementComment)
+	mux.HandleFunc("POST /api/updates/{siteKey}/{id}/read", s.handleAnnouncementRead)
 	mux.HandleFunc("GET /api/demo/replay/{token}", s.handleDemoReplay)
 	mux.HandleFunc("GET /api/demo/replay/{token}/events", s.handleDemoReplayEvents)
 
@@ -227,7 +238,7 @@ func (s *Server) routes() http.Handler {
 // CORS to that origin. The dashboard API is same-origin and needs no grant.
 func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		isPublic := strings.HasPrefix(r.URL.Path, "/api/ingest/") || strings.HasPrefix(r.URL.Path, "/api/config/") || strings.HasPrefix(r.URL.Path, "/api/demo/claim/")
+		isPublic := strings.HasPrefix(r.URL.Path, "/api/ingest/") || strings.HasPrefix(r.URL.Path, "/api/config/") || strings.HasPrefix(r.URL.Path, "/api/demo/claim/") || strings.HasPrefix(r.URL.Path, "/api/updates/")
 		if !isPublic {
 			next.ServeHTTP(w, r)
 			return
@@ -273,6 +284,8 @@ func (s *Server) originAllowed(path, origin string) bool {
 	} else if after, ok := strings.CutPrefix(path, "/api/ingest/"); ok {
 		key, _, _ = strings.Cut(after, "/")
 	} else if after, ok := strings.CutPrefix(path, "/api/demo/claim/"); ok {
+		key, _, _ = strings.Cut(after, "/")
+	} else if after, ok := strings.CutPrefix(path, "/api/updates/"); ok {
 		key, _, _ = strings.Cut(after, "/")
 	}
 	if key == "" {
@@ -712,6 +725,22 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "unknown site key")
 		return
 	}
+	feedbackAppearance := site.Settings.Appearance
+	if a := site.Settings.UpdatesAppearance; a != nil {
+		panelBg, panelText := "#ffffff", "#142018"
+		if a.Theme == "dark" {
+			panelBg, panelText = "#121b16", "#eef5f0"
+		}
+		accent := a.Accent
+		if accent == "" {
+			accent = "#2f7d4a"
+		}
+		radius := a.Radius
+		if radius == 0 {
+			radius = 18
+		}
+		feedbackAppearance = &SiteAppearance{ButtonBg: accent, ButtonText: "#ffffff", ButtonLabel: "Feedback", PanelBg: panelBg, PanelText: panelText, Accent: accent, Primary: accent, PrimaryText: "#ffffff", Radius: radius, Spacing: 16}
+	}
 	// The dashboard owns these settings per site; the tracker consumes them.
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sample_rate":          1.0,
@@ -731,8 +760,13 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 			"title":      site.Settings.SurveyTitle,
 			"type":       site.Settings.SurveyType,
 			"questions":  site.Settings.Questions,
-			"appearance": site.Settings.Appearance,
+			"appearance": feedbackAppearance,
 			"trigger":    site.Settings.FeedbackTrigger,
+		},
+		"updates": map[string]any{
+			"enabled":    site.Settings.UpdatesEnabled,
+			"position":   site.Settings.UpdatesPosition,
+			"appearance": site.Settings.UpdatesAppearance,
 		},
 	})
 }

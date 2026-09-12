@@ -23,7 +23,8 @@ export type IconName =
   | 'star'
   | 'message'
   | 'send'
-  | 'activity';
+  | 'activity'
+  | 'megaphone';
 
 // Hand-drawn 24px stroke icon set (Feather-style) so the app ships zero icon
 // dependencies and every icon inherits the current color.
@@ -119,6 +120,7 @@ const GLYPHS: Record<IconName, ReactNode> = {
   message: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />,
   send: <path d="m22 2-11 11M22 2 15 22l-4-9-9-4 20-7z" />,
   activity: <path d="M3 12h4l2.2-7 4.2 14 2.2-7H21" />,
+  megaphone: <><path d="M3 11v2a2 2 0 0 0 2 2h3l9 4V5L8 9H5a2 2 0 0 0-2 2z"/><path d="M8 15l1 5h3"/><path d="M20 9v6"/></>,
 };
 
 type Props = { name: IconName; size?: number };

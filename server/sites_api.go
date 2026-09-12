@@ -119,6 +119,8 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 		return nil
 	}
 	for key, target := range map[string]any{
+		"updates_enabled":         &settings.UpdatesEnabled,
+		"updates_position":        &settings.UpdatesPosition,
 		"feedback_enabled":        &settings.FeedbackEnabled,
 		"feedback_position":       &settings.FeedbackPosition,
 		"survey_id":               &settings.SurveyID,
@@ -135,6 +137,14 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
+	}
+	if v, ok := raw["updates_appearance"]; ok {
+		var a AnnouncementAppearance
+		if err := json.Unmarshal(v, &a); err != nil {
+			writeErr(w, http.StatusBadRequest, "invalid updates_appearance")
+			return
+		}
+		settings.UpdatesAppearance = &a
 	}
 	if v, ok := raw["appearance"]; ok {
 		var a SiteAppearance
