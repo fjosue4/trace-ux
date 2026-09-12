@@ -124,7 +124,39 @@ Then manage the server with:
 | `trace-ux --uninstall` | remove it (recordings are kept) |
 | `trace-ux --run` | run in the foreground for debugging |
 
-Building from a git clone instead of a release: `bash install.sh --build-from-source` (needs Go ≥ 1.27 and Node ≥ 18). Releases are built automatically by [.github/workflows/release.yml](.github/workflows/release.yml) when a `v*` tag is pushed.
+Building from a git clone instead of a release: `sudo bash install.sh --build-from-source` (needs Go ≥ 1.27 and Node ≥ 18). Releases are built automatically by [.github/workflows/release.yml](.github/workflows/release.yml) when a `v*` tag is pushed.
+
+## Releases and updates
+
+TraceUX publishes versioned Linux releases for `amd64` and `arm64`. Each
+release bundles the dashboard and tracker into the server binary and publishes
+the architecture archives with a `checksums.txt` file. Release installs do not
+need Go, Node, or Docker on the VPS.
+
+To update an existing release install to the latest published version:
+
+```bash
+sudo trace-ux --update
+trace-ux --version
+sudo trace-ux --status
+```
+
+The update downloads the matching release for the server architecture,
+verifies it against the published checksum, replaces the binary, and restarts
+the systemd service. Your SQLite data, sites, users, and admin password stay in
+place. Check `/api/health` after the restart if the instance is behind a proxy.
+
+To install a specific release instead of the latest one, pin the version when
+running the installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/fjosue4/trace-ux/main/install.sh \
+  | sudo env TRACE_UX_VERSION=0.3.0 bash
+```
+
+Installs created with `--build-from-source` do not use `--update`; pull the
+desired source revision and run `sudo bash install.sh --build-from-source`
+again.
 
 ## Minimum requirements
 
