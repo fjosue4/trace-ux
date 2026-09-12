@@ -9,6 +9,8 @@ export type Site = {
   session_count: number;
   recording_enabled?: boolean;
   settings?: SiteSettings;
+  // Returned only when a site is created or a key is rotated.
+  performance_key?: string;
 };
 
 // Per-site configuration, managed in the dashboard and served to the tracker
@@ -98,6 +100,7 @@ export type SiteDetail = {
   sessions: Session[];
   feedback: Feedback[];
   stats: SiteStats;
+  performance_keys: PerformanceKey[];
 };
 
 export type Session = {
@@ -194,6 +197,63 @@ export type LogStats = {
   info: number;
   warn: number;
   error: number;
+};
+
+export type PerformanceStats = {
+  requests: number;
+  errors: number;
+  error_rate: number;
+  avg_ms: number;
+  p50_ms: number;
+  p95_ms: number;
+  p99_ms: number;
+};
+
+export type PerformanceKey = {
+  id: number;
+  key_hint: string;
+  created_at: number;
+  last_used_at: number;
+};
+
+export type PerformanceSeriesPoint = {
+  bucket_start: number;
+  requests: number;
+  p50_ms: number;
+  p95_ms: number;
+  p99_ms: number;
+};
+
+export type PerformanceEndpoint = PerformanceStats & {
+  site_id: number;
+  site_name?: string;
+  endpoint: string;
+  environment: string;
+  service: string;
+  version: string;
+  series: PerformanceSeriesPoint[];
+};
+
+export type PerformanceReport = {
+  from: number;
+  to: number;
+  summary: PerformanceStats;
+  endpoints: PerformanceEndpoint[];
+  filters: {
+    environments: string[];
+    services: string[];
+    versions: string[];
+  };
+};
+
+export type PerformanceQuery = {
+  siteId?: number | null;
+  environment?: string;
+  service?: string;
+  version?: string;
+  from?: number;
+  to?: number;
+  limit?: number;
 };
 
 export type LogQuery = {
@@ -344,6 +404,19 @@ export const api = {
     return request<LogStats>(`/api/logs/stats${suffix ? `?${suffix}` : ''}`);
   },
 
+  performance: (query: PerformanceQuery = {}) => {
+    const q = new URLSearchParams();
+    if (query.siteId) q.set('site_id', String(query.siteId));
+    if (query.environment) q.set('environment', query.environment);
+    if (query.service) q.set('service', query.service);
+    if (query.version) q.set('version', query.version);
+    if (query.from) q.set('from', String(query.from));
+    if (query.to) q.set('to', String(query.to));
+    if (query.limit) q.set('limit', String(query.limit));
+    const suffix = q.toString();
+    return request<PerformanceReport>(`/api/performance${suffix ? `?${suffix}` : ''}`);
+  },
+
   getSharedSession: (token: string) =>
     request<{ session: SharedSession; custom_events: CustomEvent[]; logs: SharedLog[] }>(
       `/api/demo/replay/${encodeURIComponent(token)}`,
@@ -369,6 +442,14 @@ export const api = {
     request<SiteSettings>(`/api/sites/${id}/settings`, {
       method: 'PUT',
       body: JSON.stringify(settings),
+    }),
+  createPerformanceKey: (siteId: number) =>
+    request<{ key_id: number; key_hint: string; created_at: number; performance_key: string }>(`/api/sites/${siteId}/performance-keys`, {
+      method: 'POST',
+    }),
+  deletePerformanceKey: (siteId: number, keyId: number) =>
+    request<{ ok: boolean }>(`/api/sites/${siteId}/performance-keys/${keyId}`, {
+      method: 'DELETE',
     }),
 
   // Server health (admin only).

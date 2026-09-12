@@ -16,6 +16,7 @@ import Login from './pages/Login';
 import Sites from './pages/Sites';
 import SiteDetail from './pages/SiteDetail';
 import Sessions from './pages/Sessions';
+import Performance from './pages/Performance';
 import Replay from './pages/Replay';
 import ShareReplay from './pages/ShareReplay';
 import Feedback from './pages/Feedback';
@@ -31,6 +32,7 @@ const router = createBrowserRouter([
       { index: true, element: <Sites /> },
       { path: 'login', element: <Login /> },
       { path: 'sessions', element: <Sessions /> },
+      { path: 'performance', element: <Performance /> },
       { path: 'site/:siteId', element: <SiteDetail /> },
       { path: 'feedback', element: <Feedback /> },
       { path: 'logs', element: <Logs /> },

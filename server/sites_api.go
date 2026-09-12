@@ -27,11 +27,17 @@ func (s *Server) handleGetSite(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "site not found")
 		return
 	}
+	performanceKeys, err := s.store.ListPerformanceKeys(id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"site":     site,
-		"sessions": sessions,
-		"feedback": feedback,
-		"stats":    stats,
+		"site":             site,
+		"sessions":         sessions,
+		"feedback":         feedback,
+		"stats":            stats,
+		"performance_keys": performanceKeys,
 	})
 }
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, FeedbackTrigger, LogSeverity, SiteAppearance, SiteDetail as SiteDetailData, SiteSettings, SurveyQuestion } from '../api';
+import { api, FeedbackTrigger, Log, LogSeverity, PerformanceKey, SiteAppearance, SiteDetail as SiteDetailData, SiteSettings, SurveyQuestion } from '../api';
 import { fmtDuration, fmtTime, stripProto, truncate } from '../lib/format';
 import { useUser } from '../App';
 import PageHeader from '../components/ui/PageHeader';
@@ -14,6 +14,16 @@ import { Icon } from '../components/ui/Icon';
 import { Field, Input, Select } from '../components/ui/fields';
 import SnippetCard from '../components/sites/SnippetCard';
 import './SiteDetail.css';
+
+type SiteTab = 'overview' | 'site' | 'recordings' | 'feedback' | 'logs';
+
+const siteTabs: { id: SiteTab; label: string; icon: 'activity' | 'settings' | 'film' | 'message' | 'code' }[] = [
+  { id: 'overview', label: 'Overview', icon: 'activity' },
+  { id: 'site', label: 'Site', icon: 'settings' },
+  { id: 'recordings', label: 'Recordings', icon: 'film' },
+  { id: 'feedback', label: 'Feedback', icon: 'message' },
+  { id: 'logs', label: 'Logs', icon: 'code' },
+];
 
 // Site hub: recording toggle, overall feedback health, the latest recordings
 // and feedback, and the widget/survey configuration — all managed here, all
@@ -29,6 +39,13 @@ export default function SiteDetail() {
   const [saved, setSaved] = useState(false);
   const [urlDraft, setUrlDraft] = useState<string | null>(null);
   const [urlSaving, setUrlSaving] = useState(false);
+  const [performanceKeys, setPerformanceKeys] = useState<PerformanceKey[]>([]);
+  const [newPerformanceKey, setNewPerformanceKey] = useState<{ id: number; value: string; hint: string } | null>(null);
+  const [performanceKeySaving, setPerformanceKeySaving] = useState(false);
+  const [performanceKeyCopied, setPerformanceKeyCopied] = useState(false);
+  const [performanceExampleCopied, setPerformanceExampleCopied] = useState(false);
+  const [latestLogs, setLatestLogs] = useState<Log[]>([]);
+  const [activeTab, setActiveTab] = useState<SiteTab>('overview');
 
   const id = Number(siteId);
 
@@ -38,13 +55,22 @@ export default function SiteDetail() {
       .then((d) => {
         setDetail(d);
         setDraft(d.site.settings ?? null);
+        setPerformanceKeys(d.performance_keys ?? []);
       })
       .catch(() => setError('Could not load this site.'));
+    api.listLogs({ siteId: id, limit: 5 }).then(setLatestLogs).catch(() => setLatestLogs([]));
   }, [id]);
 
   useEffect(() => {
     if (id > 0) load();
   }, [id, load]);
+
+  useEffect(() => {
+    setActiveTab('overview');
+    setNewPerformanceKey(null);
+    setPerformanceKeyCopied(false);
+    setPerformanceExampleCopied(false);
+  }, [id]);
 
   async function toggleRecording(enabled: boolean) {
     try {
@@ -86,6 +112,55 @@ export default function SiteDetail() {
       setError(e instanceof Error ? e.message : 'Could not save the configuration.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function createPerformanceKey() {
+    setPerformanceKeySaving(true);
+    try {
+      const result = await api.createPerformanceKey(id);
+      setNewPerformanceKey({ id: result.key_id, value: result.performance_key, hint: result.key_hint });
+      setPerformanceKeys((keys) => [
+        { id: result.key_id, key_hint: result.key_hint, created_at: result.created_at, last_used_at: 0 },
+        ...keys,
+      ]);
+      setPerformanceKeyCopied(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not create a performance key.');
+    } finally {
+      setPerformanceKeySaving(false);
+    }
+  }
+
+  async function copyPerformanceKey() {
+    if (!newPerformanceKey) return;
+    try {
+      await navigator.clipboard.writeText(newPerformanceKey.value);
+      setPerformanceKeyCopied(true);
+      setTimeout(() => setPerformanceKeyCopied(false), 1800);
+    } catch {
+      setError('Could not copy the performance key.');
+    }
+  }
+
+  async function copyPerformanceExample(example: string) {
+    try {
+      await navigator.clipboard.writeText(example);
+      setPerformanceExampleCopied(true);
+      setTimeout(() => setPerformanceExampleCopied(false), 1800);
+    } catch {
+      setError('Could not copy the connection example.');
+    }
+  }
+
+  async function removePerformanceKey(key: PerformanceKey) {
+    if (!window.confirm(`Remove performance key ${key.key_hint}? Any backend using it will stop sending data.`)) return;
+    try {
+      await api.deletePerformanceKey(id, key.id);
+      setPerformanceKeys((keys) => keys.filter((item) => item.id !== key.id));
+      if (newPerformanceKey?.id === key.id) setNewPerformanceKey(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove the performance key.');
     }
   }
 
@@ -168,6 +243,23 @@ export default function SiteDetail() {
         </Notice>
       )}
 
+      <nav className="site-tabs" aria-label="Site management sections">
+        {siteTabs.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`site-tab${activeTab === tab.id ? ' is-active' : ''}`}
+            onClick={() => setActiveTab(tab.id)}
+            aria-current={activeTab === tab.id ? 'page' : undefined}
+          >
+            <Icon name={tab.icon} size={14} />
+            {tab.label}
+          </button>
+        ))}
+      </nav>
+
+      {activeTab === 'site' && (
+        <>
       <Card className="site-url">
         <form
           className="row row--between"
@@ -207,6 +299,103 @@ export default function SiteDetail() {
         </form>
       </Card>
 
+      <Card className="site-performance-key">
+        <div className="site-performance-key__head">
+          <div className="site-url__info">
+            <strong><Icon name="activity" size={13} /> Backend performance</strong>
+            <span className="muted small">
+              This connects your application server to TraceUX. It is not used by the browser
+              tracker and does not instrument your backend automatically.
+            </span>
+          </div>
+          {isAdmin && (
+            <Button variant="secondary" size="sm" onClick={createPerformanceKey} disabled={performanceKeySaving}>
+              <Icon name="plus" size={13} />
+              {performanceKeySaving ? 'Creating…' : performanceKeys.length ? 'Create another key' : 'Create key'}
+            </Button>
+          )}
+        </div>
+
+        <div className="site-performance-key__steps">
+          <strong>Connect your backend in 3 steps</strong>
+          <ol>
+            <li>Create a key and save the raw value as <code>TRACE_UX_PERFORMANCE_KEY</code> on your backend.</li>
+            <li>Measure requests in your application and send observations to the endpoint below.</li>
+            <li>Open <Link to="/performance">Performance</Link> to see the resulting percentiles.</li>
+          </ol>
+          <p className="muted small">
+            The <strong>site key</strong> identifies this site in the URL. The <strong>performance key</strong> authenticates the request in the header. No Google authorization, OAuth, or Tag Manager is involved.
+          </p>
+          <pre className="site-performance-key__example">{`curl -X POST "${location.origin}/api/performance/ingest/${site.site_key}" \\
+  -H "Content-Type: application/json" \\
+  -H "X-TraceUX-Performance-Key: $TRACE_UX_PERFORMANCE_KEY" \\
+  -d '{"observations":[
+    {"environment":"production","service":"api","version":"1.4.0","endpoint":"GET /orders","duration_ms":184,"status_code":200}
+  ]}'`}</pre>
+          <div className="site-performance-key__actions">
+            <Button variant="secondary" size="sm" onClick={() => copyPerformanceExample(`curl -X POST "${location.origin}/api/performance/ingest/${site.site_key}" \\
+  -H "Content-Type: application/json" \\
+  -H "X-TraceUX-Performance-Key: $TRACE_UX_PERFORMANCE_KEY" \\
+  -d '{"observations":[
+    {"environment":"production","service":"api","version":"1.4.0","endpoint":"GET /orders","duration_ms":184,"status_code":200}
+  ]}'`)}>
+              <Icon name={performanceExampleCopied ? 'check' : 'copy'} size={13} />
+              {performanceExampleCopied ? 'Copied' : 'Copy curl example'}
+            </Button>
+            <Link to="/performance" className="btn btn--ghost btn--sm">Open Performance</Link>
+          </div>
+        </div>
+
+        {newPerformanceKey && (
+          <div className="site-performance-key__new">
+            <div>
+              <strong>Copy this new key now</strong>
+              <span className="muted small">The full value is shown only after creation and will not be listed again.</span>
+            </div>
+            <div className="site-performance-key__value">
+              <code>{newPerformanceKey.value}</code>
+              <Button variant="ghost" size="sm" onClick={copyPerformanceKey}>
+                <Icon name={performanceKeyCopied ? 'check' : 'copy'} size={13} />
+                {performanceKeyCopied ? 'Copied' : 'Copy key'}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        <div className="site-performance-key__list">
+          <div className="site-performance-key__list-head">
+            <strong>Created keys</strong>
+            <span className="muted small">Only the first and last 4 characters are listed.</span>
+          </div>
+          {performanceKeys.length > 0 ? (
+            <div className="site-performance-key__rows">
+              {performanceKeys.map((key) => (
+                <div className="site-performance-key__row" key={key.id}>
+                  <code>{key.key_hint}</code>
+                  <span className="muted small">
+                    Created {fmtTime(key.created_at)} · {key.last_used_at ? `Last used ${fmtTime(key.last_used_at)}` : 'Not used yet'}
+                  </span>
+                  {isAdmin && (
+                    <Button variant="dangerGhost" size="sm" onClick={() => removePerformanceKey(key)}>
+                      <Icon name="trash" size={13} />
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="muted small site-performance-key__note">No backend keys have been created yet.</p>
+          )}
+        </div>
+      </Card>
+
+      <SnippetCard site={site} origin={location.origin} title="Installation snippet" />
+        </>
+      )}
+
+      {activeTab === 'overview' && (
+        <>
       <div className="hub-stats">
         <Card className="hub-stat">
           <span className="hub-stat__label">Recordings</span>
@@ -249,6 +438,33 @@ export default function SiteDetail() {
               ))}
             </div>
           )}
+          <Link to={`/sessions?site=${site.id}`} className="muted small">All recordings →</Link>
+        </div>
+
+        <div className="hub-col">
+          <h2>Latest logs</h2>
+          {latestLogs.length === 0 ? (
+            <EmptyState
+              title="No logs yet"
+              description="Enable browser logs in the Logs tab to see recent console output here."
+            />
+          ) : (
+            <div className="hub-list">
+              {latestLogs.map((log) => (
+                <div key={log.id} className="hub-row">
+                  <span className={`hub-row__icon hub-row__icon--log hub-row__icon--${log.severity}`}>{log.severity.slice(0, 3).toUpperCase()}</span>
+                  <span className="hub-row__body">
+                    <span className="hub-row__title">{truncate(log.message, 52)}</span>
+                    <span className="muted small">{fmtTime(Math.floor(log.timestamp_ms / 1000))}</span>
+                  </span>
+                  <Link to={`/replay/${log.session_id}`} className="icon-btn" title="Open replay">
+                    <Icon name="play" size={13} />
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
+          <Link to={`/logs?site=${site.id}`} className="muted small">All logs →</Link>
         </div>
 
         <div className="hub-col">
@@ -256,7 +472,7 @@ export default function SiteDetail() {
           {feedback.length === 0 ? (
             <EmptyState
               title="No feedback yet"
-              description="Enable the feedback widget below to start collecting responses."
+              description="Enable the feedback widget in the Feedback tab to start collecting responses."
             />
           ) : (
             <div className="hub-list">
@@ -281,19 +497,21 @@ export default function SiteDetail() {
               ))}
             </div>
           )}
-          <Link to="/feedback" className="muted small">
-            All feedback →
-          </Link>
+          <Link to="/feedback" className="muted small">All feedback →</Link>
         </div>
       </div>
+        </>
+      )}
 
-      {isAdmin && draft && (
+      {isAdmin && draft && activeTab !== 'overview' && activeTab !== 'site' && (
         <Card className="hub-config">
-          <h2>Configuration</h2>
+          <h2>Manage {activeTab === 'recordings' ? 'recordings' : activeTab === 'feedback' ? 'feedback' : 'logs'}</h2>
           <p className="muted small">
             Served to the tracker automatically — the snippet never carries these settings.
           </p>
 
+          {activeTab === 'recordings' && (
+            <>
           <div className="hub-config__title">Recordings</div>
           <div className="hub-config__grid">
             <Field label="Max simultaneous recordings" hint="0 = no limit">
@@ -332,6 +550,11 @@ export default function SiteDetail() {
             />
           </div>
 
+            </>
+          )}
+
+          {activeTab === 'logs' && (
+            <>
           <div className="hub-config__title">Logs</div>
           <div className="hub-config__row">
             <Switch
@@ -389,7 +612,11 @@ export default function SiteDetail() {
           <p className="muted small">
             Logs are linked to recordings by session and are removed when the related recording is removed. The age and row caps are enforced during the server's retention sweep.
           </p>
+            </>
+          )}
 
+          {activeTab === 'feedback' && (
+            <>
           <div className="hub-config__title">Feedback widget</div>
           <div className="hub-config__row">
             <Switch
@@ -646,6 +873,9 @@ export default function SiteDetail() {
             </>
           )}
 
+            </>
+          )}
+
           {saved && <Notice tone="success">Configuration saved — live for new visitors immediately.</Notice>}
 
           <div className="hub-config__save">
@@ -656,7 +886,13 @@ export default function SiteDetail() {
         </Card>
       )}
 
-      <SnippetCard site={site} origin={location.origin} title="Installation snippet" />
+      {!isAdmin && activeTab !== 'overview' && activeTab !== 'site' && (
+        <Card className="hub-config card--static">
+          <h2>Manage {activeTab}</h2>
+          <Notice tone="info">Only administrators can change this site's configuration.</Notice>
+        </Card>
+      )}
+
     </main>
   );
 }

@@ -6,6 +6,7 @@ import type { eventWithTime } from '@rrweb/types';
 import 'rrweb-player/dist/style.css';
 import { api, CustomEvent, SharedLog, SharedSession } from '../api';
 import Loading from '../components/ui/Loading';
+import EmptyState from '../components/ui/EmptyState';
 import Notice from '../components/ui/Notice';
 import PagesPanel from '../components/replay/PagesPanel';
 import ReplayControls, { type InactivePeriod } from '../components/replay/ReplayControls';
@@ -63,6 +64,7 @@ export default function ShareReplay() {
   const [session, setSession] = useState<SharedSession | null>(null);
   const [events, setEvents] = useState<eventWithTime[] | null>(null);
   const [error, setError] = useState('');
+  const [playerError, setPlayerError] = useState('');
   const [progress, setProgress] = useState('Loading events…');
   const [loaded, setLoaded] = useState(false);
   const [activity, setActivity] = useState<CustomEvent[]>([]);
@@ -77,6 +79,7 @@ export default function ShareReplay() {
   const [speed, setSpeed] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const playerFrame = useRef<HTMLDivElement>(null);
+  const playerStage = useRef<HTMLDivElement>(null);
   const playerHost = useRef<HTMLDivElement>(null);
   const player = useRef<PlayerLike | null>(null);
   const builtWidth = useRef(0);
@@ -92,6 +95,7 @@ export default function ShareReplay() {
         const meta = await api.getSharedSession(token);
         if (cancelled) return;
         setSession(meta.session);
+        setPlayerError('');
         setActivity(meta.custom_events);
         setLogs(meta.logs);
         const all: eventWithTime[] = [];
@@ -123,7 +127,7 @@ export default function ShareReplay() {
   }, [token]);
 
   useEffect(() => {
-    const el = playerHost.current;
+    const el = playerStage.current;
     if (!session || !el) return;
     const ro = new ResizeObserver((entries) => {
       const width = Math.round(entries[0].contentRect.width);
@@ -140,7 +144,9 @@ export default function ShareReplay() {
   }, []);
 
   useEffect(() => {
-    if (!loaded || !events || events.length === 0 || !session || !playerHost.current) return;
+    // rrweb-player throws when it receives fewer than two events. Keep the
+    // public replay page usable and show an explicit unavailable state instead.
+    if (!loaded || !events || events.length < 2 || !session || !playerHost.current) return;
     if (hostWidth < 240) return;
     if (player.current && Math.abs(hostWidth - builtWidth.current) < 60) return;
 
@@ -157,19 +163,27 @@ export default function ShareReplay() {
     const height = Math.round(width * ratioFor(session));
     builtWidth.current = width;
     playerHost.current.innerHTML = '';
-    const nextPlayer = new rrwebPlayer({
-      target: playerHost.current,
-      props: {
-        events,
-        width,
-        height,
-        autoPlay: false,
-        speed: speedRef.current,
-        showController: false,
-        skipInactive: skipInactiveRef.current,
-        speedOption: [0.5, 1, 2, 4, 8],
-      },
-    }) as unknown as PlayerLike;
+    let nextPlayer: PlayerLike;
+    try {
+      nextPlayer = new rrwebPlayer({
+        target: playerHost.current,
+        props: {
+          events,
+          width,
+          height,
+          autoPlay: false,
+          speed: speedRef.current,
+          showController: false,
+          skipInactive: skipInactiveRef.current,
+          speedOption: [0.5, 1, 2, 4, 8],
+        },
+      }) as unknown as PlayerLike;
+    } catch {
+      builtWidth.current = 0;
+      player.current = null;
+      setPlayerError('This recording is not available for replay.');
+      return;
+    }
     player.current = nextPlayer;
     const eventDuration = Math.max(0, events[events.length - 1].timestamp - firstTs.current);
     let nextDuration = eventDuration;
@@ -273,7 +287,8 @@ export default function ShareReplay() {
     seekPlayer(offsetMs);
   }
 
-  const playerReady = loaded && events !== null && events.length > 0;
+  const playerReady = loaded && events !== null && events.length >= 2 && !playerError;
+  const replayUnavailable = loaded && events !== null && (events.length < 2 || !!playerError);
 
   return (
     <main className="page page--wide share-replay-page">
@@ -290,8 +305,8 @@ export default function ShareReplay() {
         <div className="share-replay-layout">
           <div className="share-replay-player">
             <div ref={playerFrame} className="player-frame">
-              <div className="player-stage">
-                <div ref={playerHost} className="player-host" />
+              <div ref={playerStage} className="player-stage">
+                {playerReady && <div ref={playerHost} className="player-host" />}
                 {playerReady && started && (
                   <button
                     type="button"
@@ -307,6 +322,12 @@ export default function ShareReplay() {
                       <span className="player-cover__label">Play recording</span>
                     </button>
                   )
+                ) : replayUnavailable ? (
+                  <EmptyState
+                    title="Replay unavailable"
+                    description={playerError || 'This recording has fewer than two replay events, so there is nothing to play yet.'}
+                    icon={<Icon name="film" size={20} />}
+                  />
                 ) : (
                   <Loading label={progress} overlay />
                 )}

@@ -9,6 +9,7 @@ import { useUser } from '../App';
 import PageHeader from '../components/ui/PageHeader';
 import Notice from '../components/ui/Notice';
 import Loading from '../components/ui/Loading';
+import EmptyState from '../components/ui/EmptyState';
 import Button from '../components/ui/Button';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import MetaCard from '../components/replay/MetaCard';
@@ -85,6 +86,7 @@ export default function Replay() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [events, setEvents] = useState<eventWithTime[] | null>(null);
   const [error, setError] = useState('');
+  const [playerError, setPlayerError] = useState('');
   const [progress, setProgress] = useState('Loading events…');
   const [started, setStarted] = useState(autoplay);
   const [loaded, setLoaded] = useState(false);
@@ -120,6 +122,7 @@ export default function Replay() {
         const m = await api.getSession(sessionId);
         if (cancelled) return;
         setMeta(m);
+        setPlayerError('');
 
         const all: eventWithTime[] = [];
         let afterSeq = -1;
@@ -175,7 +178,10 @@ export default function Replay() {
   // Mount the player once sized; rebuild only when the host changes meaningfully
   // (window resizes), resuming at the current playback position.
   useEffect(() => {
-    if (!loaded || !events || events.length === 0 || !playerHost.current) return;
+    // rrweb-player throws when it receives fewer than two events. Keep the
+    // empty/unavailable state in React instead of letting that exception take
+    // down the entire replay route.
+    if (!loaded || !events || events.length < 2 || !playerHost.current) return;
     if (stageSize.width < 240) return;
 
     const isDesktop = window.matchMedia('(min-width: 961px)').matches;
@@ -199,19 +205,27 @@ export default function Replay() {
     const height = Math.round(width * ratio);
     builtWidth.current = width;
     playerHost.current.innerHTML = '';
-    const nextPlayer = new rrwebPlayer({
-      target: playerHost.current,
-      props: {
-        events,
-        width,
-        height,
-        autoPlay: autoplay && !resumeAt,
-        speed: speedRef.current,
-        showController: false,
-        skipInactive: skipInactiveRef.current,
-        speedOption: [0.5, 1, 2, 4, 8],
-      },
-    }) as unknown as PlayerLike;
+    let nextPlayer: PlayerLike;
+    try {
+      nextPlayer = new rrwebPlayer({
+        target: playerHost.current,
+        props: {
+          events,
+          width,
+          height,
+          autoPlay: autoplay && !resumeAt,
+          speed: speedRef.current,
+          showController: false,
+          skipInactive: skipInactiveRef.current,
+          speedOption: [0.5, 1, 2, 4, 8],
+        },
+      }) as unknown as PlayerLike;
+    } catch {
+      builtWidth.current = 0;
+      player.current = null;
+      setPlayerError('This recording is not available for replay.');
+      return;
+    }
     player.current = nextPlayer;
     const eventDuration = Math.max(0, events[events.length - 1].timestamp - firstTs.current);
     let nextDuration = eventDuration;
@@ -360,7 +374,8 @@ export default function Replay() {
   }
 
   const { session, custom_events: activity, logs } = meta;
-  const playerReady = loaded && events !== null && events.length > 0;
+  const playerReady = loaded && events !== null && events.length >= 2 && !playerError;
+  const replayUnavailable = loaded && events !== null && (events.length < 2 || !!playerError);
 
   return (
     <main className="page page--wide">
@@ -407,7 +422,7 @@ export default function Replay() {
         <div className="replay-main">
           <div ref={playerFrame} className="player-frame">
             <div ref={playerStage} className="player-stage">
-              <div ref={playerHost} className="player-host" />
+              {playerReady && <div ref={playerHost} className="player-host" />}
               {playerReady && started && (
                 <button
                   type="button"
@@ -425,6 +440,12 @@ export default function Replay() {
                     <span className="player-cover__label">Play recording</span>
                   </button>
                 )
+              ) : replayUnavailable ? (
+                <EmptyState
+                  title="Replay unavailable"
+                  description={playerError || 'This recording has fewer than two replay events, so there is nothing to play yet.'}
+                  icon={<Icon name="film" size={20} />}
+                />
               ) : (
                 <Loading label={progress} overlay />
               )}

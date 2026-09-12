@@ -58,6 +58,7 @@ export default function Sidebar({ user, onLogout }: Props) {
       <motion.nav className="sidebar__nav" variants={stagger} initial="hidden" animate="visible">
         <NavItem to="/" end icon="globe" label="Sites" />
         <NavItem to="/sessions" icon="film" label="Sessions" />
+        <NavItem to="/performance" icon="activity" label="Performance" />
         <NavItem to="/feedback" icon="message" label="Feedback" />
         <NavItem to="/logs" icon="code" label="Logs" />
         {user.role === 'admin' && (

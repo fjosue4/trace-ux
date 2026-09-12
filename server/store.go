@@ -200,6 +200,60 @@ var migrations = []string{
 	CREATE INDEX IF NOT EXISTS idx_logs_session_time ON logs(session_id, timestamp_ms);
 	CREATE INDEX IF NOT EXISTS idx_logs_severity_time ON logs(severity, created_at DESC);
 	`,
+	// v10: backend endpoint latency metrics. Rows hold one minute of histogram
+	// data per site, endpoint and deployment identity instead of one row per
+	// request, keeping the small SQLite store bounded and queryable.
+	`
+	CREATE TABLE IF NOT EXISTS performance_keys (
+		id           INTEGER PRIMARY KEY,
+		site_id      INTEGER NOT NULL UNIQUE REFERENCES sites(id) ON DELETE CASCADE,
+		key_hash     TEXT    NOT NULL UNIQUE,
+		key_prefix   TEXT    NOT NULL,
+		created_at   INTEGER NOT NULL,
+		last_used_at INTEGER NOT NULL DEFAULT 0
+	);
+	CREATE INDEX IF NOT EXISTS idx_performance_keys_site ON performance_keys(site_id);
+
+	CREATE TABLE IF NOT EXISTS performance_metrics (
+		id               INTEGER PRIMARY KEY,
+		site_id          INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+		bucket_start     INTEGER NOT NULL,
+		environment      TEXT    NOT NULL DEFAULT '',
+		service          TEXT    NOT NULL DEFAULT '',
+		version          TEXT    NOT NULL DEFAULT '',
+		endpoint         TEXT    NOT NULL DEFAULT '',
+		request_count    INTEGER NOT NULL DEFAULT 0,
+		error_count      INTEGER NOT NULL DEFAULT 0,
+		duration_sum_ms  INTEGER NOT NULL DEFAULT 0,
+		max_duration_ms  INTEGER NOT NULL DEFAULT 0,
+		bucket_counts    TEXT    NOT NULL DEFAULT '[0,0,0,0,0,0,0,0,0,0,0,0]',
+		UNIQUE (site_id, bucket_start, environment, service, version, endpoint)
+	);
+	CREATE INDEX IF NOT EXISTS idx_performance_metrics_site_time
+		ON performance_metrics(site_id, bucket_start DESC);
+	CREATE INDEX IF NOT EXISTS idx_performance_metrics_dimensions
+		ON performance_metrics(site_id, environment, service, version, endpoint);
+	`,
+	// v11: allow more than one backend key per site and keep a safe display hint
+	// for each key. Existing keys are preserved; their suffix is unknown because
+	// v10 deliberately stored only a hash and prefix.
+	`
+	CREATE TABLE performance_keys_v11 (
+		id           INTEGER PRIMARY KEY,
+		site_id      INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+		key_hash     TEXT    NOT NULL UNIQUE,
+		key_prefix   TEXT    NOT NULL,
+		key_suffix   TEXT    NOT NULL DEFAULT '',
+		created_at   INTEGER NOT NULL,
+		last_used_at INTEGER NOT NULL DEFAULT 0
+	);
+	INSERT INTO performance_keys_v11 (id, site_id, key_hash, key_prefix, key_suffix, created_at, last_used_at)
+		SELECT id, site_id, key_hash, key_prefix, '', created_at, last_used_at
+		FROM performance_keys;
+	DROP TABLE performance_keys;
+	ALTER TABLE performance_keys_v11 RENAME TO performance_keys;
+	CREATE INDEX IF NOT EXISTS idx_performance_keys_site ON performance_keys(site_id);
+	`,
 }
 
 func (s *Store) migrate() error {
@@ -233,6 +287,9 @@ type Site struct {
 	SessionCount     int64        `json:"session_count"`
 	RecordingEnabled bool         `json:"recording_enabled"`
 	Settings         SiteSettings `json:"settings"`
+	// PerformanceKey is only populated on site creation or explicit key creation;
+	// stored/listed sites never expose the hashed credential.
+	PerformanceKey string `json:"performance_key,omitempty"`
 }
 
 func newKey(n int) string {
@@ -246,12 +303,30 @@ func newKey(n int) string {
 func (s *Store) CreateSite(name, url string) (Site, error) {
 	now := time.Now().Unix()
 	key := newKey(16)
-	res, err := s.db.Exec(`INSERT INTO sites (name, url, site_key, created_at) VALUES (?, ?, ?, ?)`, name, url, key, now)
+	performanceKey := newPerformanceKey()
+	tx, err := s.db.Begin()
 	if err != nil {
 		return Site{}, err
 	}
-	id, _ := res.LastInsertId()
-	return Site{ID: id, Name: name, URL: url, SiteKey: key, CreatedAt: now, RecordingEnabled: true, Settings: DefaultSiteSettings()}, nil
+	res, err := tx.Exec(`INSERT INTO sites (name, url, site_key, created_at) VALUES (?, ?, ?, ?)`, name, url, key, now)
+	if err != nil {
+		tx.Rollback()
+		return Site{}, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		tx.Rollback()
+		return Site{}, err
+	}
+	if _, err := tx.Exec(`INSERT INTO performance_keys (site_id, key_hash, key_prefix, key_suffix, created_at) VALUES (?, ?, ?, ?, ?)`,
+		id, hashPerformanceKey(performanceKey), performanceKey[:4], performanceKey[len(performanceKey)-4:], now); err != nil {
+		tx.Rollback()
+		return Site{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Site{}, err
+	}
+	return Site{ID: id, Name: name, URL: url, SiteKey: key, CreatedAt: now, RecordingEnabled: true, Settings: DefaultSiteSettings(), PerformanceKey: performanceKey}, nil
 }
 
 const siteCols = `s.id, s.name, s.url, s.site_key, s.created_at, s.recording_enabled, s.config,
