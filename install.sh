@@ -92,22 +92,24 @@ install_release() {
     release="${base}/latest/download"
   fi
   local url="${release}/trace_ux_linux_${ARCH}.tar.gz"
+  local archive_name="trace_ux_linux_${ARCH}.tar.gz"
   local tmp; tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
 
   info "downloading TraceUX (${ARCH})${TRACE_UX_VERSION:+ v$TRACE_UX_VERSION}"
-  fetch "$url" "${tmp}/trace-ux.tar.gz"
+  # Keep the release filename because checksums.txt refers to it directly.
+  fetch "$url" "${tmp}/${archive_name}"
   # Verify against the checksums published for THIS release. Reading them from
   # /latest would compare a pinned download against a different build.
   if fetch "${release}/checksums.txt" "${tmp}/checksums.txt" 2>/dev/null; then
     (cd "$tmp" \
-      && grep -q "trace_ux_linux_${ARCH}.tar.gz" checksums.txt \
-      && grep "trace_ux_linux_${ARCH}.tar.gz" checksums.txt | sha256sum -c - >/dev/null) \
+      && grep -Fq -- "$archive_name" checksums.txt \
+      && grep -F -- "$archive_name" checksums.txt | sha256sum -c - >/dev/null) \
       || fail "checksum verification failed — download aborted"
   else
     warn "checksums.txt not published for this release; skipping verification"
   fi
-  tar -xzf "${tmp}/trace-ux.tar.gz" -C "$tmp"
+  tar -xzf "${tmp}/${archive_name}" -C "$tmp"
   install -m 0755 "${tmp}/trace-ux" "${LIBEXEC_DIR}/trace-ux"
   rm -f "${LIBEXEC_DIR}/BUILT_FROM_SOURCE"
 }
