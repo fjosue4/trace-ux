@@ -462,6 +462,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
    *  overflow on either axis. */
   function swapView(build: () => HTMLElement, dir: 1 | -1) {
     const next = build();
+    body.classList.toggle('body--ticket-thread', next.classList.contains('ticket-view--thread'));
     body.replaceChildren(next);
     body.scrollTop = 0;
     animate(
@@ -693,7 +694,11 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   }
 
   function repaintTicketView() {
-    if (!destroyed && panelOpen && section === 'tickets') body.replaceChildren(buildTicketsView());
+    if (!destroyed && panelOpen && section === 'tickets') {
+      const next = buildTicketsView();
+      body.classList.toggle('body--ticket-thread', next.classList.contains('ticket-view--thread'));
+      body.replaceChildren(next);
+    }
   }
 
   function buildTicketsList(): HTMLElement {

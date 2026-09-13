@@ -134,6 +134,8 @@ export function widgetCSS(): string {
 .body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
 .body::-webkit-scrollbar { width: 10px; }
 .body::-webkit-scrollbar-thumb { background: var(--w-line); border: 3px solid var(--w-panel-bg); border-radius: 999px; }
+.body--ticket-thread { display: flex; flex-direction: column; height: 0; overflow: hidden; }
+.body--ticket-thread > .ticket-view--thread { flex: 1; min-height: 0; }
 .view { will-change: transform, opacity; }
 
 /* ---- announcements list ---- */
