@@ -77,12 +77,20 @@ type SiteSettings struct {
 	// the two widgets and are kept only so rows written by an older build
 	// still resolve; ParseSiteSettings derives this field from them, and the
 	// dashboard mirrors this value back into both on save.
-	WidgetPosition        string                  `json:"widget_position"` // right | left
+	WidgetPosition string `json:"widget_position"` // right | left
+	// WidgetEnabled is the master switch for the whole widget: with it off the
+	// tracker mounts nothing, whatever the per-section flags say. It is a
+	// pointer because rows written before it existed carry no key at all, and
+	// a plain bool would read as false and switch off every widget in the
+	// field the first time its settings were parsed. nil means "derive from
+	// the sections", which is exactly how the widget behaved before.
+	WidgetEnabled         *bool                   `json:"widget_enabled,omitempty"`
 	UpdatesEnabled        bool                    `json:"updates_enabled"`
 	UpdatesPosition       string                  `json:"updates_position"`
 	UpdatesAppearance     *AnnouncementAppearance `json:"updates_appearance,omitempty"`
 	FeedbackEnabled       bool                    `json:"feedback_enabled"`
 	FeedbackPosition      string                  `json:"feedback_position"` // right | left
+	TicketsEnabled        bool                    `json:"tickets_enabled"`
 	SurveyID              string                  `json:"survey_id"`
 	SurveyTitle           string                  `json:"survey_title"`
 	SurveyType            string                  `json:"survey_type"` // stars | nps | custom
@@ -96,13 +104,28 @@ type SiteSettings struct {
 	Logs                  LogSettings             `json:"logs"`
 }
 
+func boolPtr(v bool) *bool { return &v }
+
+// WidgetOn reports whether the widget is allowed to mount at all. Sites
+// configured before the master switch existed have no stored value; they keep
+// the old behaviour, where having any section switched on was what made the
+// widget appear.
+func (s SiteSettings) WidgetOn() bool {
+	if s.WidgetEnabled != nil {
+		return *s.WidgetEnabled
+	}
+	return s.UpdatesEnabled || s.FeedbackEnabled || s.TicketsEnabled
+}
+
 func DefaultSiteSettings() SiteSettings {
 	return SiteSettings{
 		WidgetPosition:        "right",
+		WidgetEnabled:         boolPtr(true),
 		UpdatesEnabled:        true,
 		UpdatesPosition:       "right",
 		FeedbackEnabled:       true,
 		FeedbackPosition:      "right",
+		TicketsEnabled:        false,
 		SurveyID:              "default",
 		SurveyTitle:           "How was your experience?",
 		SurveyType:            "stars",
@@ -117,6 +140,16 @@ func DefaultSiteSettings() SiteSettings {
 func ParseSiteSettings(configText string) SiteSettings {
 	s := DefaultSiteSettings()
 	if configText != "" {
+		// DefaultSiteSettings supplies the new default for newly created sites,
+		// but older stored JSON has no widget_enabled key. Preserve that
+		// distinction so legacy sites continue deriving the master state from
+		// their existing section flags until an operator explicitly saves it.
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal([]byte(configText), &raw); err == nil {
+			if _, ok := raw["widget_enabled"]; !ok {
+				s.WidgetEnabled = nil
+			}
+		}
 		_ = json.Unmarshal([]byte(configText), &s)
 	}
 	if s.FeedbackPosition == "" {

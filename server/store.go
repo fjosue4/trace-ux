@@ -305,6 +305,41 @@ var migrations = []string{
 		updated_at INTEGER NOT NULL
 	);
 	`,
+	// v14: visitor-facing support tickets and their threaded messages.
+	`
+	CREATE TABLE IF NOT EXISTS tickets (
+		id INTEGER PRIMARY KEY,
+		site_id INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+		visitor_key TEXT NOT NULL,
+		user_id TEXT NOT NULL DEFAULT '',
+		email TEXT NOT NULL DEFAULT '',
+		name TEXT NOT NULL DEFAULT '',
+		subject TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'open'
+			CHECK (status IN ('open','in_progress','under_review','closed')),
+		session_id TEXT NOT NULL DEFAULT '',
+		page_url TEXT NOT NULL DEFAULT '',
+		message_count INTEGER NOT NULL DEFAULT 0,
+		last_message_at INTEGER NOT NULL DEFAULT 0,
+		last_message_author TEXT NOT NULL DEFAULT 'visitor'
+			CHECK (last_message_author IN ('visitor','staff')),
+		created_at INTEGER NOT NULL,
+		updated_at INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_tickets_site_status ON tickets(site_id, status, last_message_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_tickets_visitor ON tickets(site_id, visitor_key, last_message_at DESC);
+
+	CREATE TABLE IF NOT EXISTS ticket_messages (
+		id INTEGER PRIMARY KEY,
+		ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+		author TEXT NOT NULL CHECK (author IN ('visitor','staff')),
+		user_id INTEGER NOT NULL DEFAULT 0,
+		author_name TEXT NOT NULL DEFAULT '',
+		body TEXT NOT NULL,
+		created_at INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_ticket_messages ON ticket_messages(ticket_id, created_at);
+	`,
 }
 
 func (s *Store) migrate() error {

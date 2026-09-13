@@ -124,6 +124,11 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settings := DefaultSiteSettings()
+	if _, ok := raw["widget_enabled"]; !ok {
+		// Keep legacy rows legacy when an older dashboard (or a GET/PUT
+		// round-trip from one) does not include the new master switch.
+		settings.WidgetEnabled = nil
+	}
 	apply := func(key string, target any) error {
 		if v, ok := raw[key]; ok {
 			if err := json.Unmarshal(v, target); err != nil {
@@ -134,10 +139,12 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	for key, target := range map[string]any{
 		"widget_position":         &settings.WidgetPosition,
+		"widget_enabled":          &settings.WidgetEnabled,
 		"updates_enabled":         &settings.UpdatesEnabled,
 		"updates_position":        &settings.UpdatesPosition,
 		"feedback_enabled":        &settings.FeedbackEnabled,
 		"feedback_position":       &settings.FeedbackPosition,
+		"tickets_enabled":         &settings.TicketsEnabled,
 		"survey_id":               &settings.SurveyID,
 		"survey_title":            &settings.SurveyTitle,
 		"survey_type":             &settings.SurveyType,

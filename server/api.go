@@ -27,16 +27,23 @@ type Server struct {
 	secret []byte       // HMAC salt for ip_hash (auth cookies are DB-backed now)
 	static http.Handler // SPA + assets
 
-	securityOnce        sync.Once
-	loginIPLimiter      *requestLimiter
-	loginUserLimiter    *requestLimiter
-	ingestIPLimiter     *requestLimiter
-	ingestSiteLimiter   *requestLimiter
-	demoClaimLimiter    *requestLimiter
-	demoReplayLimiter   *requestLimiter
-	updatesReadLimiter  *requestLimiter
-	updatesWriteLimiter *requestLimiter
-	updatesSiteLimiter  *requestLimiter
+	securityOnce            sync.Once
+	loginIPLimiter          *requestLimiter
+	loginUserLimiter        *requestLimiter
+	ingestIPLimiter         *requestLimiter
+	ingestSiteLimiter       *requestLimiter
+	demoClaimLimiter        *requestLimiter
+	demoReplayLimiter       *requestLimiter
+	updatesReadLimiter      *requestLimiter
+	updatesWriteLimiter     *requestLimiter
+	updatesSiteLimiter      *requestLimiter
+	ticketsReadLimiter      *requestLimiter
+	ticketsWriteLimiter     *requestLimiter
+	ticketsSiteLimiter      *requestLimiter
+	widgetSocketLimiter     *requestLimiter
+	widgetSocketSiteLimiter *requestLimiter
+	widgetSocketOnce        sync.Once
+	widgetSockets           *widgetSocketHub
 
 	cspOnce sync.Once
 	csp     string
@@ -222,6 +229,14 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/announcements/{id}/archive", s.auth(s.requireAdmin(s.handleArchiveAnnouncement)))
 	mux.HandleFunc("DELETE /api/announcements/comments/{id}", s.auth(s.requireAdmin(s.handleDeleteAnnouncementComment)))
 
+	// Support tickets. Staff can read and reply; only admins can delete.
+	mux.HandleFunc("GET /api/tickets", s.auth(s.handleListTickets))
+	mux.HandleFunc("GET /api/tickets/socket", s.auth(s.handleDashboardTicketSocket))
+	mux.HandleFunc("GET /api/tickets/{id}", s.auth(s.handleGetTicket))
+	mux.HandleFunc("POST /api/tickets/{id}/messages", s.auth(s.handleStaffTicketReply))
+	mux.HandleFunc("PATCH /api/tickets/{id}", s.auth(s.handleUpdateTicket))
+	mux.HandleFunc("DELETE /api/tickets/{id}", s.auth(s.requireAdmin(s.handleDeleteTicket)))
+
 	// Public tracker-facing endpoints. Cross-origin access is granted per
 	// site via the URL the admin registers (see cors below).
 	mux.HandleFunc("GET /api/config/{siteKey}", s.handleConfig)
@@ -232,6 +247,11 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/updates/{siteKey}/{id}/reaction", s.handleAnnouncementReaction)
 	mux.HandleFunc("POST /api/updates/{siteKey}/{id}/comments", s.handleAnnouncementComment)
 	mux.HandleFunc("POST /api/updates/{siteKey}/{id}/read", s.handleAnnouncementRead)
+	mux.HandleFunc("GET /api/support/{siteKey}/tickets", s.handlePublicListTickets)
+	mux.HandleFunc("POST /api/support/{siteKey}/tickets", s.handlePublicCreateTicket)
+	mux.HandleFunc("GET /api/support/{siteKey}/tickets/{id}", s.handlePublicGetTicket)
+	mux.HandleFunc("POST /api/support/{siteKey}/tickets/{id}/messages", s.handlePublicTicketReply)
+	mux.HandleFunc("GET /api/widget/{siteKey}/socket", s.handleWidgetSocket)
 	mux.HandleFunc("GET /api/demo/replay/{token}", s.handleDemoReplay)
 	mux.HandleFunc("GET /api/demo/replay/{token}/events", s.handleDemoReplayEvents)
 
@@ -248,7 +268,7 @@ func (s *Server) routes() http.Handler {
 // CORS to that origin. The dashboard API is same-origin and needs no grant.
 func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		isPublic := strings.HasPrefix(r.URL.Path, "/api/ingest/") || strings.HasPrefix(r.URL.Path, "/api/config/") || strings.HasPrefix(r.URL.Path, "/api/demo/claim/") || strings.HasPrefix(r.URL.Path, "/api/updates/")
+		isPublic := strings.HasPrefix(r.URL.Path, "/api/ingest/") || strings.HasPrefix(r.URL.Path, "/api/config/") || strings.HasPrefix(r.URL.Path, "/api/demo/claim/") || strings.HasPrefix(r.URL.Path, "/api/updates/") || strings.HasPrefix(r.URL.Path, "/api/support/") || strings.HasPrefix(r.URL.Path, "/api/widget/")
 		if !isPublic {
 			next.ServeHTTP(w, r)
 			return
@@ -296,6 +316,10 @@ func (s *Server) originAllowed(path, origin string) bool {
 	} else if after, ok := strings.CutPrefix(path, "/api/demo/claim/"); ok {
 		key, _, _ = strings.Cut(after, "/")
 	} else if after, ok := strings.CutPrefix(path, "/api/updates/"); ok {
+		key, _, _ = strings.Cut(after, "/")
+	} else if after, ok := strings.CutPrefix(path, "/api/support/"); ok {
+		key, _, _ = strings.Cut(after, "/")
+	} else if after, ok := strings.CutPrefix(path, "/api/widget/"); ok {
 		key, _, _ = strings.Cut(after, "/")
 	}
 	if key == "" {

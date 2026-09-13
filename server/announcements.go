@@ -75,6 +75,11 @@ func (s *Store) ListAnnouncements(siteID int64, publishedOnly bool) ([]Announcem
 	return out, rows.Err()
 }
 
+func (s *Store) GetAnnouncement(id int64) (Announcement, error) {
+	return scanAnnouncement(s.db.QueryRow(announcementSelect+` FROM announcements a
+		JOIN sites s ON s.id=a.site_id WHERE a.id=?`, id))
+}
+
 func validateAnnouncement(a Announcement) error {
 	if strings.TrimSpace(a.Title) == "" || len(a.Title) > 160 {
 		return errBadJSON
@@ -153,6 +158,12 @@ func (s *Server) handleUpdateAnnouncement(w http.ResponseWriter, r *http.Request
 		writeErr(w, 404, "announcement not found")
 		return
 	}
+	if updated, err := s.store.GetAnnouncement(id); err == nil && updated.Status == "published" {
+		s.broadcastWidgetEvent(updated.SiteID, "", "updates", widgetSocketEvent{
+			Type:         "announcement.updated",
+			Announcement: &updated,
+		})
+	}
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 func (s *Server) setAnnouncementStatus(w http.ResponseWriter, r *http.Request, status string) {
@@ -166,10 +177,29 @@ func (s *Server) setAnnouncementStatus(w http.ResponseWriter, r *http.Request, s
 	if status == "published" {
 		pub = now
 	}
-	_, e = s.store.db.Exec(`UPDATE announcements SET status=?,published_at=CASE WHEN ?='published' THEN ? ELSE published_at END,updated_at=? WHERE id=?`, status, status, pub, now, id)
+	res, e := s.store.db.Exec(`UPDATE announcements SET status=?,published_at=CASE WHEN ?='published' THEN ? ELSE published_at END,updated_at=? WHERE id=?`, status, status, pub, now, id)
 	if e != nil {
 		writeErr(w, 500, e.Error())
 		return
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		writeErr(w, 500, err.Error())
+		return
+	} else if n == 0 {
+		writeErr(w, 404, "announcement not found")
+		return
+	}
+	if updated, err := s.store.GetAnnouncement(id); err == nil {
+		eventType := "announcement.updated"
+		if status == "published" {
+			eventType = "announcement.published"
+		} else if status == "archived" {
+			eventType = "announcement.archived"
+		}
+		s.broadcastWidgetEvent(updated.SiteID, "", "updates", widgetSocketEvent{
+			Type:         eventType,
+			Announcement: &updated,
+		})
 	}
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
@@ -181,10 +211,17 @@ func (s *Server) handleArchiveAnnouncement(w http.ResponseWriter, r *http.Reques
 }
 func (s *Server) handleDeleteAnnouncement(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	previous, _ := s.store.GetAnnouncement(id)
 	_, e := s.store.db.Exec(`DELETE FROM announcements WHERE id=?`, id)
 	if e != nil {
 		writeErr(w, 500, e.Error())
 		return
+	}
+	if previous.ID > 0 {
+		s.broadcastWidgetEvent(previous.SiteID, "", "updates", widgetSocketEvent{
+			Type: "announcement.deleted",
+			ID:   previous.ID,
+		})
 	}
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }

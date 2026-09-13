@@ -1,6 +1,6 @@
-import { CSSProperties, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { AnnouncementAppearance, api, FeedbackTrigger, Log, LogSeverity, PerformanceKey, SiteAppearance, SiteDetail as SiteDetailData, SiteSettings, SurveyQuestion } from '../api';
+import { AnnouncementAppearance, api, FeedbackTrigger, Log, LogSeverity, PerformanceKey, SiteDetail as SiteDetailData, SiteSettings, SurveyQuestion } from '../api';
 import { fmtDuration, fmtTime, stripProto, truncate } from '../lib/format';
 import { useUser } from '../App';
 import PageHeader from '../components/ui/PageHeader';
@@ -13,17 +13,17 @@ import Switch from '../components/ui/Switch';
 import { Icon } from '../components/ui/Icon';
 import { Field, Input, Select } from '../components/ui/fields';
 import SnippetCard from '../components/sites/SnippetCard';
+import WidgetPreview from '../components/sites/WidgetPreview';
+import { AnnouncementSettingsModal, FeedbackSettingsModal } from '../components/sites/WidgetSettingsModals';
 import './SiteDetail.css';
 
-type SiteTab = 'overview' | 'site' | 'recordings' | 'feedback' | 'announcements' | 'styles' | 'logs';
+type SiteTab = 'overview' | 'site' | 'recordings' | 'widget' | 'logs';
 
 const siteTabs: { id: SiteTab; label: string; icon: 'activity' | 'settings' | 'film' | 'message' | 'megaphone' | 'code' }[] = [
   { id: 'overview', label: 'Overview', icon: 'activity' },
   { id: 'site', label: 'Site', icon: 'settings' },
   { id: 'recordings', label: 'Recordings', icon: 'film' },
-  { id: 'feedback', label: 'Feedback', icon: 'message' },
-  { id: 'announcements', label: 'Announcements', icon: 'megaphone' },
-  { id: 'styles', label: 'Styles', icon: 'settings' },
+  { id: 'widget', label: 'Widget', icon: 'settings' },
   { id: 'logs', label: 'Logs', icon: 'code' },
 ];
 const announcementAccents = ['#2f7d4a', '#2563eb', '#7c3aed', '#db2777', '#ea580c', '#0891b2'];
@@ -49,6 +49,7 @@ export default function SiteDetail() {
   const [performanceExampleCopied, setPerformanceExampleCopied] = useState(false);
   const [latestLogs, setLatestLogs] = useState<Log[]>([]);
   const [activeTab, setActiveTab] = useState<SiteTab>('overview');
+  const [widgetSettingsModal, setWidgetSettingsModal] = useState<'announcements' | 'feedback' | null>(null);
   const [iconBusy, setIconBusy] = useState(false);
   const [iconError, setIconError] = useState<string | null>(null);
 
@@ -56,12 +57,28 @@ export default function SiteDetail() {
 
   // Mirrors buildWidgetConfig on the server: with only one section switched on
   // the launcher names it rather than showing a generic label.
-  const launcherPlaceholder =
-    draft?.updates_enabled && !draft?.feedback_enabled
-      ? "What's new"
-      : draft?.feedback_enabled && !draft?.updates_enabled
-        ? 'Feedback'
-        : 'Help & updates';
+  const launcherPlaceholder = (() => {
+    const on = [
+      draft?.updates_enabled && "What's new",
+      draft?.tickets_enabled && 'Support',
+      draft?.feedback_enabled && 'Feedback',
+    ].filter(Boolean) as string[];
+    return on.length === 1 ? on[0] : 'Help & updates';
+  })();
+
+  // Re-read the site without touching `draft`. Anything that saves something
+  // other than the settings — an icon, the URL, the recording switch — has to
+  // use this: re-seeding the draft from the server would silently throw away
+  // whatever unsaved widget styling the operator is in the middle of.
+  const refreshDetail = useCallback(() => {
+    api
+      .getSiteDetail(id)
+      .then((d) => {
+        setDetail(d);
+        setPerformanceKeys(d.performance_keys ?? []);
+      })
+      .catch(() => setError('Could not load this site.'));
+  }, [id]);
 
   const load = useCallback(() => {
     api
@@ -84,6 +101,7 @@ export default function SiteDetail() {
     setNewPerformanceKey(null);
     setPerformanceKeyCopied(false);
     setPerformanceExampleCopied(false);
+    setWidgetSettingsModal(null);
   }, [id]);
 
   async function uploadIcon(file: File) {
@@ -91,7 +109,7 @@ export default function SiteDetail() {
     setIconError(null);
     try {
       await api.uploadWidgetIcon(id, file);
-      load();
+      refreshDetail();
     } catch (e) {
       setIconError(e instanceof Error ? e.message : 'Could not upload that image.');
     } finally {
@@ -104,7 +122,7 @@ export default function SiteDetail() {
     setIconError(null);
     try {
       await api.deleteWidgetIcon(id);
-      load();
+      refreshDetail();
     } catch {
       setIconError('Could not remove the icon.');
     } finally {
@@ -115,7 +133,7 @@ export default function SiteDetail() {
   async function toggleRecording(enabled: boolean) {
     try {
       await api.updateSiteRecording(id, enabled);
-      load();
+      refreshDetail();
     } catch {
       setError('Could not change the recording setting.');
     }
@@ -127,7 +145,7 @@ export default function SiteDetail() {
     try {
       await api.updateSiteURL(id, urlDraft.trim());
       setUrlDraft(null);
-      load();
+      refreshDetail();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not update the site URL.');
     } finally {
@@ -216,12 +234,12 @@ export default function SiteDetail() {
     });
   }
 
-  function patchAppearance(patch: Partial<SiteAppearance>) {
-    setDraft((d) => (d ? { ...d, appearance: { ...d.appearance, ...patch } } : d));
-  }
-
   function patchAnnouncementAppearance(patch: Partial<AnnouncementAppearance>) {
     setDraft((d) => (d ? { ...d, updates_appearance: { ...d.updates_appearance, ...patch } } : d));
+  }
+
+  function patchWidgetPosition(position: string) {
+    patchDraft({ widget_position: position, updates_position: position, feedback_position: position });
   }
 
   function patchTrigger(patch: Partial<FeedbackTrigger>) {
@@ -257,6 +275,13 @@ export default function SiteDetail() {
   const { site, sessions, feedback, stats } = detail;
   const recordingOn = site.recording_enabled ?? true;
   const trigger = draft?.feedback_trigger ?? { mode: 'always' as const };
+  const widgetAppearance = {
+    theme: draft?.updates_appearance?.theme ?? 'light',
+    accent: draft?.updates_appearance?.accent || draft?.appearance?.accent || draft?.appearance?.primary || '#2f7d4a',
+    radius: draft?.updates_appearance?.radius || draft?.appearance?.radius || 18,
+    max_width: draft?.updates_appearance?.max_width || 440,
+    button_label: draft?.updates_appearance?.button_label ?? draft?.appearance?.button_label ?? '',
+  };
 
   return (
     <main className="page">
@@ -516,7 +541,7 @@ export default function SiteDetail() {
           {feedback.length === 0 ? (
             <EmptyState
               title="No feedback yet"
-              description="Enable the feedback section in the Feedback tab to start collecting responses."
+              description="Enable the feedback section in the Widget tab to start collecting responses."
             />
           ) : (
             <div className="hub-list">
@@ -659,329 +684,208 @@ export default function SiteDetail() {
             </>
           )}
 
-          {activeTab === 'announcements' && (
+          {activeTab === 'widget' && (
             <>
-              <div className="hub-config__title">Announcements section</div>
-              <div className="hub-config__row"><Switch checked={draft.updates_enabled ?? true} onChange={(v) => patchDraft({ updates_enabled: v })} label="Show the announcements section" /></div>
-              <div className="hub-config__grid">
+              <div className="hub-config__title">Widget</div>
+              <div className="hub-config__row">
+                <Switch
+                  checked={draft.widget_enabled ?? (!!draft.updates_enabled || !!draft.tickets_enabled || !!draft.feedback_enabled)}
+                  onChange={(v) => {
+                    patchDraft({ widget_enabled: v });
+                    if (!v) setWidgetSettingsModal(null);
+                  }}
+                  label="Show the widget on this site"
+                />
               </div>
-              <Notice tone="info">Announcements share one launcher with Feedback. The panel shows a “What’s new” tab whenever this is on; look, icon and label live in the Styles tab.</Notice>
-            </>
-          )}
-
-          {activeTab === 'styles' && (
-            <>
-              <div className="hub-config__title">Widget styles</div>
-              <Notice tone="info">Announcements and feedback share one launcher and one panel. These styles apply to the whole widget; each section is switched on in its own tab.</Notice>
-                <div className="announcement-customizer">
-                  <div className="announcement-customizer__controls">
-                    <h3>Choose a look</h3><p className="muted small">Theme colors are paired automatically for accessible contrast.</p>
-                    <Field label="Theme"><div className="announcement-themes">{(['light','dark'] as const).map(theme=><button key={theme} type="button" className={`announcement-theme${(draft.updates_appearance?.theme||'light')===theme?' is-selected':''}`} onClick={()=>patchAnnouncementAppearance({theme})}><span className={`announcement-theme__sample is-${theme}`}><i/><i/></span><strong>{theme[0].toUpperCase()+theme.slice(1)}</strong></button>)}</div></Field>
-                    <Field label="Accent color"><div className="announcement-swatches">{announcementAccents.map(color=><button type="button" key={color} aria-label={`Use ${color}`} title={color} className={(draft.updates_appearance?.accent||'#2f7d4a')===color?'is-selected':''} style={{background:color}} onClick={()=>patchAnnouncementAppearance({accent:color})}/>)}</div><div className="announcement-custom-color"><input type="color" aria-label="Custom accent color" value={draft.updates_appearance?.accent||'#2f7d4a'} onChange={(e)=>patchAnnouncementAppearance({accent:e.target.value})}/><Input aria-label="Accent hex color" value={draft.updates_appearance?.accent||'#2f7d4a'} maxLength={7} onChange={(e)=>patchAnnouncementAppearance({accent:e.target.value})}/></div></Field>
-                    <div className="hub-config__grid announcement-customizer__fields">
-                      <Field label="Corner radius" hint="6–40 px"><Input type="number" min={6} max={40} value={draft.updates_appearance?.radius ?? 18} onChange={(e)=>patchAnnouncementAppearance({radius:Number(e.target.value)})}/></Field>
-                      <Field label="Launcher label" hint="Text on the button"><Input value={draft.updates_appearance?.button_label ?? ''} placeholder={launcherPlaceholder} maxLength={40} onChange={(e)=>patchAnnouncementAppearance({button_label:e.target.value})}/></Field>
-                      <Field label="Position" hint="Corner the launcher sits in">
-                        <Select
-                          value={draft.widget_position || 'right'}
-                          onChange={(v) => patchDraft({ widget_position: v, updates_position: v, feedback_position: v })}
-                          options={[
-                            { value: 'right', label: 'Bottom right' },
-                            { value: 'left', label: 'Bottom left' },
-                          ]}
-                        />
-                      </Field>
-                      <Field label="Maximum width" hint="300–560 px"><Input type="number" min={300} max={560} value={draft.updates_appearance?.max_width ?? 440} onChange={(e)=>patchAnnouncementAppearance({max_width:Number(e.target.value)})}/></Field>
-                    </div>
-                    <Field label="Launcher icon" hint="PNG, JPEG or GIF · up to 256 KB · any size, rendered at 48×48">
-                      <div className="widget-icon">
-                        <div className="widget-icon__preview">
-                          {detail.widget_icon_url ? <img src={detail.widget_icon_url} alt="" /> : <Icon name="megaphone" size={18} />}
-                        </div>
-                        <div className="widget-icon__actions">
-                          <label className="widget-icon__pick">
-                            <input
-                              type="file"
-                              accept="image/png,image/jpeg,image/gif"
-                              disabled={iconBusy}
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                e.target.value = '';
-                                if (file) void uploadIcon(file);
-                              }}
-                            />
-                            <span>{detail.widget_icon_url ? 'Replace image' : 'Upload image'}</span>
-                          </label>
-                          {detail.widget_icon_url && (
-                            <button type="button" className="widget-icon__remove" disabled={iconBusy} onClick={() => void removeIcon()}>Remove</button>
-                          )}
-                          <p className="muted small">
-                            {detail.widget_icon
-                              ? `${detail.widget_icon.width}×${detail.widget_icon.height} ${detail.widget_icon.mime.replace('image/', '').toUpperCase()} · replaces the text label on the launcher`
-                              : 'Without an icon the launcher shows the label above.'}
-                          </p>
-                        </div>
-                      </div>
-                      {iconError && <Notice tone="error">{iconError}</Notice>}
-                    </Field>
-                    <button className="announcement-reset" type="button" onClick={()=>patchAnnouncementAppearance({theme:'light',button_label:'',accent:'#2f7d4a',radius:18,max_width:440})}><Icon name="x" size={13}/> Reset to defaults</button>
-                  </div>
-                  <div className={`announcement-live-preview is-${draft.updates_appearance?.theme||'light'}`} style={{'--preview-accent':draft.updates_appearance?.accent||'#2f7d4a','--preview-radius':`${draft.updates_appearance?.radius??18}px`} as CSSProperties}>
-                    <div className="announcement-live-preview__label">Live preview</div><div className="announcement-live-preview__panel"><header><strong>Announcements</strong><button type="button" aria-label="Close"><Icon name="x" size={14}/></button></header><main><span>NEW RELEASE</span><h3>Everything you need, closer at hand</h3><p>We refreshed the workspace with faster navigation and a clearer way to discover what’s new.</p><div><button type="button"><svg aria-hidden viewBox="0 0 1024 1024"><path d="M923 283.6a260 260 0 0 0-56.9-82.8 264.4 264.4 0 0 0-84-55.5A265.3 265.3 0 0 0 679.7 125c-49.3 0-97.4 13.5-139.2 39q-15 9.15-28.5 20.1-13.5-10.95-28.5-20.1c-41.8-25.5-89.9-39-139.2-39-35.5 0-69.9 6.8-102.4 20.3-31.4 13-59.7 31.7-84 55.5a258.4 258.4 0 0 0-56.9 82.8c-13.9 32.3-21 66.6-21 101.9 0 33.3 6.8 68 20.3 103.3 11.3 29.5 27.5 60.1 48.2 91 32.8 48.9 77.9 99.9 133.9 151.6 92.8 85.7 184.7 144.9 188.6 147.3l23.7 15.2c10.5 6.7 24 6.7 34.5 0l23.7-15.2c3.9-2.5 95.7-61.6 188.6-147.3 56-51.7 101.1-102.7 133.9-151.6 20.7-30.9 37-61.5 48.2-91 13.5-35.3 20.3-70 20.3-103.3.1-35.3-7-68.6-20.9-101.9M512 814.8S156 586.7 156 385.5C156 283.6 240.3 201 344.3 201c73.1 0 136.5 40.8 167.7 100.4C543.2 241.8 606.6 201 679.7 201c104 0 188.3 82.6 188.3 184.5 0 201.2-356 429.3-356 429.3" fill="currentColor"/></svg> Like · 12</button></div></main></div><div className="announcement-live-preview__launcher">{draft.updates_appearance?.button_label||launcherPlaceholder} <b>1</b></div>
-                  </div>
+              <div className="widget-sections">
+                <div className="widget-section">
+                  <Switch
+                    checked={!!draft.updates_enabled}
+                    onChange={(v) => {
+                      patchDraft({ updates_enabled: v });
+                      if (!v && widgetSettingsModal === 'announcements') setWidgetSettingsModal(null);
+                    }}
+                    label="Announcements"
+                  />
+                  {draft.updates_enabled && (
+                    <button
+                      className="icon-btn widget-section__settings"
+                      type="button"
+                      aria-label="Configure Announcements"
+                      title="Configure Announcements"
+                      onClick={() => setWidgetSettingsModal('announcements')}
+                    >
+                      <Icon name="gear" size={15} />
+                    </button>
+                  )}
                 </div>
-            </>
-          )}
-
-          {activeTab === 'feedback' && (
-            <>
-          <div className="hub-config__title">Feedback section</div>
-          <div className="hub-config__row">
-            <Switch
-              checked={draft.feedback_enabled}
-              onChange={(v) => patchDraft({ feedback_enabled: v })}
-              label="Feedback section"
-            />
-          </div>
-
-          {draft.feedback_enabled && (
-            <>
-              <div className="hub-config__grid">
-                <Field label="Survey id" hint="Groups responses together">
-                  <Input value={draft.survey_id} onChange={(e) => patchDraft({ survey_id: e.target.value })} />
-                </Field>
-                <Field label="Survey title">
-                  <Input
-                    value={draft.survey_title}
-                    onChange={(e) => patchDraft({ survey_title: e.target.value })}
+                <div className="widget-section">
+                  <Switch
+                    checked={!!draft.feedback_enabled}
+                    onChange={(v) => {
+                      patchDraft({ feedback_enabled: v });
+                      if (!v && widgetSettingsModal === 'feedback') setWidgetSettingsModal(null);
+                    }}
+                    label="Feedback"
                   />
-                </Field>
-                <Field label="Question set">
-                  <Select
-                    value={draft.survey_type}
-                    onChange={(v) => patchDraft({ survey_type: v })}
-                    options={[
-                      { value: 'stars', label: 'Stars (1–5) + comment' },
-                      { value: 'nps', label: 'NPS (0–10) + comment' },
-                      { value: 'custom', label: 'Custom questions' },
-                    ]}
+                  {draft.feedback_enabled && (
+                    <button
+                      className="icon-btn widget-section__settings"
+                      type="button"
+                      aria-label="Configure Feedback"
+                      title="Configure Feedback"
+                      onClick={() => setWidgetSettingsModal('feedback')}
+                    >
+                      <Icon name="gear" size={15} />
+                    </button>
+                  )}
+                </div>
+                <div className="widget-section">
+                  <Switch
+                    checked={!!draft.tickets_enabled}
+                    onChange={(v) => patchDraft({ tickets_enabled: v })}
+                    label="Tickets"
                   />
-                </Field>
-                <Field label="Show section">
-                  <Select
-                    value={trigger.mode}
-                    onChange={(v) => patchTrigger({ mode: v as FeedbackTrigger['mode'] })}
-                    options={[
-                      { value: 'always', label: 'Always' },
-                      { value: 'page', label: 'On specific pages' },
-                      { value: 'action', label: 'After a tracked action' },
-                    ]}
-                  />
-                </Field>
+                </div>
               </div>
-
-              {trigger.mode === 'page' && (
-                <Field
-                  label="Page patterns"
-                  hint="Comma separated, * wildcards — e.g. /checkout*, /pricing. The feedback section appears only on matching pages."
-                >
-                  <Input
-                    value={(trigger.pages ?? []).join(', ')}
-                    onChange={(e) =>
-                      patchTrigger({ pages: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })
-                    }
-                  />
-                </Field>
-              )}
-              {trigger.mode === 'action' && (
-                <Field
-                  label="Tracked actions"
-                  hint="Comma separated trace-ux-track-id names — the widget opens on the feedback section when the visitor clicks one."
-                >
-                  <Input
-                    value={(trigger.actions ?? []).join(', ')}
-                    onChange={(e) =>
-                      patchTrigger({ actions: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })
-                    }
-                  />
-                </Field>
-              )}
-
-              {draft.survey_type === 'custom' && (
-                <div className="hub-questions">
-                  {(draft.questions ?? []).map((q, i) => (
-                    <div key={i} className="hub-question">
-                      <Input
-                        placeholder="Question text"
-                        value={q.label}
-                        onChange={(e) => patchQuestion(i, { label: e.target.value })}
+              <Notice tone="info">
+                One launcher, one panel. Each enabled section becomes a tab inside it. Use the gear beside a section to configure its settings.
+              </Notice>
+              <div className="announcement-customizer">
+                <div className="announcement-customizer__controls">
+                  <h3>Choose a look</h3>
+                  <p className="muted small">Theme colors are paired automatically for accessible contrast.</p>
+                  <Field label="Theme">
+                    <div className="announcement-themes">
+                      {(['light', 'dark'] as const).map((theme) => (
+                        <button
+                          key={theme}
+                          type="button"
+                          className={`announcement-theme${widgetAppearance.theme === theme ? ' is-selected' : ''}`}
+                          aria-label={`Use ${theme} theme`}
+                          onClick={() => patchAnnouncementAppearance({ theme })}
+                        >
+                          <span className={`announcement-theme__sample is-${theme}`}><i /><i /></span>
+                          <strong>{theme[0].toUpperCase() + theme.slice(1)}</strong>
+                        </button>
+                      ))}
+                    </div>
+                  </Field>
+                  <Field label="Accent color">
+                    <div className="announcement-swatches">
+                      {announcementAccents.map((color) => (
+                        <button
+                          type="button"
+                          key={color}
+                          aria-label={`Use ${color}`}
+                          title={color}
+                          className={widgetAppearance.accent === color ? 'is-selected' : ''}
+                          style={{ background: color }}
+                          onClick={() => patchAnnouncementAppearance({ accent: color })}
+                        />
+                      ))}
+                    </div>
+                    <div className="announcement-custom-color">
+                      <input
+                        type="color"
+                        aria-label="Custom accent color"
+                        value={widgetAppearance.accent}
+                        onChange={(e) => patchAnnouncementAppearance({ accent: e.target.value })}
                       />
+                      <Input
+                        aria-label="Accent hex color"
+                        value={widgetAppearance.accent}
+                        maxLength={7}
+                        onChange={(e) => patchAnnouncementAppearance({ accent: e.target.value })}
+                      />
+                    </div>
+                  </Field>
+                  <div className="hub-config__grid announcement-customizer__fields">
+                    <Field label="Corner radius" hint="6–40 px">
+                      <Input
+                        type="number"
+                        min={6}
+                        max={40}
+                        value={widgetAppearance.radius}
+                        onChange={(e) => patchAnnouncementAppearance({ radius: Number(e.target.value) })}
+                      />
+                    </Field>
+                    <Field label="Launcher label" hint="Text on the button">
+                      <Input
+                        value={widgetAppearance.button_label}
+                        placeholder={launcherPlaceholder}
+                        maxLength={40}
+                        onChange={(e) => patchAnnouncementAppearance({ button_label: e.target.value })}
+                      />
+                    </Field>
+                    <Field label="Position" hint="Corner the launcher sits in">
                       <Select
-                        value={q.type}
-                        onChange={(v) =>
-                          patchQuestion(i, {
-                            type: v as SurveyQuestion['type'],
-                            max: v === 'rating' ? 5 : undefined,
-                            options: v === 'choice' ? ['Yes', 'No'] : undefined,
-                          })
-                        }
+                        value={draft.widget_position || 'right'}
+                        ariaLabel="Widget position"
+                        onChange={patchWidgetPosition}
                         options={[
-                          { value: 'rating', label: 'Rating' },
-                          { value: 'choice', label: 'Choice' },
-                          { value: 'text', label: 'Text' },
+                          { value: 'right', label: 'Bottom right' },
+                          { value: 'left', label: 'Bottom left' },
                         ]}
                       />
-                      {q.type === 'rating' && (
-                        <Select
-                          value={String(q.max || 5)}
-                          onChange={(v) => patchQuestion(i, { max: Number(v) })}
-                          options={[
-                            { value: '5', label: '1–5 stars' },
-                            { value: '10', label: '0–10 NPS' },
-                          ]}
-                        />
-                      )}
-                      {q.type === 'choice' && (
-                        <Input
-                          placeholder="Options, comma separated"
-                          value={(q.options ?? []).join(', ')}
-                          onChange={(e) =>
-                            patchQuestion(i, {
-                              options: e.target.value.split(',').map((o) => o.trim()).filter(Boolean),
-                            })
-                          }
-                        />
-                      )}
-                      <label className="hub-question__optional">
-                        <input
-                          type="checkbox"
-                          checked={!!q.optional}
-                          onChange={(e) => patchQuestion(i, { optional: e.target.checked })}
-                        />
-                        Optional
-                      </label>
-                      <button
-                        className="icon-btn"
-                        title="Remove question"
-                        aria-label="Remove question"
-                        onClick={() =>
-                          patchDraft({ questions: (draft.questions ?? []).filter((_, qi) => qi !== i) })
-                        }
-                      >
-                        <Icon name="trash" size={14} />
-                      </button>
+                    </Field>
+                    <Field label="Maximum width" hint="300–560 px">
+                      <Input
+                        type="number"
+                        min={300}
+                        max={560}
+                        value={widgetAppearance.max_width}
+                        onChange={(e) => patchAnnouncementAppearance({ max_width: Number(e.target.value) })}
+                      />
+                    </Field>
+                  </div>
+                  <Field label="Launcher icon" hint="PNG, JPEG or GIF · up to 256 KB · any size, rendered at 48×48">
+                    <div className="widget-icon">
+                      <div className="widget-icon__preview">
+                        {detail.widget_icon_url ? <img src={detail.widget_icon_url} alt="" /> : <Icon name="megaphone" size={18} />}
+                      </div>
+                      <div className="widget-icon__actions">
+                        <label className="widget-icon__pick">
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/gif"
+                            disabled={iconBusy}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = '';
+                              if (file) void uploadIcon(file);
+                            }}
+                          />
+                          <span>{detail.widget_icon_url ? 'Replace image' : 'Upload image'}</span>
+                        </label>
+                        {detail.widget_icon_url && (
+                          <button type="button" className="widget-icon__remove" disabled={iconBusy} onClick={() => void removeIcon()}>
+                            Remove
+                          </button>
+                        )}
+                        <p className="muted small">
+                          {detail.widget_icon
+                            ? `${detail.widget_icon.width}×${detail.widget_icon.height} ${detail.widget_icon.mime.replace('image/', '').toUpperCase()} · replaces the text label on the launcher`
+                            : 'Without an icon the launcher shows the label above.'}
+                        </p>
+                      </div>
                     </div>
-                  ))}
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() =>
-                      patchDraft({
-                        questions: [
-                          ...(draft.questions ?? []),
-                          { id: `q${(draft.questions?.length ?? 0) + 1}`, label: '', type: 'rating', max: 5 },
-                        ],
-                      })
-                    }
+                    {iconError && <Notice tone="error">{iconError}</Notice>}
+                  </Field>
+                  <button
+                    className="announcement-reset"
+                    type="button"
+                    onClick={() => patchAnnouncementAppearance({ theme: 'light', button_label: '', accent: '#2f7d4a', radius: 18, max_width: 440 })}
                   >
-                    <Icon name="plus" size={13} />
-                    Add question
-                  </Button>
+                    <Icon name="x" size={13} /> Reset to defaults
+                  </button>
                 </div>
-              )}
-
-              <h4>Shared appearance</h4>
-              <Notice tone="info">Feedback shares one launcher with Announcements. The panel shows a “Feedback” tab whenever this is on; look, icon and label live in the Styles tab.</Notice>
-              <div className="hub-config__grid feedback-legacy-appearance">
-                <Field label="Button label">
-                  <Input
-                    value={draft.appearance?.button_label ?? 'Feedback'}
-                    maxLength={40}
-                    onChange={(e) => patchAppearance({ button_label: e.target.value })}
-                  />
-                </Field>
-                <Field label="Button color">
-                  <input
-                    type="color"
-                    className="color-input"
-                    value={draft.appearance?.button_bg || '#1a1d29'}
-                    onChange={(e) => patchAppearance({ button_bg: e.target.value })}
-                  />
-                </Field>
-                <Field label="Button text">
-                  <input
-                    type="color"
-                    className="color-input"
-                    value={draft.appearance?.button_text || '#ffffff'}
-                    onChange={(e) => patchAppearance({ button_text: e.target.value })}
-                  />
-                </Field>
-                <Field label="Panel color">
-                  <input
-                    type="color"
-                    className="color-input"
-                    value={draft.appearance?.panel_bg || '#ffffff'}
-                    onChange={(e) => patchAppearance({ panel_bg: e.target.value })}
-                  />
-                </Field>
-                <Field label="Panel text">
-                  <input
-                    type="color"
-                    className="color-input"
-                    value={draft.appearance?.panel_text || '#1a1d29'}
-                    onChange={(e) => patchAppearance({ panel_text: e.target.value })}
-                  />
-                </Field>
-                <Field label="Accent (stars)">
-                  <input
-                    type="color"
-                    className="color-input"
-                    value={draft.appearance?.accent || '#f5a623'}
-                    onChange={(e) => patchAppearance({ accent: e.target.value })}
-                  />
-                </Field>
-                <Field label="Submit button">
-                  <input
-                    type="color"
-                    className="color-input"
-                    value={draft.appearance?.primary || '#1a1d29'}
-                    onChange={(e) => patchAppearance({ primary: e.target.value })}
-                  />
-                </Field>
-                <Field label="Corner radius" hint="0–40 px">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={40}
-                    value={draft.appearance?.radius ?? 14}
-                    onChange={(e) => patchAppearance({ radius: Number(e.target.value) })}
-                  />
-                </Field>
-                <Field label="Spacing" hint="6–48 px">
-                  <Input
-                    type="number"
-                    min={6}
-                    max={48}
-                    value={draft.appearance?.spacing ?? 16}
-                    onChange={(e) => patchAppearance({ spacing: Number(e.target.value) })}
-                  />
-                </Field>
+                <WidgetPreview
+                  draft={draft}
+                  iconUrl={detail.widget_icon_url || undefined}
+                  launcherPlaceholder={launcherPlaceholder}
+                />
               </div>
-              <button
-                className="icon-btn feedback-legacy-appearance"
-                title="Reset appearance to defaults"
-                onClick={() => patchAppearance({
-                  button_bg: '#1a1d29', button_text: '#ffffff', button_label: 'Feedback',
-                  panel_bg: '#ffffff', panel_text: '#1a1d29', accent: '#f5a623',
-                  primary: '#1a1d29', primary_text: '#ffffff', radius: 14, spacing: 16,
-                })}
-              >
-                <Icon name="x" size={13} />
-              </button>
-              <span className="muted small feedback-legacy-appearance"> Reset appearance</span>
-            </>
-          )}
-
             </>
           )}
 
@@ -993,6 +897,24 @@ export default function SiteDetail() {
             </Button>
           </div>
         </Card>
+      )}
+
+      {isAdmin && draft && (
+        <>
+          <AnnouncementSettingsModal
+            open={widgetSettingsModal === 'announcements'}
+            onClose={() => setWidgetSettingsModal(null)}
+          />
+          <FeedbackSettingsModal
+            open={widgetSettingsModal === 'feedback'}
+            onClose={() => setWidgetSettingsModal(null)}
+            draft={draft}
+            trigger={trigger}
+            onPatchDraft={patchDraft}
+            onPatchTrigger={patchTrigger}
+            onPatchQuestion={patchQuestion}
+          />
+        </>
       )}
 
       {!isAdmin && activeTab !== 'overview' && activeTab !== 'site' && (

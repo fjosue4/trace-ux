@@ -55,11 +55,16 @@ export type SiteSettings = {
   // feedback_position predate the merge of the two widgets; the server mirrors
   // this value into both, and the dashboard writes all three together.
   widget_position?: string; // right | left
+  // Master switch. Absent on sites configured before it existed, where the
+  // widget showed whenever any section was on — so read it as
+  // `widget_enabled ?? (updates_enabled || tickets_enabled || feedback_enabled)`.
+  widget_enabled?: boolean;
   updates_enabled?: boolean;
   updates_position?: string;
   updates_appearance?: AnnouncementAppearance;
   feedback_enabled: boolean;
   feedback_position: string; // right | left
+  tickets_enabled?: boolean;
   survey_id: string;
   survey_title: string;
   survey_type: string; // stars | nps | custom
@@ -205,6 +210,38 @@ export type Announcement = {
   id: number; site_id: number; site_name?: string; title: string; summary: string; body: string;
   release_label: string; link_url: string; status: AnnouncementStatus; published_at: number;
   created_at: number; updated_at: number; reactions: number; comments: number; reads: number;
+};
+
+export type TicketStatus = 'open' | 'in_progress' | 'under_review' | 'closed';
+export type Ticket = {
+  id: number;
+  site_id: number;
+  site_name?: string;
+  user_id?: string;
+  email?: string;
+  name?: string;
+  subject: string;
+  status: TicketStatus;
+  session_id?: string;
+  page_url?: string;
+  message_count: number;
+  last_message_at: number;
+  last_message_author: 'visitor' | 'staff';
+  created_at: number;
+  updated_at: number;
+};
+export type TicketMessage = {
+  id: number;
+  ticket_id: number;
+  author: 'visitor' | 'staff';
+  user_id: number;
+  author_name?: string;
+  body: string;
+  created_at: number;
+};
+export type TicketThread = {
+  ticket: Ticket;
+  messages: TicketMessage[];
 };
 
 export type Log = {
@@ -521,6 +558,26 @@ export const api = {
   publishAnnouncement: (id: number) => request<{ ok: boolean }>(`/api/announcements/${id}/publish`, { method: 'POST' }),
   archiveAnnouncement: (id: number) => request<{ ok: boolean }>(`/api/announcements/${id}/archive`, { method: 'POST' }),
   deleteAnnouncement: (id: number) => request<{ ok: boolean }>(`/api/announcements/${id}`, { method: 'DELETE' }),
+
+  // Support tickets.
+  listTickets: (siteId: number | null, status: TicketStatus | '') => {
+    const q = new URLSearchParams();
+    if (siteId) q.set('site_id', String(siteId));
+    if (status) q.set('status', status);
+    return request<Ticket[]>(`/api/tickets${q.toString() ? `?${q}` : ''}`);
+  },
+  getTicket: (id: number) => request<TicketThread>(`/api/tickets/${id}`),
+  replyToTicket: (id: number, body: string) =>
+    request<TicketThread>(`/api/tickets/${id}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }),
+  updateTicket: (id: number, status: TicketStatus) =>
+    request<Ticket>(`/api/tickets/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status }),
+    }),
+  deleteTicket: (id: number) => request<{ ok: boolean }>(`/api/tickets/${id}`, { method: 'DELETE' }),
 };
 
 export type SessionFilter = {

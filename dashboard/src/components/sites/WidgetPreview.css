@@ -1,0 +1,236 @@
+/* Live preview of the embedded widget. It is deliberately a mock, but every
+   value comes from the unsaved Widget-tab draft. */
+.widget-preview {
+  --preview-accent: #2f7d4a;
+  --preview-radius: 18px;
+  --preview-max-width: 440px;
+  --preview-panel-bg: #fff;
+  --preview-panel-text: #142018;
+  --preview-button-bg: var(--preview-accent);
+  --preview-button-text: #fff;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 480px;
+  padding: 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(145deg, #e8eee9, #cfd9d1);
+  overflow: hidden;
+}
+.widget-preview.is-dark {
+  background: linear-gradient(145deg, #08100b, #182a1f);
+}
+.widget-preview__label {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b786f;
+}
+
+/* Both the panel and launcher follow the selected corner. */
+.widget-preview__stage {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  transition: align-items 0.18s ease;
+}
+.widget-preview.is-right .widget-preview__stage { align-items: flex-end; }
+.widget-preview.is-left .widget-preview__stage { align-items: flex-start; }
+
+.widget-preview__panel {
+  width: min(100%, var(--preview-max-width));
+  border-radius: var(--preview-radius);
+  overflow: hidden;
+  background: var(--preview-panel-bg);
+  color: var(--preview-panel-text);
+  box-shadow: 0 24px 55px #07150c3a;
+  transition: width 0.18s ease, border-radius 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+.widget-preview__panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+}
+.widget-preview__panel header strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.widget-preview__panel header button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(in srgb, currentColor 9%, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+
+/* ---- tab strip: one tab per switched-on section ---- */
+.widget-preview__tabs {
+  display: flex;
+  gap: 0.2rem;
+  padding: 0 0.6rem;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+}
+.widget-preview__tabs button {
+  position: relative;
+  border: 0;
+  background: none;
+  color: inherit;
+  opacity: 0.6;
+  padding: 0.6rem 0.65rem;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  cursor: default;
+}
+.widget-preview__tabs button.is-active {
+  opacity: 1;
+  color: var(--preview-accent);
+}
+.widget-preview__tabs button.is-active::after {
+  content: '';
+  position: absolute;
+  left: 0.4rem;
+  right: 0.4rem;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--preview-accent);
+}
+
+.widget-preview__panel main {
+  padding: 1rem 1.25rem 1.25rem;
+}
+.widget-preview__eyebrow {
+  display: block;
+  color: var(--preview-accent);
+  font-weight: 750;
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+}
+.widget-preview__panel h3 {
+  margin: 0.45rem 0;
+  font-size: 1.05rem;
+  color: inherit;
+}
+.widget-preview__panel p {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.55;
+  opacity: 0.72;
+}
+.widget-preview__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.9rem;
+  padding: 0.55rem 0.7rem;
+  border: 0;
+  border-radius: 8px;
+  background: var(--preview-button-bg);
+  color: var(--preview-button-text);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 650;
+  cursor: default;
+}
+.widget-preview__cta svg { width: 14px; height: 14px; flex: none; }
+
+/* ---- feedback mock ---- */
+.widget-preview__rating {
+  display: flex;
+  gap: 0.35rem;
+  margin: 0.6rem 0 0.9rem;
+  color: var(--preview-accent);
+}
+.widget-preview__rating i {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid currentColor;
+  border-radius: 7px;
+  font-size: 0.7rem;
+  font-style: normal;
+  font-weight: 700;
+}
+.widget-preview__field {
+  padding: 0.6rem 0.7rem;
+  border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
+  border-radius: 9px;
+  font-size: 0.78rem;
+  opacity: 0.55;
+}
+
+/* ---- launcher: the icon replaces the pill, rendered at 48x48 ---- */
+.widget-preview__launcher {
+  margin-top: 1rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 999px;
+  background: var(--preview-button-bg);
+  color: var(--preview-button-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  box-shadow: 0 8px 20px #0003;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.widget-preview__launcher b {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 0.3rem;
+  border-radius: 50%;
+  background: var(--preview-button-text);
+  color: var(--preview-button-bg);
+  font-size: 0.65rem;
+}
+.widget-preview__launcher--icon {
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 50%;
+  overflow: hidden;
+}
+.widget-preview__launcher--icon img {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+}
+
+/* ---- master switch off ---- */
+.widget-preview.is-hidden .widget-preview__stage {
+  opacity: 0.22;
+  filter: grayscale(1);
+  pointer-events: none;
+}
+.widget-preview__off {
+  position: absolute;
+  inset: auto 0 50% 0;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 650;
+  color: var(--ink);
+}
+.widget-preview.is-dark .widget-preview__off { color: #eef5f0; }
+
+@media (max-width: 900px) {
+  .widget-preview { min-height: 420px; }
+}

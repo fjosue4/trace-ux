@@ -2,7 +2,10 @@ module trace-ux
 
 go 1.27
 
-require modernc.org/sqlite v1.46.1
+require (
+	github.com/gorilla/websocket v1.5.3
+	modernc.org/sqlite v1.46.1
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect

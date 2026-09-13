@@ -82,6 +82,14 @@ func (s *Server) initSecurity() {
 		s.updatesReadLimiter = newRequestLimiter(120, minute)
 		s.updatesWriteLimiter = newRequestLimiter(30, minute)
 		s.updatesSiteLimiter = newRequestLimiter(2_000, minute)
+		s.ticketsReadLimiter = newRequestLimiter(120, minute)
+		s.ticketsWriteLimiter = newRequestLimiter(10, minute)
+		s.ticketsSiteLimiter = newRequestLimiter(600, minute)
+		// A socket handshake is cheap, but a client can keep the resulting
+		// connection open. Cap handshakes independently from the HTTP feed
+		// budgets so reconnect storms cannot exhaust the process.
+		s.widgetSocketLimiter = newRequestLimiter(30, minute)
+		s.widgetSocketSiteLimiter = newRequestLimiter(2_000, minute)
 	})
 }
 

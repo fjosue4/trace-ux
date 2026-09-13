@@ -20,6 +20,7 @@ import Performance from './pages/Performance';
 import Replay from './pages/Replay';
 import ShareReplay from './pages/ShareReplay';
 import Feedback from './pages/Feedback';
+import Tickets from './pages/Tickets';
 import Logs from './pages/Logs';
 import Settings from './pages/Settings';
 import SystemHealth from './pages/SystemHealth';
@@ -36,6 +37,7 @@ const router = createBrowserRouter([
       { path: 'performance', element: <Performance /> },
       { path: 'site/:siteId', element: <SiteDetail /> },
       { path: 'feedback', element: <Feedback /> },
+      { path: 'tickets', element: <Tickets /> },
       { path: 'announcements', element: <Announcements /> },
       { path: 'logs', element: <Logs /> },
       { path: 'replay/:sessionId', element: <Replay /> },

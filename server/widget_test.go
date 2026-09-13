@@ -158,7 +158,32 @@ func TestWidgetConfigWithSingleSection(t *testing.T) {
 	}
 }
 
-// The two legacy appearance objects fold into one: the Styles tab's
+func TestWidgetConfigHonorsMasterSwitchAndLegacySites(t *testing.T) {
+	legacy := ParseSiteSettings(`{"updates_enabled":true,"feedback_enabled":false}`)
+	if legacy.WidgetEnabled != nil {
+		t.Fatal("legacy settings unexpectedly gained a widget_enabled value")
+	}
+	if cfg := buildWidgetConfig(Site{Settings: legacy}, ""); !cfg.Enabled {
+		t.Fatal("legacy section settings should still enable the widget")
+	}
+
+	disabled := false
+	settings := DefaultSiteSettings()
+	settings.WidgetEnabled = &disabled
+	if cfg := buildWidgetConfig(Site{Settings: settings}, ""); cfg.Enabled {
+		t.Fatal("explicitly disabled widget still appears enabled")
+	}
+
+	encoded, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), `"widget_enabled"`) {
+		t.Fatalf("legacy settings should omit widget_enabled, got %s", encoded)
+	}
+}
+
+// The two legacy appearance objects fold into one: the Widget tab's
 // announcement object wins, the older feedback object fills the gaps.
 func TestWidgetAppearanceMergesLegacyObjects(t *testing.T) {
 	settings := DefaultSiteSettings()
