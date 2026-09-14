@@ -1,9 +1,9 @@
-.tickets-toolbar{display:flex;gap:.75rem;margin-bottom:1rem;flex-wrap:wrap}
 .tickets-layout{display:grid;grid-template-columns:minmax(300px,.78fr) minmax(0,1.6fr);gap:1rem;align-items:stretch;height:min(720px,calc(100vh - 190px));min-height:520px}
 .tickets-list-card,.ticket-thread-card{height:100%;min-height:0;padding:0;overflow:hidden;display:flex;flex-direction:column}
 .tickets-list-card__head{display:flex;flex:none;align-items:center;justify-content:space-between;padding:1.2rem 1.25rem 1rem;border-bottom:1px solid var(--line)}
 .tickets-list-card__head h2{font-size:1.05rem;margin:.22rem 0 0}
-.tickets-list-card__head>svg{color:var(--accent)}
+.tickets-list-card__head .tickets-filter-button{color:var(--accent)}
+.tickets-list-card__head .tickets-filter-button.is-active{background:var(--accent-soft)}
 .eyebrow,.ticket-kicker{display:block;color:var(--accent);font-size:.67rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase}
 .ticket-list{display:flex;flex:1;min-height:0;flex-direction:column;overflow-y:auto}
 .ticket-row{display:flex;flex-direction:column;gap:.42rem;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:transparent;color:var(--ink);padding:1rem 1.25rem;cursor:pointer;transition:background var(--duration-fast) var(--ease-out),border-color var(--duration-fast) var(--ease-out)}
@@ -32,10 +32,10 @@
 .ticket-message__meta strong{color:var(--ink-2);font-size:.73rem}
 .ticket-message p{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.55;font-size:.86rem;margin:0}
 .ticket-reply{flex:none;border-top:1px solid var(--line);padding:1rem 1.5rem;background:var(--surface)}
-.ticket-reply textarea{display:block;width:100%;min-height:90px;resize:vertical;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--ink);padding:.75rem;font:inherit;line-height:1.5;outline:none}
+.ticket-reply textarea{display:block;width:100%;min-height:90px;resize:none;border:1px solid var(--line-strong);border-radius:var(--radius-sm);background:var(--surface-2);color:var(--ink);padding:.75rem;font:inherit;line-height:1.5;outline:none}
 .ticket-reply textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 .ticket-reply__bottom{display:flex;align-items:center;gap:.75rem;min-height:36px;margin-top:.6rem}
-.ticket-reply__bottom .btn{margin-left:auto;display:inline-flex;align-items:center;gap:.4rem}
+.ticket-reply__bottom .btn{margin-left:0;display:inline-flex;align-items:center;gap:.4rem}
 .ticket-form-error{color:var(--danger);font-size:.75rem}
 .ticket-closed-note{margin:auto 1.5rem 1.5rem;padding:.9rem 1rem;border:1px solid var(--line);border-radius:var(--radius-sm);color:var(--muted);font-size:.8rem;background:var(--surface-2)}
 .ticket-thread__danger{display:flex;flex:none;justify-content:flex-end;padding:.65rem 1.5rem;border-top:1px solid var(--line)}

@@ -5,6 +5,7 @@ import { fmtClock, fmtDuration, fmtTime, stripProto, truncate } from '../../lib/
 import { stagger } from '../../lib/motion';
 import Badge from '../ui/Badge';
 import Card from '../ui/Card';
+import DebouncedTextInput from '../ui/DebouncedTextInput';
 import { Icon } from '../ui/Icon';
 import Modal from '../ui/Modal';
 import './replay.css';
@@ -207,13 +208,13 @@ export default function PagesPanel({
       <div className="actions-head">
         <h4>Actions</h4>
         {actions.length > 0 && (
-          <input
+          <DebouncedTextInput
             type="search"
             className="actions-search"
             placeholder="Search actions and pages"
             aria-label="Search actions and pages"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onDebouncedChange={setQuery}
           />
         )}
       </div>

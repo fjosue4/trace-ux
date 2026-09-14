@@ -249,7 +249,14 @@ export function widgetCSS(): string {
 .ticket-thread .detail__title { margin-top: 8px; }
 .ticket-thread__meta { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; margin-top: 9px; color: var(--w-quiet); font-size: 11px; }
 .ticket-thread__meta .detail__link { margin-top: 0; font-size: 11px; }
-.ticket-messages { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 9px; margin-top: 20px; overflow-y: auto; overscroll-behavior: contain; }
+.ticket-messages {
+  display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 9px; margin-top: 20px;
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable;
+  scrollbar-width: thin; scrollbar-color: var(--w-line) transparent;
+}
+.ticket-messages::-webkit-scrollbar { width: 10px; }
+.ticket-messages::-webkit-scrollbar-track { background: transparent; }
+.ticket-messages::-webkit-scrollbar-thumb { background: var(--w-line); border: 3px solid var(--w-panel-bg); border-radius: 999px; }
 .ticket-message { max-width: 88%; padding: 10px 12px; border: 1px solid var(--w-line); border-radius: 13px; background: var(--w-field); }
 .ticket-message--visitor { align-self: flex-end; border-bottom-right-radius: 4px; }
 .ticket-message--staff { align-self: flex-start; border-bottom-left-radius: 4px; background: var(--w-hover); }
@@ -257,9 +264,9 @@ export function widgetCSS(): string {
 .ticket-message__body { margin: 4px 0 0; color: var(--w-panel-text); font-size: 13px; line-height: 1.52; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ticket-message__time { margin-top: 6px; color: var(--w-quiet); font-size: 10px; }
 .ticket-composer { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--w-line-soft); }
-.ticket-composer__input { height: 82px; resize: vertical; }
+.ticket-composer__input { height: 82px; resize: none; }
 .ticket-composer__actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
-.ticket-composer__actions .submit { width: auto; min-width: 86px; margin-inline-start: auto; padding: 0 14px; }
+.ticket-composer__actions .submit { width: auto; min-width: 0; margin-inline-start: 0; padding: 0 12px; }
 .ticket-error { margin-top: 10px; padding: 9px 11px; border-radius: 8px; background: color-mix(in srgb, #d0453e 12%, transparent); color: #d0453e; font-size: 11.5px; line-height: 1.4; }
 .ticket-composer__actions .ticket-error { flex: 1; margin-top: 0; }
 .ticket-loading { padding: 40px 0; color: var(--w-muted); text-align: center; font-size: 13px; }
@@ -269,7 +276,7 @@ export function widgetCSS(): string {
 .ticket-new__field { display: block; margin-top: 14px; }
 .ticket-new__field > span { display: block; margin-bottom: 7px; color: var(--w-panel-text); font-size: 12px; font-weight: 620; }
 .ticket-new__field .field { width: 100%; }
-.ticket-new__message { height: 115px; resize: vertical; }
+.ticket-new__message { height: 115px; resize: none; }
 .ticket-new > .submit { margin-top: 16px; }
 
 /* ---- feedback form ---- */

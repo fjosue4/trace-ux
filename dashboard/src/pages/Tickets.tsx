@@ -9,6 +9,7 @@ import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import EmptyState from '../components/ui/EmptyState';
 import Loading from '../components/ui/Loading';
+import Modal from '../components/ui/Modal';
 import Notice from '../components/ui/Notice';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { Icon } from '../components/ui/Icon';
@@ -198,6 +199,7 @@ export default function Tickets() {
   const [error, setError] = useState('');
   const [pendingDelete, setPendingDelete] = useState<Ticket | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const selectedId = Number(searchParams.get('ticket')) || null;
   const selectedIdRef = useRef<number | null>(selectedId);
   const siteSelRef = useRef<SiteSelection>(siteSel);
@@ -428,11 +430,6 @@ export default function Tickets() {
         subtitle="Keep visitor support conversations in one place, with replay context close at hand."
       />
 
-      <div className="tickets-toolbar">
-        <Select ariaLabel="Site" value={String(siteSel)} onChange={(value) => setSiteSel(value === 'all' ? 'all' : Number(value))} options={siteOptions} />
-        <Select ariaLabel="Status" value={statusSel} onChange={(value) => setStatusSel(value as StatusSelection)} options={statusOptions} />
-      </div>
-
       {error && <Notice tone="error">{error}</Notice>}
 
       <div className="tickets-layout">
@@ -442,7 +439,16 @@ export default function Tickets() {
               <span className="eyebrow">Inbox</span>
               <h2>{items ? `${items.length} ticket${items.length === 1 ? '' : 's'}` : 'Tickets'}</h2>
             </div>
-            <Icon name="lifebuoy" size={20} />
+            <button
+              type="button"
+              className={`icon-btn tickets-filter-button${siteSel !== 'all' || statusSel !== 'all' ? ' is-active' : ''}`}
+              aria-label="Filter tickets"
+              aria-haspopup="dialog"
+              title="Filter tickets"
+              onClick={() => setFiltersOpen(true)}
+            >
+              <Icon name="filter" size={18} />
+            </button>
           </div>
           {items === null ? (
             <Loading />
@@ -501,6 +507,36 @@ export default function Tickets() {
         onConfirm={confirmDelete}
         onClose={() => setPendingDelete(null)}
       />
+
+      <Modal
+        open={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title="Filter tickets"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => { setSiteSel('all'); setStatusSel('all'); }}>
+              Clear filters
+            </Button>
+            <Button onClick={() => setFiltersOpen(false)}>Done</Button>
+          </>
+        }
+      >
+        <div className="stack">
+          <label className="field">
+            <span className="field-label">Site</span>
+            <Select
+              ariaLabel="Site"
+              value={String(siteSel)}
+              onChange={(value) => setSiteSel(value === 'all' ? 'all' : Number(value))}
+              options={siteOptions}
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Status</span>
+            <Select ariaLabel="Status" value={statusSel} onChange={(value) => setStatusSel(value as StatusSelection)} options={statusOptions} />
+          </label>
+        </div>
+      </Modal>
     </main>
   );
 }

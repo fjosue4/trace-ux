@@ -288,6 +288,24 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 	const ticketBaseInterval = ticketInterval;
 	let ticketTimer: ReturnType<typeof setTimeout> | undefined;
 	let ticketRequest = 0;
+	// Anything typed but not sent yet. Every ticket view is thrown away and
+	// rebuilt on each repaint — a background poll, a tab switch, the panel
+	// closing on a click elsewhere on the page — so a draft that lives only in
+	// the DOM is lost on all of them. Keeping it here is what survives.
+	let ticketDraft = { subject: '', email: '', body: '' };
+	const ticketReplyDrafts = new Map<number, string>();
+
+	// Mirrors a field into the draft and seeds it from whatever is already there.
+	const bindDraft = (
+		field: HTMLInputElement | HTMLTextAreaElement,
+		name: string,
+		read: () => string,
+		write: (value: string) => void,
+	) => {
+		field.name = name;
+		field.value = read();
+		field.addEventListener('input', () => write(field.value));
+	};
 	let widgetSocket: WebSocket | null = null;
 	let widgetSocketRetryTimer: ReturnType<typeof setTimeout> | undefined;
 	let widgetSocketRetryCount = 0;
@@ -694,10 +712,27 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   }
 
   function repaintTicketView() {
-    if (!destroyed && panelOpen && section === 'tickets') {
-      const next = buildTicketsView();
-      body.classList.toggle('body--ticket-thread', next.classList.contains('ticket-view--thread'));
-      body.replaceChildren(next);
+    if (destroyed || !panelOpen || section !== 'tickets') return;
+    // Replacing the view moves focus to the panel, so remember which field the
+    // visitor was in and where the caret sat, and put both back afterwards. A
+    // reply arriving on the poll must not interrupt someone mid-sentence.
+    const focused = shadow.activeElement as HTMLInputElement | HTMLTextAreaElement | null;
+    const focusName = focused && focused.name && body.contains(focused) ? focused.name : '';
+    const caret = focusName && typeof focused?.selectionStart === 'number' ? focused.selectionStart : null;
+
+    const next = buildTicketsView();
+    body.classList.toggle('body--ticket-thread', next.classList.contains('ticket-view--thread'));
+    body.replaceChildren(next);
+
+    if (!focusName) return;
+    const restored = body.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${focusName}"]`);
+    if (!restored) return;
+    restored.focus();
+    if (caret === null) return;
+    try {
+      restored.setSelectionRange(caret, caret);
+    } catch {
+      /* number and email inputs reject setSelectionRange in some browsers */
     }
   }
 
@@ -804,16 +839,6 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     detail.appendChild(el('h3', 'detail__title', ticket.subject));
     const meta = el('div', 'ticket-thread__meta');
     meta.append(el('span', undefined, ticketRelativeTime(ticket.created_at)));
-    if (ticket.page_url) {
-      const href = safeHref(ticket.page_url);
-      if (href) {
-        const page = el('a', 'detail__link', 'Current page');
-        page.href = href;
-        page.target = '_blank';
-        page.rel = 'noopener noreferrer';
-        meta.append(page);
-      }
-    }
     detail.appendChild(meta);
 
     const messages = el('div', 'ticket-messages');
@@ -830,6 +855,12 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       input.maxLength = 4000;
       input.placeholder = 'Reply to support…';
       input.setAttribute('aria-label', 'Reply to support');
+      bindDraft(
+        input,
+        'reply',
+        () => ticketReplyDrafts.get(ticket.id) || '',
+        (v) => ticketReplyDrafts.set(ticket.id, v),
+      );
       const actions = el('div', 'ticket-composer__actions');
       const error = el('div', 'ticket-error');
       error.hidden = true;
@@ -857,6 +888,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
         }
         try {
           ticketThread = (await res.json()) as TicketThread;
+          ticketReplyDrafts.delete(ticket.id);
           tickets = tickets.map((item) => item.id === ticket.id ? ticketThread?.ticket || item : item);
           syncBadges();
           ticketError = '';
@@ -896,6 +928,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     subject.required = true;
     subject.placeholder = 'What can we help with?';
     subject.setAttribute('aria-label', 'Subject');
+    bindDraft(subject, 'subject', () => ticketDraft.subject, (v) => (ticketDraft.subject = v));
     const subjectLabel = el('label', 'ticket-new__field');
     subjectLabel.append(el('span', undefined, 'Subject'), subject);
     form.appendChild(subjectLabel);
@@ -910,6 +943,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       email.required = true;
       email.placeholder = 'you@example.com';
       email.setAttribute('aria-label', 'Email');
+      bindDraft(email, 'email', () => ticketDraft.email, (v) => (ticketDraft.email = v));
       const emailLabel = el('label', 'ticket-new__field');
       emailLabel.append(el('span', undefined, 'Email'), email);
       form.appendChild(emailLabel);
@@ -920,6 +954,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     message.required = true;
     message.placeholder = 'Describe the issue…';
     message.setAttribute('aria-label', 'Message');
+    bindDraft(message, 'body', () => ticketDraft.body, (v) => (ticketDraft.body = v));
     const messageLabel = el('label', 'ticket-new__field');
     messageLabel.append(el('span', undefined, 'Message'), message);
     form.appendChild(messageLabel);
@@ -958,6 +993,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       }
       try {
         const created = (await res.json()) as Ticket;
+        ticketDraft = { subject: '', email: '', body: '' };
         markTicketHistory();
         tickets = [created, ...tickets.filter((item) => item.id !== created.id)];
         hasLiveTicket = true;
@@ -1074,7 +1110,9 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     if (panelOpen && section === 'tickets') {
       if (ticketView.kind === 'thread') {
         void loadTicketThread(ticketView.id, false);
-      } else {
+      } else if (ticketView.kind === 'list') {
+        // The compose form shows nothing the ticket list feeds, so a poll has
+        // no reason to rebuild it underneath whoever is filling it in.
         repaintTicketView();
       }
     }
@@ -1415,7 +1453,21 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     );
     hasLiveTicket = tickets.some((item) => item.status !== 'closed');
     syncBadges();
-    if (panelOpen && section === 'tickets' && ticketView.kind === 'list') repaintTicketView();
+    if (!panelOpen || section !== 'tickets') return;
+    if (ticketView.kind === 'list') {
+      repaintTicketView();
+      return;
+    }
+    // The open thread renders from its own copy of the ticket, so a change
+    // that arrives while it is on screen — support moving it to closed, say —
+    // has to be written back and the view rebuilt. Without this the pill goes
+    // stale and, worse, a closed ticket keeps offering a reply box whose next
+    // message the server rejects. Rebuilding is safe: a repaint carries the
+    // unsent draft and the caret across.
+    if (ticketView.kind !== 'thread' || ticketView.id !== ticket.id || !ticketThread) return;
+    const statusChanged = ticketThread.ticket.status !== ticket.status;
+    ticketThread = { ...ticketThread, ticket };
+    if (statusChanged) repaintTicketView();
   }
 
   function removeTicketFromSocket(id: number) {
@@ -1482,7 +1534,8 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     const viewingThisThread =
       panelOpen && section === 'tickets' && ticketView.kind === 'thread' && ticketView.id === ticket.id;
     if (viewingThisThread && ticketThread) {
-      ticketThread = { ...ticketThread, ticket };
+      // upsertTicketFromSocket above already wrote the fresh ticket back and
+      // rebuilt the view if the status moved, so all that is left is the bubble.
       appendTicketMessageToView(message);
       if (message.author === 'staff') markTicketRead(ticket);
       return;
