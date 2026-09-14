@@ -19,6 +19,7 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		Device:   q.Get("device"),
 		Country:  strings.ToUpper(strings.TrimSpace(q.Get("country"))),
 		URL:      q.Get("url"),
+		Action:   q.Get("action"),
 		Identity: q.Get("visitor"),
 	}
 	if v := q.Get("site_id"); v != "" {
