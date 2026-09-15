@@ -2,8 +2,31 @@
   "name": "@trace-ux/tracker",
   "version": "0.2.0",
   "description": "TraceUX session replay, logs, events, and optional in-product widget for HTML, GTM, npm, and React",
+  "keywords": [
+    "session-replay",
+    "rrweb",
+    "analytics",
+    "product-analytics",
+    "session-recording",
+    "feedback",
+    "support-tickets",
+    "self-hosted"
+  ],
+  "homepage": "https://github.com/fjosue4/trace-ux#readme",
+  "bugs": {
+    "url": "https://github.com/fjosue4/trace-ux/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fjosue4/trace-ux.git",
+    "directory": "tracker"
+  },
+  "author": "fjosue4 (https://github.com/fjosue4)",
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
+  "sideEffects": [
+    "./dist/tracker.js"
+  ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "browser": "./dist/index.js",
@@ -13,6 +36,12 @@
     "README.md",
     "LICENSE"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "exports": {
     ".": {
       "types": "./dist/types/main.d.ts",
@@ -40,7 +69,7 @@
     "build:esm": "esbuild src/main.ts --bundle --minify --format=esm --platform=browser --target=es2018 --legal-comments=none --external:./widget.js --outfile=dist/index.js",
     "build:cjs": "esbuild src/main.ts --bundle --minify --format=cjs --platform=browser --target=es2018 --legal-comments=none --external:./widget.js --outfile=dist/index.cjs",
     "build:widget": "esbuild src/widget.ts --bundle --minify --format=esm --platform=browser --target=es2018 --legal-comments=none --outfile=dist/widget.js && esbuild src/widget.ts --bundle --minify --format=cjs --platform=browser --target=es2018 --legal-comments=none --outfile=dist/widget.cjs",
-    "build:react": "esbuild src/react.ts --bundle --minify --format=esm --platform=browser --target=es2018 --legal-comments=none --external:react --external:./widget.js --outfile=dist/react.js && esbuild src/react.ts --bundle --minify --format=cjs --platform=browser --target=es2018 --legal-comments=none --external:react --external:./widget.js --outfile=dist/react.cjs",
+    "build:react": "esbuild src/react.ts --bundle --minify --format=esm --platform=browser --target=es2018 --legal-comments=none --external:react --external:@trace-ux/tracker --outfile=dist/react.js && esbuild src/react.ts --bundle --minify --format=cjs --platform=browser --target=es2018 --legal-comments=none --external:react --external:@trace-ux/tracker --outfile=dist/react.cjs",
     "build:types": "tsc --noEmit false --emitDeclarationOnly --declaration --declarationDir dist/types",
     "clean": "rm -rf dist",
     "prepack": "npm run build",

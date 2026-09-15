@@ -6,7 +6,7 @@ import {
   useRef,
   type ReactNode,
 } from 'react';
-import { init, type TraceUXHandle, type TraceUXOptions } from './main';
+import { init, type TraceUXHandle, type TraceUXOptions } from '@trace-ux/tracker';
 
 export interface TraceUXProviderProps extends TraceUXOptions {
   children?: ReactNode;
