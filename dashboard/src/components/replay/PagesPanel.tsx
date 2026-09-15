@@ -87,6 +87,22 @@ function actionLabel(action: Action): string {
   return action.message || 'Browser log';
 }
 
+function actionSearchText(action: Action): string {
+  const label = actionLabel(action);
+  const common = 'action actions activity activities';
+
+  if (action.kind === 'custom') {
+    const clickTerms = action.name === 'click' ? 'click clicks clicked' : '';
+    return `${label} ${common} custom custom-action custom event custom events ${clickTerms} ${action.name} ${action.trackId}`.toLowerCase();
+  }
+
+  if (action.kind === 'page') {
+    return `${label} ${common} page pages page visit page visits visit visits visited navigation navigated opened ${action.title} ${action.url} ${pagePath(action.url)}`.toLowerCase();
+  }
+
+  return `${label} ${common} log logs browser log browser logs console ${action.severity} ${action.message} ${action.url}`.toLowerCase();
+}
+
 function logIcon(severity: ReplayLog['severity']): 'code' | 'warn' | 'x' {
   return severity === 'error' ? 'x' : severity === 'warn' ? 'warn' : 'code';
 }
@@ -154,20 +170,19 @@ export default function PagesPanel({
   const searchable = useMemo(() => {
     const map: Record<string, string> = {};
     for (const a of actions) {
-      const extra =
-        a.kind === 'custom'
-          ? `custom event ${a.name} ${a.trackId}`
-          : a.kind === 'log'
-            ? `log ${a.severity} ${a.url}`
-            : `page navigation ${a.title} ${a.url}`;
-      map[a.key] = `${actionLabel(a)} ${extra}`.toLowerCase();
+      map[a.key] = actionSearchText(a);
     }
     return map;
   }, [actions]);
 
   const needle = query.trim().toLowerCase();
   const visible = useMemo(
-    () => (needle ? actions.filter((a) => searchable[a.key].includes(needle)) : actions),
+    () => {
+      const terms = needle.split(/\s+/).filter(Boolean);
+      return terms.length
+        ? actions.filter((a) => terms.every((term) => searchable[a.key].includes(term)))
+        : actions;
+    },
     [actions, needle, searchable],
   );
 

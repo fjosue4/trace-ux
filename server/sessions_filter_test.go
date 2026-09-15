@@ -8,8 +8,7 @@ import (
 	"testing"
 )
 
-// Filter by action (custom event name) and by page visited, end to end
-// through ingest + ListSessions.
+// Filter by activity and by page visited, end to end through ingest + ListSessions.
 func TestListSessionsFilterByActionAndURL(t *testing.T) {
 	srv, ts := newTestServer(t)
 
@@ -36,8 +35,17 @@ func TestListSessionsFilterByActionAndURL(t *testing.T) {
 	mk("sess-with-action", "https://x.test/")
 	mk("sess-no-action", "https://x.test/other")
 
-	if r := postJSON(t, ingestURL, `{"type":"custom","session_id":"sess-with-action","events":[{"ts":1,"name":"signup_click","track_id":""}]}`, false); r.StatusCode != 200 {
+	if r := postJSON(t, ingestURL, `{"type":"custom","session_id":"sess-with-action","events":[{"ts":1,"name":"signup_click","track_id":""},{"ts":2,"name":"click","track_id":"checkout-button"}]}`, false); r.StatusCode != 200 {
 		t.Fatalf("custom: %d", r.StatusCode)
+	}
+	if err := srv.store.SaveLogs(site.ID, "sess-no-action", []Log{{
+		ClientSeq:   1,
+		TimestampMs: 3000,
+		Severity:    "error",
+		Message:     "payment failed",
+		URL:         "https://x.test/checkout",
+	}}); err != nil {
+		t.Fatal(err)
 	}
 
 	// Action filter: only the session that recorded the event matches.
@@ -57,6 +65,28 @@ func TestListSessionsFilterByActionAndURL(t *testing.T) {
 	got, _ = srv.store.ListSessions(SessionFilter{Action: "purchase", Limit: 50})
 	if len(got) != 0 {
 		t.Fatalf("missing action should match nothing: got %d sessions", len(got))
+	}
+
+	// The same filter searches click metadata, page visits, and browser logs.
+	got, _ = srv.store.ListSessions(SessionFilter{Action: "checkout-button", Limit: 50})
+	if len(got) != 1 || got[0].ID != "sess-with-action" {
+		t.Fatalf("track id filter: got %+v", got)
+	}
+	got, _ = srv.store.ListSessions(SessionFilter{Action: "clicks", Limit: 50})
+	if len(got) != 1 || got[0].ID != "sess-with-action" {
+		t.Fatalf("click category filter: got %+v", got)
+	}
+	got, _ = srv.store.ListSessions(SessionFilter{Action: "other", Limit: 50})
+	if len(got) != 1 || got[0].ID != "sess-no-action" {
+		t.Fatalf("page visit filter: got %+v", got)
+	}
+	got, _ = srv.store.ListSessions(SessionFilter{Action: "payment", Limit: 50})
+	if len(got) != 1 || got[0].ID != "sess-no-action" {
+		t.Fatalf("log message filter: got %+v", got)
+	}
+	got, _ = srv.store.ListSessions(SessionFilter{Action: "logs", Limit: 50})
+	if len(got) != 1 || got[0].ID != "sess-no-action" {
+		t.Fatalf("log category filter: got %+v", got)
 	}
 
 	// Page visited filter still works alongside it.

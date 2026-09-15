@@ -3,7 +3,8 @@ import { motion } from 'motion/react';
 import { stagger } from '../../lib/motion';
 import { SessionFilter } from '../../api';
 import { formatCountry } from '../../lib/format';
-import { Input, Select, SelectOption } from '../ui/fields';
+import DebouncedTextInput from '../ui/DebouncedTextInput';
+import { Select, SelectOption } from '../ui/fields';
 import './FiltersBar.css';
 
 type Props = {
@@ -77,25 +78,28 @@ export default function FiltersBar({ filter, onChange, extra, countries = [] }: 
         onChange={(v) => onChange({ min_duration_ms: Number(v) || undefined })}
       />
 
-      <Input
+      <DebouncedTextInput
+        className="field-control"
         placeholder="Filter by visitor id…"
         title="Matches the userId, clientId or remoteId attached to the session"
         value={filter.identity || ''}
-        onChange={(e) => onChange({ identity: e.target.value || undefined })}
+        onDebouncedChange={(value) => onChange({ identity: value || undefined })}
       />
 
-      <Input
+      <DebouncedTextInput
+        className="field-control"
         placeholder="Filter by any visited path…"
         title="Matches the entry/exit URL and every page the session navigated through"
         value={filter.url || ''}
-        onChange={(e) => onChange({ url: e.target.value || undefined })}
+        onDebouncedChange={(value) => onChange({ url: value || undefined })}
       />
 
-      <Input
+      <DebouncedTextInput
+        className="field-control"
         placeholder="Filter by action…"
-        title="Matches the name of any custom event (action) recorded in the session"
+        title="Matches custom events, page visits, and browser logs recorded in the session"
         value={filter.action || ''}
-        onChange={(e) => onChange({ action: e.target.value || undefined })}
+        onDebouncedChange={(value) => onChange({ action: value || undefined })}
       />
     </motion.div>
   );

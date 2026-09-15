@@ -12,7 +12,7 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> &
 export default function DebouncedTextInput({
   value,
   onDebouncedChange,
-  delayMs = 250,
+  delayMs = 840,
   ...props
 }: Props) {
   const [draft, setDraft] = useState(value);

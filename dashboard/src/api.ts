@@ -587,7 +587,7 @@ export type SessionFilter = {
   device?: string;
   country?: string;
   url?: string;
-  action?: string; // matches a custom event name recorded in the session
+  action?: string; // matches custom events, page visits, and browser logs in the session
   identity?: string; // matches userId / clientId / remoteId
   min_duration_ms?: number;
 };
