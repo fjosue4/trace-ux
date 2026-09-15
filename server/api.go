@@ -230,9 +230,11 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/announcements/{id}/publish", s.auth(s.requireAdmin(s.handlePublishAnnouncement)))
 	mux.HandleFunc("POST /api/announcements/{id}/archive", s.auth(s.requireAdmin(s.handleArchiveAnnouncement)))
 	mux.HandleFunc("DELETE /api/announcements/comments/{id}", s.auth(s.requireAdmin(s.handleDeleteAnnouncementComment)))
+	mux.HandleFunc("GET /api/announcements/{id}/engagement", s.auth(s.handleAnnouncementEngagement))
 
 	// Support tickets. Staff can read and reply; only admins can delete.
 	mux.HandleFunc("GET /api/tickets", s.auth(s.handleListTickets))
+	mux.HandleFunc("POST /api/tickets", s.auth(s.handleCreateStaffTicket))
 	mux.HandleFunc("GET /api/tickets/socket", s.auth(s.handleDashboardTicketSocket))
 	mux.HandleFunc("GET /api/tickets/{id}", s.auth(s.handleGetTicket))
 	mux.HandleFunc("POST /api/tickets/{id}/messages", s.auth(s.handleStaffTicketReply))

@@ -4,6 +4,8 @@ export type Feedback = {
   site_id: number;
   site_name?: string;
   session_id?: string;
+  visitor_key?: string;
+  user_id?: string;
   survey_id: string;
   rating: number;
   comment: string;

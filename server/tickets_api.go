@@ -368,3 +368,51 @@ func (s *Server) handlePublicTicketReply(w http.ResponseWriter, r *http.Request)
 	}
 	writeJSON(w, http.StatusOK, store.TicketThread{Ticket: ticket, Messages: messages})
 }
+
+// POST /api/tickets — a staff member opens the conversation.
+//
+// The ticket is delivered through the visitor's widget, so it needs that
+// visitor's key: take it from the announcement comment, reaction or feedback
+// row the ticket is being raised from. An email is always required here even
+// when the visitor is identified, because it is the only way to reach someone
+// who never comes back to the site — TraceUX does not send it, it stores it so
+// a human can.
+func (s *Server) handleCreateStaffTicket(w http.ResponseWriter, r *http.Request) {
+	var input store.NewTicket
+	if readJSON(w, r, &input) != nil {
+		return
+	}
+	if input.SiteID <= 0 {
+		writeErr(w, http.StatusBadRequest, "site_id is required")
+		return
+	}
+	if err := store.NormalizeTicketInput(&input); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if input.Email == "" {
+		writeErr(w, http.StatusBadRequest, "an email address is required to contact this visitor")
+		return
+	}
+
+	user := currentUser(r)
+	input.Author = "staff"
+	if user != nil {
+		input.StaffUserID = user.ID
+		input.StaffName = user.Username
+	}
+
+	ticket, err := s.store.CreateTicket(input)
+	if err != nil {
+		if handleTicketStoreError(w, err) {
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "could not create ticket")
+		return
+	}
+	s.broadcastWidgetEvent(ticket.SiteID, ticket.VisitorKey, "tickets", widgetSocketEvent{
+		Type:   "ticket.created",
+		Ticket: &ticket,
+	})
+	writeJSON(w, http.StatusCreated, ticket)
+}

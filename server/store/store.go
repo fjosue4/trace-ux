@@ -339,6 +339,18 @@ var migrations = []string{
 	);
 	CREATE INDEX IF NOT EXISTS idx_ticket_messages ON ticket_messages(ticket_id, created_at);
 	`,
+	// v15: attribute engagement to a visitor. Likes, comments and feedback all
+	// carried an anonymous localStorage key at most; user_id is whatever the
+	// host page passed to identify(), so a signed-in visitor is recognisable
+	// while an anonymous one still works exactly as before. feedback gains the
+	// visitor key so a staff-opened ticket can reach that visitor's widget.
+	`
+	ALTER TABLE announcement_reactions ADD COLUMN user_id TEXT NOT NULL DEFAULT '';
+	ALTER TABLE announcement_comments  ADD COLUMN user_id TEXT NOT NULL DEFAULT '';
+	ALTER TABLE feedback ADD COLUMN visitor_key TEXT NOT NULL DEFAULT '';
+	ALTER TABLE feedback ADD COLUMN user_id     TEXT NOT NULL DEFAULT '';
+	CREATE INDEX IF NOT EXISTS idx_feedback_visitor ON feedback(site_id, visitor_key);
+	`,
 }
 
 func (s *Store) migrate() error {

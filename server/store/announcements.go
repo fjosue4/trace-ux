@@ -101,3 +101,55 @@ func ValidAnnouncementLink(raw string) bool {
 	u, err := url.Parse(raw)
 	return err == nil && u.Host != "" && (u.Scheme == "http" || u.Scheme == "https")
 }
+
+// AnnouncementEngagementEntry is one like or one comment. VisitorKey is the
+// widget's anonymous per-browser id; UserID is whatever the host page passed to
+// identify() and is empty for a visitor who was never identified.
+type AnnouncementEngagementEntry struct {
+	ID         int64  `json:"id"`
+	VisitorKey string `json:"visitor_key"`
+	UserID     string `json:"user_id,omitempty"`
+	Body       string `json:"body,omitempty"`
+	CreatedAt  int64  `json:"created_at"`
+}
+
+type AnnouncementEngagement struct {
+	Reactions []AnnouncementEngagementEntry `json:"reactions"`
+	Comments  []AnnouncementEngagementEntry `json:"comments"`
+}
+
+func (s *Store) AnnouncementEngagement(announcementID int64) (AnnouncementEngagement, error) {
+	out := AnnouncementEngagement{Reactions: []AnnouncementEngagementEntry{}, Comments: []AnnouncementEngagementEntry{}}
+
+	reactions, err := s.DB.Query(`SELECT visitor_key, user_id, created_at
+		FROM announcement_reactions WHERE announcement_id=? ORDER BY created_at DESC`, announcementID)
+	if err != nil {
+		return out, err
+	}
+	defer reactions.Close()
+	for reactions.Next() {
+		var entry AnnouncementEngagementEntry
+		if err := reactions.Scan(&entry.VisitorKey, &entry.UserID, &entry.CreatedAt); err != nil {
+			return out, err
+		}
+		out.Reactions = append(out.Reactions, entry)
+	}
+	if err := reactions.Err(); err != nil {
+		return out, err
+	}
+
+	comments, err := s.DB.Query(`SELECT id, visitor_key, user_id, body, created_at
+		FROM announcement_comments WHERE announcement_id=? AND status='visible' ORDER BY created_at DESC`, announcementID)
+	if err != nil {
+		return out, err
+	}
+	defer comments.Close()
+	for comments.Next() {
+		var entry AnnouncementEngagementEntry
+		if err := comments.Scan(&entry.ID, &entry.VisitorKey, &entry.UserID, &entry.Body, &entry.CreatedAt); err != nil {
+			return out, err
+		}
+		out.Comments = append(out.Comments, entry)
+	}
+	return out, comments.Err()
+}

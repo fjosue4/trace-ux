@@ -16,18 +16,20 @@ type FeedbackAnswer struct {
 }
 
 type Feedback struct {
-	ID        int64            `json:"id"`
-	SiteID    int64            `json:"site_id"`
-	SiteName  string           `json:"site_name,omitempty"`
-	SessionID string           `json:"session_id,omitempty"`
-	SurveyID  string           `json:"survey_id"`
-	Rating    int              `json:"rating"` // derived: first numeric answer; 0 = none
-	Comment   string           `json:"comment"`
-	Answers   []FeedbackAnswer `json:"answers,omitempty"`
-	CreatedAt int64            `json:"created_at"`
-	Browser   string           `json:"browser,omitempty"`
-	OS        string           `json:"os,omitempty"`
-	Device    string           `json:"device,omitempty"`
+	ID         int64            `json:"id"`
+	SiteID     int64            `json:"site_id"`
+	SiteName   string           `json:"site_name,omitempty"`
+	SessionID  string           `json:"session_id,omitempty"`
+	VisitorKey string           `json:"visitor_key,omitempty"`
+	UserID     string           `json:"user_id,omitempty"`
+	SurveyID   string           `json:"survey_id"`
+	Rating     int              `json:"rating"` // derived: first numeric answer; 0 = none
+	Comment    string           `json:"comment"`
+	Answers    []FeedbackAnswer `json:"answers,omitempty"`
+	CreatedAt  int64            `json:"created_at"`
+	Browser    string           `json:"browser,omitempty"`
+	OS         string           `json:"os,omitempty"`
+	Device     string           `json:"device,omitempty"`
 }
 
 type FeedbackFilter struct {
@@ -38,22 +40,36 @@ type FeedbackFilter struct {
 
 // SaveFeedback stores one response. When sessionID is set, the response is
 // linked to the recording so the dashboard can jump from feedback to replay.
-func (s *Store) SaveFeedback(siteID int64, sessionID, surveyID string, rating int, comment, answersJSON string) (int64, error) {
+// NewFeedback is one submitted response. VisitorKey and UserID identify who
+// sent it: the key is the widget's own anonymous id, the user id is whatever
+// the host page passed to identify(). Both may be empty.
+type NewFeedback struct {
+	SiteID      int64
+	SessionID   string
+	VisitorKey  string
+	UserID      string
+	SurveyID    string
+	Rating      int
+	Comment     string
+	AnswersJSON string
+}
+
+func (s *Store) SaveFeedback(in NewFeedback) (int64, error) {
 	now := time.Now().Unix()
-	if sessionID != "" {
-		if err := s.EnsureSessionForSite(siteID, sessionID, now); err != nil {
+	if in.SessionID != "" {
+		if err := s.EnsureSessionForSite(in.SiteID, in.SessionID, now); err != nil {
 			return 0, err
 		}
 	}
-	res, err := s.DB.Exec(`INSERT INTO feedback (site_id, session_id, survey_id, rating, comment, answers, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		siteID, sessionID, surveyID, rating, comment, answersJSON, now)
+	res, err := s.DB.Exec(`INSERT INTO feedback (site_id, session_id, visitor_key, user_id, survey_id, rating, comment, answers, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		in.SiteID, in.SessionID, in.VisitorKey, in.UserID, in.SurveyID, in.Rating, in.Comment, in.AnswersJSON, now)
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
 
-const feedbackCols = `f.id, f.site_id, f.session_id, f.survey_id, f.rating, f.comment, f.answers, f.created_at,
+const feedbackCols = `f.id, f.site_id, f.session_id, f.visitor_key, f.user_id, f.survey_id, f.rating, f.comment, f.answers, f.created_at,
 	si.name, COALESCE(se.browser, ''), COALESCE(se.os, ''), COALESCE(se.device, '')`
 
 func (s *Store) ListFeedback(f FeedbackFilter) ([]Feedback, error) {
@@ -86,7 +102,7 @@ func (s *Store) ListFeedback(f FeedbackFilter) ([]Feedback, error) {
 	for rows.Next() {
 		var fb Feedback
 		var answers string
-		if err := rows.Scan(&fb.ID, &fb.SiteID, &fb.SessionID, &fb.SurveyID, &fb.Rating, &fb.Comment, &answers, &fb.CreatedAt,
+		if err := rows.Scan(&fb.ID, &fb.SiteID, &fb.SessionID, &fb.VisitorKey, &fb.UserID, &fb.SurveyID, &fb.Rating, &fb.Comment, &answers, &fb.CreatedAt,
 			&fb.SiteName, &fb.Browser, &fb.OS, &fb.Device); err != nil {
 			return nil, err
 		}

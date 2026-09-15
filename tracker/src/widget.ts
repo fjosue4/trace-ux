@@ -119,6 +119,7 @@ export type WidgetHost = {
     comment: string;
     surveyId: string;
     answers: { id: string; label?: string; value: string }[];
+    visitorKey: string;
   }) => void;
   newId: () => string;
   /** The current recording session, attached to newly opened tickets. */
@@ -707,7 +708,10 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     return fetch(ticketURL(path), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visitor_key: visitor, ...payload }),
+      // user_id names the visitor for whoever reads this in the dashboard. It is
+      // asserted by the host page and never authorizes anything; an explicit
+      // value in payload still wins.
+      body: JSON.stringify({ visitor_key: visitor, user_id: host.identity().userId || '', ...payload }),
     });
   }
 
@@ -1247,6 +1251,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       const ratingQ = questions.find((q) => q.type === 'rating' && answers.has(q.id));
       const textQ = questions.find((q) => q.type === 'text' && answers.has(q.id));
       host.submitFeedback({
+        visitorKey: visitor,
         rating: ratingQ ? Number(answers.get(ratingQ.id)) : 0,
         comment: textQ ? (answers.get(textQ.id) as string) : '',
         surveyId: survey.survey_id || 'default',
@@ -1703,7 +1708,10 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     fetch(`${host.origin}/api/updates/${encodeURIComponent(host.siteKey)}/${id}/${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ visitor_key: visitor, ...payload }),
+      // user_id names the visitor for whoever reads this in the dashboard. It is
+      // asserted by the host page and never authorizes anything; an explicit
+      // value in payload still wins.
+      body: JSON.stringify({ visitor_key: visitor, user_id: host.identity().userId || '', ...payload }),
     });
 
   // ---- go ----

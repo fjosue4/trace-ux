@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Announcement } from '../../api';
 import { useUser } from '../../App';
 import { fmtTime } from '../../lib/format';
@@ -10,11 +11,13 @@ import Loading from '../../components/ui/Loading';
 import Modal from '../../components/ui/Modal';
 import Notice from '../../components/ui/Notice';
 import { Input, Select } from '../../components/ui/fields';
+import EngagementModal from './subcomponents/EngagementModal';
 import { useAnnouncements } from './hooks/useAnnouncements';
 import './Announcements.scss';
 
 export default function Announcements() {
   const { user } = useUser();
+  const [engaging, setEngaging] = useState<Announcement | null>(null);
   const { sites, siteId, setSiteId, items, filter, setFilter, editing, setEditing, form, setForm, error, busy, shown, open, save, action } =
     useAnnouncements();
 
@@ -56,12 +59,12 @@ export default function Announcements() {
                 <Badge tone={a.status === 'published' ? 'accent' : 'neutral'}>{a.status}</Badge>
               </div>
               <p>{a.summary || a.body}</p>
-              <div className="announcement-stats">
+              <button type="button" className="announcement-stats" onClick={() => setEngaging(a)}>
                 <span>{a.reads} reads</span>
                 <span>{a.reactions} likes</span>
                 <span>{a.comments} comments</span>
                 <span>{a.published_at ? fmtTime(a.published_at) : `Updated ${fmtTime(a.updated_at)}`}</span>
-              </div>
+              </button>
               {user.role === 'admin' && (
                 <div className="announcement-actions">
                   <Button size="sm" variant="secondary" onClick={() => open(a)}>Edit</Button>
@@ -78,6 +81,8 @@ export default function Announcements() {
           ))}
         </div>
       )}
+      <EngagementModal announcement={engaging} onClose={() => setEngaging(null)} />
+
       <Modal
         className="announcement-editor-modal"
         open={editing !== null}

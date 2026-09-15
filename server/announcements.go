@@ -193,6 +193,7 @@ func (s *Server) handlePublicAnnouncements(w http.ResponseWriter, r *http.Reques
 type publicRequest struct {
 	AnnouncementID int64
 	VisitorKey     string
+	UserID         string
 	Body           string
 	Liked          *bool
 }
@@ -209,6 +210,7 @@ func (s *Server) publicAnnouncement(w http.ResponseWriter, r *http.Request) (pub
 	}
 	var body struct {
 		VisitorKey string `json:"visitor_key"`
+		UserID     string `json:"user_id"`
 		Body       string `json:"body"`
 		Liked      *bool  `json:"liked"`
 	}
@@ -225,7 +227,11 @@ func (s *Server) publicAnnouncement(w http.ResponseWriter, r *http.Request) (pub
 		writeErr(w, 404, "announcement not found")
 		return publicRequest{}, false
 	}
-	return publicRequest{AnnouncementID: id, VisitorKey: v, Body: body.Body, Liked: body.Liked}, true
+	userID := strings.TrimSpace(body.UserID)
+	if len(userID) > maxIdentityLength {
+		userID = ""
+	}
+	return publicRequest{AnnouncementID: id, VisitorKey: v, UserID: userID, Body: body.Body, Liked: body.Liked}, true
 }
 func (s *Server) handleAnnouncementReaction(w http.ResponseWriter, r *http.Request) {
 	req, ok := s.publicAnnouncement(w, r)
@@ -235,7 +241,9 @@ func (s *Server) handleAnnouncementReaction(w http.ResponseWriter, r *http.Reque
 	if req.Liked != nil && !*req.Liked {
 		_, _ = s.store.DB.Exec(`DELETE FROM announcement_reactions WHERE announcement_id=? AND visitor_key=?`, req.AnnouncementID, req.VisitorKey)
 	} else {
-		_, _ = s.store.DB.Exec(`INSERT OR IGNORE INTO announcement_reactions(announcement_id,visitor_key,created_at) VALUES(?,?,?)`, req.AnnouncementID, req.VisitorKey, time.Now().Unix())
+		_, _ = s.store.DB.Exec(`INSERT INTO announcement_reactions(announcement_id,visitor_key,user_id,created_at) VALUES(?,?,?,?)
+			ON CONFLICT(announcement_id,visitor_key) DO UPDATE SET user_id=excluded.user_id`,
+			req.AnnouncementID, req.VisitorKey, req.UserID, time.Now().Unix())
 	}
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
@@ -281,7 +289,7 @@ func (s *Server) handleAnnouncementComment(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	now := time.Now().Unix()
-	res, e := s.store.DB.Exec(`INSERT INTO announcement_comments(announcement_id,visitor_key,body,created_at) VALUES(?,?,?,?)`, req.AnnouncementID, req.VisitorKey, body, now)
+	res, e := s.store.DB.Exec(`INSERT INTO announcement_comments(announcement_id,visitor_key,user_id,body,created_at) VALUES(?,?,?,?,?)`, req.AnnouncementID, req.VisitorKey, req.UserID, body, now)
 	if e != nil {
 		log.Printf("updates: insert comment for announcement %d: %v", req.AnnouncementID, e)
 		writeErr(w, 500, "could not save comment")
@@ -289,4 +297,24 @@ func (s *Server) handleAnnouncementComment(w http.ResponseWriter, r *http.Reques
 	}
 	cid, _ := res.LastInsertId()
 	writeJSON(w, 201, store.AnnouncementComment{ID: cid, Body: body, CreatedAt: now})
+}
+
+// GET /api/announcements/{id}/engagement — who liked and who commented.
+//
+// Identity here is only as good as what the host page supplied: a visitor who
+// was never passed through identify() is anonymous by design, and the visitor
+// key is a per-browser id, not a person.
+func (s *Server) handleAnnouncementEngagement(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeErr(w, 400, "invalid announcement id")
+		return
+	}
+	engagement, err := s.store.AnnouncementEngagement(id)
+	if err != nil {
+		log.Printf("announcements: engagement for %d: %v", id, err)
+		writeErr(w, 500, "could not load engagement")
+		return
+	}
+	writeJSON(w, 200, engagement)
 }

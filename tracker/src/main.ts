@@ -525,7 +525,7 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
     );
   }
 
-  function sendFeedback(input: TraceUXFeedbackInput) {
+  function sendFeedback(input: TraceUXFeedbackInput, visitorKey = '') {
     if (disposed) return;
     const rating = Math.round(Number(input && input.rating)) || 0;
     if (rating < 0 || rating > 10) return;
@@ -538,6 +538,8 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
       {
         type: 'feedback',
         session_id: sessionId,
+        visitor_key: visitorKey,
+        user_id: identity.user_id,
         survey_id: String(input.surveyId || 'default').slice(0, 100),
         rating,
         comment: String(input.comment || '').slice(0, 2000),
@@ -760,7 +762,7 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
             survey_id: cfg.feedback?.survey_id,
             questions: cfg.feedback?.questions,
           },
-          submitFeedback: (input) => sendFeedback(input),
+          submitFeedback: (input) => sendFeedback(input, input.visitorKey),
           newId,
           sessionId: () => sessionId,
           identity: () => ({ userId: identity.user_id }),

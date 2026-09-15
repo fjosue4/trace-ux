@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { Feedback as FeedbackType } from '../../api';
 import { Link } from 'react-router-dom';
 import { fmtTime, truncate } from '../../lib/format';
 import { useUser } from '../../App';
@@ -8,6 +10,8 @@ import Loading from '../../components/ui/Loading';
 import EmptyState from '../../components/ui/EmptyState';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Table from '../../components/ui/Table';
+import Button from '../../components/ui/Button';
+import CreateTicketModal from '../../components/tickets/CreateTicketModal';
 import { Icon } from '../../components/ui/Icon';
 import { Select } from '../../components/ui/fields';
 import { useFeedback } from './hooks/useFeedback';
@@ -18,6 +22,7 @@ import './Feedback.scss';
 // window.TraceUX.feedback(). Rows link straight to the session replay.
 export default function Feedback() {
   const { user } = useUser();
+  const [ticketFor, setTicketFor] = useState<FeedbackType | null>(null);
   const { sites, summaries, items, error, siteSel, setSiteSel, surveySel, setSurveySel, pendingDelete, setPendingDelete, deleting, confirmDelete } =
     useFeedback();
 
@@ -85,8 +90,8 @@ export default function Feedback() {
         <Table
           className="feedback-table"
           fixed
-          widths={['13%', '11%', '32%', '10%', '14%', '13%', '52px']}
-          headers={['Rating', 'Survey', 'Comment', 'Session', 'Device', 'Received', ...(user.role === 'admin' ? [''] : [])]}
+          widths={['12%', '10%', '28%', '9%', '13%', '12%', '100px', ...(user.role === 'admin' ? ['52px'] : [])]}
+          headers={['Rating', 'Survey', 'Comment', 'Session', 'Device', 'Received', '', ...(user.role === 'admin' ? [''] : [])]}
         >
           {items.map((f) => (
             <tr key={f.id}>
@@ -107,6 +112,13 @@ export default function Feedback() {
               </td>
               <td className="muted">{[f.browser, f.device].filter(Boolean).join(' · ') || '—'}</td>
               <td className="muted">{fmtTime(f.created_at)}</td>
+              <td>
+                {f.visitor_key ? (
+                  <Button size="sm" variant="secondary" onClick={() => setTicketFor(f)}>Start a ticket</Button>
+                ) : (
+                  <span className="muted small" title="This response predates visitor keys, so there is no widget to deliver a ticket to">—</span>
+                )}
+              </td>
               {user.role === 'admin' && (
                 <td onClick={(e) => e.stopPropagation()}>
                   <button
@@ -122,6 +134,19 @@ export default function Feedback() {
             </tr>
           ))}
         </Table>
+      )}
+
+      {ticketFor && (
+        <CreateTicketModal
+          showModal
+          toggleModalOpen={() => setTicketFor(null)}
+          siteId={ticketFor.site_id}
+          visitorKey={ticketFor.visitor_key ?? ''}
+          userId={ticketFor.user_id}
+          sessionId={ticketFor.session_id}
+          defaultSubject="About your feedback"
+          defaultBody={ticketFor.comment ? `You wrote: “${ticketFor.comment}”\n\n` : ''}
+        />
       )}
 
       <ConfirmDialog

@@ -74,6 +74,15 @@ type NewTicket struct {
 	Body       string `json:"body"`
 	SessionID  string `json:"session_id"`
 	PageURL    string `json:"page_url"`
+
+	// Author of the opening message. Empty means "visitor", the public path.
+	// A staff member can also start the conversation from the dashboard, in
+	// which case the ticket is delivered to that visitor's widget on their
+	// next visit and the per-visitor abuse caps do not apply — those exist to
+	// bound the unauthenticated surface, not our own inbox.
+	Author      string `json:"-"`
+	StaffUserID int64  `json:"-"`
+	StaffName   string `json:"-"`
 }
 
 const ticketColumns = `t.id,t.site_id,t.visitor_key,t.user_id,t.email,t.name,t.subject,t.status,
@@ -110,22 +119,29 @@ func (s *Store) CreateTicket(input NewTicket) (Ticket, error) {
 	}
 	defer tx.Rollback()
 
-	var openCount, totalCount int64
-	if err := tx.QueryRow(`SELECT COALESCE(SUM(CASE WHEN status <> 'closed' THEN 1 ELSE 0 END),0), COUNT(*)
-		FROM tickets WHERE site_id=? AND visitor_key=?`, input.SiteID, input.VisitorKey).Scan(&openCount, &totalCount); err != nil {
-		return Ticket{}, err
+	author := "visitor"
+	if input.Author == "staff" {
+		author = "staff"
 	}
-	if openCount >= MaxOpenTicketsPerVisitor {
-		return Ticket{}, ErrTicketOpenLimit
-	}
-	if totalCount >= MaxTicketsPerVisitor {
-		return Ticket{}, ErrTicketLifetimeLimit
+
+	if author == "visitor" {
+		var openCount, totalCount int64
+		if err := tx.QueryRow(`SELECT COALESCE(SUM(CASE WHEN status <> 'closed' THEN 1 ELSE 0 END),0), COUNT(*)
+			FROM tickets WHERE site_id=? AND visitor_key=?`, input.SiteID, input.VisitorKey).Scan(&openCount, &totalCount); err != nil {
+			return Ticket{}, err
+		}
+		if openCount >= MaxOpenTicketsPerVisitor {
+			return Ticket{}, ErrTicketOpenLimit
+		}
+		if totalCount >= MaxTicketsPerVisitor {
+			return Ticket{}, ErrTicketLifetimeLimit
+		}
 	}
 
 	res, err := tx.Exec(`INSERT INTO tickets(site_id,visitor_key,user_id,email,name,subject,status,session_id,page_url,message_count,last_message_at,last_message_author,created_at,updated_at)
 		VALUES(?,?,?,?,?,?,'open',?,?,?,?,?,?,?)`,
 		input.SiteID, input.VisitorKey, input.UserID, input.Email, input.Name, input.Subject,
-		input.SessionID, input.PageURL, 1, now, "visitor", now, now)
+		input.SessionID, input.PageURL, 1, now, author, now, now)
 	if err != nil {
 		return Ticket{}, err
 	}
@@ -134,7 +150,7 @@ func (s *Store) CreateTicket(input NewTicket) (Ticket, error) {
 		return Ticket{}, err
 	}
 	if _, err := tx.Exec(`INSERT INTO ticket_messages(ticket_id,author,user_id,author_name,body,created_at) VALUES(?,?,?,?,?,?)`,
-		id, "visitor", 0, "", input.Body, now); err != nil {
+		id, author, input.StaffUserID, input.StaffName, input.Body, now); err != nil {
 		return Ticket{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -144,7 +160,7 @@ func (s *Store) CreateTicket(input NewTicket) (Ticket, error) {
 		ID: id, SiteID: input.SiteID, VisitorKey: input.VisitorKey, UserID: input.UserID,
 		Email: input.Email, Name: input.Name, Subject: input.Subject, Status: "open",
 		SessionID: input.SessionID, PageURL: input.PageURL, MessageCount: 1,
-		LastMessageAt: now, LastMessageAuthor: "visitor", CreatedAt: now, UpdatedAt: now,
+		LastMessageAt: now, LastMessageAuthor: author, CreatedAt: now, UpdatedAt: now,
 	}, nil
 }
 
