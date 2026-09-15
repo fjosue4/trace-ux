@@ -689,6 +689,10 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "user not found")
 		return
 	}
+	if actor := currentUser(r); actor != nil && actor.ID == id {
+		writeErr(w, http.StatusForbidden, "cannot delete your own account")
+		return
+	}
 	if target.Role == "admin" {
 		other, err := s.store.HasOtherAdmin(id)
 		if err != nil {

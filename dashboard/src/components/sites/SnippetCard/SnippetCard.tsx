@@ -27,13 +27,13 @@ export default function SnippetCard({ site, origin, title, onDismiss, embedded =
         <motion.button
           type="button"
           role="tab"
-          aria-selected={method === 'manual'}
-          className={`snippet-tab${method === 'manual' ? ' is-active' : ''}`}
-          onClick={() => setMethod('manual')}
+          aria-selected={method === 'npm'}
+          className={`snippet-tab${method === 'npm' ? ' is-active' : ''}`}
+          onClick={() => setMethod('npm')}
           whileTap={{ scale: 0.96 }}
           transition={spring}
         >
-          Manual
+          NPM
         </motion.button>
         <motion.button
           type="button"
@@ -46,9 +46,24 @@ export default function SnippetCard({ site, origin, title, onDismiss, embedded =
         >
           Google Tag Manager
         </motion.button>
+        <motion.button
+          type="button"
+          role="tab"
+          aria-selected={method === 'manual'}
+          className={`snippet-tab${method === 'manual' ? ' is-active' : ''}`}
+          onClick={() => setMethod('manual')}
+          whileTap={{ scale: 0.96 }}
+          transition={spring}
+        >
+          Manual
+        </motion.button>
       </div>
 
-      {method === 'manual' ? (
+      {method === 'npm' ? (
+        <p className="muted small">
+          Install the tracker package and initialize it in your application:
+        </p>
+      ) : method === 'manual' ? (
         <p className="muted small">
           Paste this into the <code>{'<head>'}</code> of every page on your site:
         </p>

@@ -9,12 +9,18 @@
   > .page-head { grid-column: 1 / -1; margin-bottom: 0.1rem; }
   > .settings__team { grid-column: 1 / -1; }
 }
+.settings__profile-card { grid-column: 1 / -1; }
 .settings__team {
   > .muted.small { margin: 0.35rem 0 0.2rem; }
   .user-manager > .row--between > .muted.small { margin: 0; }
 }
 .settings__profile { display: flex; align-items: center; gap: 0.55rem; margin: 0.5rem 0 0.2rem; }
 .settings__username { font-size: 1.05rem; font-weight: 700; }
+.settings__appearance {
+  margin-top: 1.15rem;
+  padding-top: 1.15rem;
+  border-top: 1px solid $line;
+}
 .settings__pw { margin-top: 0.8rem; }
 
 /* segmented light/dark selector */

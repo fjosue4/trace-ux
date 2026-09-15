@@ -23,7 +23,7 @@ export default function Settings() {
     <main className="page settings">
       <PageHeader title="Settings" />
 
-      <Card>
+      <Card className="settings__profile-card">
         <h3>Profile</h3>
         <div className="settings__profile">
           <span className="mono settings__username">{user.username}</span>
@@ -34,23 +34,22 @@ export default function Settings() {
             ? 'You can manage users and sites as an admin.'
             : 'You can browse sites, sessions and replays. An admin manages users.'}
         </p>
-      </Card>
-
-      <Card>
-        <h3>Appearance</h3>
-        <p className="muted small">Choose how TraceUX looks on this device.</p>
-        <div className="seg" role="group" aria-label="Theme">
-          {(['light', 'dark'] as Theme[]).map((t) => (
-            <motion.button
-              key={t}
-              className={`seg__option${theme === t ? ' is-active' : ''}`}
-              onClick={() => setTheme(t)}
-              whileTap={{ scale: 0.96 }}
-              transition={spring}
-            >
-              {t === 'light' ? 'Light' : 'Dark'}
-            </motion.button>
-          ))}
+        <div className="settings__appearance">
+          <h3>Appearance</h3>
+          <p className="muted small">Choose how TraceUX looks on this device.</p>
+          <div className="seg" role="group" aria-label="Theme">
+            {(['light', 'dark'] as Theme[]).map((t) => (
+              <motion.button
+                key={t}
+                className={`seg__option${theme === t ? ' is-active' : ''}`}
+                onClick={() => setTheme(t)}
+                whileTap={{ scale: 0.96 }}
+                transition={spring}
+              >
+                {t === 'light' ? 'Light' : 'Dark'}
+              </motion.button>
+            ))}
+          </div>
         </div>
       </Card>
 
