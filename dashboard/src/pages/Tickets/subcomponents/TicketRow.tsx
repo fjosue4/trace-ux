@@ -1,7 +1,6 @@
 import { Ticket } from '../../../api';
-import { fmtTime } from '../../../lib/format';
 import Badge from '../../../components/ui/Badge';
-import { requester, statusLabel, statusTone } from '../Tickets.helpers';
+import { compactTime, requester, statusLabel, statusTone } from '../Tickets.helpers';
 
 type TicketRowProps = {
   ticket: Ticket;
@@ -11,23 +10,28 @@ type TicketRowProps = {
 };
 
 export function TicketRow({ ticket, isSelected, showSite, onOpen }: TicketRowProps) {
+  const isWaiting = ticket.last_message_author === 'visitor';
+  const subtitle = [requester(ticket), showSite ? ticket.site_name : ''].filter(Boolean).join(' · ');
+
   return (
     <button
       type="button"
-      className={`ticket-row${isSelected ? ' is-selected' : ''}`}
+      className={`ticket-row${isSelected ? ' is-selected' : ''}${isWaiting ? ' is-waiting' : ''}`}
       onClick={() => onOpen(ticket.id)}
     >
-      <span className="ticket-row__top">
-        <strong>{ticket.subject}</strong>
+      <span className="ticket-row__stripe" aria-hidden />
+      <span className="ticket-row__body">
+        <span className="ticket-row__title">
+          {isWaiting && <span className="ticket-row__flag" aria-hidden />}
+          <strong>{ticket.subject}</strong>
+        </span>
+        <span className="ticket-row__sub">{subtitle}</span>
+      </span>
+      <span className="ticket-row__aside">
+        {isWaiting && <span className="visually-hidden">Waiting on a reply</span>}
         <Badge tone={statusTone(ticket.status)}>{statusLabel(ticket.status)}</Badge>
+        <span className="ticket-row__when">{compactTime(ticket.last_message_at)}</span>
       </span>
-      <span className="ticket-row__bottom">
-        <span className={`ticket-row__dot${ticket.last_message_author === 'visitor' ? ' is-waiting' : ''}`} aria-hidden />
-        <span>{requester(ticket)}</span>
-        <span>·</span>
-        <span>{fmtTime(ticket.last_message_at)}</span>
-      </span>
-      {showSite && ticket.site_name && <span className="ticket-row__site">{ticket.site_name}</span>}
     </button>
   );
 }

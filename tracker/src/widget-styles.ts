@@ -39,7 +39,15 @@ export function widgetCSS(): string {
   min-width: 20px; height: 20px; padding: 0 6px; margin-inline-start: 2px;
   border-radius: 999px;
   background: var(--w-button-text); color: var(--w-button-bg);
-  font-size: 11px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
+  font-size: 11px; font-weight: 700; line-height: 1;
+  /* Two reasons a centred digit still reads off-centre, both handled here.
+     Vertically, place-items centres the line box, and the font box reserves
+     descender space a digit never uses, landing the glyph ~0.06em low; the
+     bottom padding trims twice that back off. Horizontally, tabular figures
+     pad a narrow glyph like "1" asymmetrically inside a fixed advance, so
+     they are left off — min-width already stops the width jumping between
+     counts, and a badge has no column to align to. */
+  padding-bottom: 0.12em;
 }
 
 /* A site that uploaded its own mark gets an icon-only launcher: the image is
@@ -53,7 +61,7 @@ export function widgetCSS(): string {
 .launcher--icon .launcher__icon svg { width: 22px; height: 22px; }
 .launcher--icon .launcher__badge {
   position: absolute; top: -3px; right: -2px; margin: 0;
-  min-width: 19px; height: 19px; padding: 0 5px;
+  min-width: 19px; height: 19px; padding: 0 5px 0.12em;
   border: 2px solid var(--w-panel-bg);
   background: var(--w-accent); color: #fff;
   font-size: 10.5px;

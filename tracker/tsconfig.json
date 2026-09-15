@@ -3,9 +3,13 @@
     "target": "ES2018",
     "module": "ESNext",
     "moduleResolution": "Bundler",
+    "paths": {
+      "@trace-ux/tracker": ["./src/main.ts"]
+    },
     "lib": ["ES2018", "DOM", "DOM.Iterable"],
     "strict": true,
     "noEmit": true,
+    "declaration": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true

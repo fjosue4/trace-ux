@@ -7,6 +7,10 @@ const apiProxyTarget = process.env.TRACE_UX_DEV_API ?? 'http://localhost:8090';
 const apiProxy = {
   target: apiProxyTarget,
   changeOrigin: true,
+  // The dashboard's live ticket feed is a WebSocket on the same /api prefix.
+  // Without this, Vite registers no upgrade listener for the path and the
+  // handshake hangs, while every plain request still proxies fine.
+  ws: true,
   // The browser talks to Vite on :5173 while Vite forwards to Go on :8090.
   // Remove the browser-only origin headers so Go's same-origin CSRF check sees
   // this as the local development proxy, not as a cross-origin request.

@@ -30,4 +30,23 @@
     color: $danger;
     border-color: color-mix(in srgb, #{$danger} 15%, transparent);
   }
+
+  &--info {
+    background: $info-soft;
+    color: $info;
+    border-color: color-mix(in srgb, #{$info} 15%, transparent);
+  }
+
+  &--warn {
+    background: $warn-soft;
+    color: $warn;
+    border-color: color-mix(in srgb, #{$warn} 18%, transparent);
+  }
+
+  // No fill: for a state that is done and should recede rather than be read.
+  &--quiet {
+    background: transparent;
+    color: $muted;
+    border-color: $line-strong;
+  }
 }

@@ -1,0 +1,138 @@
+TRACEUX COMMUNITY SOURCE LICENSE
+Version 1.0 — 12 September 2026
+
+Copyright © 2026 TraceUX contributors.
+
+IMPORTANT NOTICE
+
+This is a source-available community license. It is not an OSI-approved
+open-source license, and it is not the GNU Affero General Public License.
+The brand and redistribution conditions below are material conditions of the
+permission granted by this license.
+
+1. Definitions
+
+"Software" means the TraceUX source code, object code, documentation, assets,
+configuration, and other files distributed with this license, excluding
+third-party components that are identified as being under separate terms.
+
+"Derivative Work" means a modified, translated, adapted, or extended version
+of the Software, or a work that incorporates a substantial portion of the
+Software.
+
+"TraceUX Marks" means the names "TraceUX", "Trace UX", and "trace-ux", the
+TraceUX logos, product names, distinctive product artwork, and other brand
+identifiers supplied with the Software or identified by the copyright holder
+as TraceUX branding.
+
+"You" means an individual or legal entity exercising rights under this
+license.
+
+2. Copyright permission
+
+Subject to the conditions in this license, each copyright holder grants You a
+worldwide, royalty-free, non-exclusive license to:
+
+  a. use and run the Software for personal, organizational, internal, or
+     commercial purposes;
+
+  b. copy, clone, study, modify, adapt, and create Derivative Works of the
+     Software;
+
+  c. collaborate on the Software and exchange patches, source code, and other
+     improvements;
+
+  d. host the Software privately or publicly and provide users access to a
+     TraceUX instance without paying a license fee; and
+
+  e. share the Software and Derivative Works at no charge, provided that the
+     conditions in this license are satisfied.
+
+This license does not grant rights to third-party components beyond the terms
+provided by their respective copyright holders.
+
+3. Conditions for sharing and hosting
+
+If You share the Software or a Derivative Work, You must:
+
+  a. include a copy of this license;
+
+  b. keep intact copyright, license, warranty, and attribution notices;
+
+  c. clearly identify material changes, including the fact that the work is a
+     modified version of TraceUX;
+
+  d. provide the corresponding source code at no charge when You distribute a
+     compiled or otherwise non-source copy; and
+
+  e. if You make a modified version available to users over a network, make
+     the corresponding source code for that version available to those users
+     at no charge, through a durable link or other reasonable means.
+
+Private use and private modifications do not, by themselves, trigger the
+source-sharing requirements in this section.
+
+4. TraceUX brand and product restrictions
+
+Every copy, Derivative Work, or hosted offering that incorporates the
+Software and is shared with, or made available to, another person must be
+presented as TraceUX. TraceUX Marks must remain visible and must not be
+removed, obscured, replaced, or altered in a way that makes the offering
+appear to be an independent product.
+
+You may add a truthful secondary attribution, such as "TraceUX hosted by
+Example Company" or "TraceUX modified by Example Company", provided that
+TraceUX remains the product name and the attribution does not imply that
+TraceUX endorses You.
+
+You may not:
+
+  a. rename, white-label, rebrand, or present the Software or a Derivative
+     Work as Your own product;
+
+  b. sell, license, sublicense, or distribute the Software or a Derivative
+     Work as a separate product or service under a different brand; or
+
+  c. remove or obscure TraceUX Marks or notices from a distributed or hosted
+     offering.
+
+This section does not prohibit charging for separate hosting infrastructure,
+support, consulting, implementation, training, or maintenance services, so
+long as the Software remains TraceUX-branded, the charge is not a license fee
+for the Software itself, and You do not provide a rebranded copy or product.
+
+Nothing in this license restricts independently developed software that does
+not copy from or derive from the Software. This license also does not limit
+truthful nominative reference to TraceUX or rights that cannot lawfully be
+restricted.
+
+5. Contributions
+
+Unless You and the copyright holder agree otherwise in writing, contributions
+submitted for inclusion in the Software are provided under this license.
+Contributing code does not grant ownership of, or any right to register, the
+TraceUX Marks.
+
+6. Termination
+
+Your rights under this license terminate automatically if You materially
+violate its conditions. They are reinstated if the violation is cured within
+30 days after You receive notice of it, or at the copyright holder's written
+discretion. A recipient who received a compliant copy from You retains rights
+under this license so long as that recipient complies with it.
+
+7. Disclaimer of warranty and liability
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, TITLE, AND NON-INFRINGEMENT. TO THE MAXIMUM EXTENT PERMITTED BY LAW,
+NO COPYRIGHT HOLDER OR CONTRIBUTOR IS LIABLE FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES ARISING FROM THE
+SOFTWARE OR THIS LICENSE.
+
+8. Entire license
+
+This license states the complete terms under which the Software is made
+available by the copyright holders. If a provision is held unenforceable, it
+will be enforced to the maximum extent permitted and the remaining provisions
+will remain in effect.

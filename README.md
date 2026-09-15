@@ -1,5 +1,9 @@
 # TraceUX
 
+[![npm](https://img.shields.io/npm/v/@trace-ux/tracker?label=%40trace-ux%2Ftracker&color=2f7d4a)](https://www.npmjs.com/package/@trace-ux/tracker)
+[![Live demo](https://img.shields.io/badge/live%20demo-trace--ux.builtbyfrank.dev-2f7d4a)](https://trace-ux.builtbyfrank.dev/)
+[![License](https://img.shields.io/badge/license-Community%20Source-6b786f)](LICENSE)
+
 The complete UX bundle for products that want to understand, hear, and update their users.
 
 Self-hosted session replay, in-product feedback, and announcements with
@@ -101,6 +105,67 @@ Then:
    unified **Help & updates** launcher: enable Feedback and Announcements from
    the site's dashboard settings, then publish an announcement or collect a
    response without changing the snippet.
+
+### npm and React integrations
+
+For applications that prefer code over a script tag, install the tracker
+package — [**@trace-ux/tracker** on npm](https://www.npmjs.com/package/@trace-ux/tracker).
+The server origin is required because npm/React integrations do not have a
+script URL from which to infer it:
+
+```bash
+npm install @trace-ux/tracker
+```
+
+```ts
+import { init } from '@trace-ux/tracker';
+
+const traceux = init({
+  siteKey: 'YOUR_SITE_KEY',
+  origin: 'https://your-server.example.com',
+  userId: currentUser?.id,
+  widget: true, // optional; the server still controls enabled sections
+});
+
+traceux.identify({ userId: user.id }); // after login
+traceux.track('checkout_completed');
+traceux.setUserStatus('active');
+traceux.warn('Checkout request failed', { orderId });
+
+// Flush and stop recording when the host application owns the lifecycle.
+traceux.stop();
+```
+
+The package entry has no import-time side effects. `widget: true` opts into the
+optional widget's dynamic import; the widget is fetched only when the server
+configuration enables at least one section. `warn`, `error`, `info`, and
+`debug` send application logs when Logs is enabled for the site and its
+severity threshold permits them. `setUserStatus` records a seekable
+`user_status` activity; it does not create a separate server-side user table.
+
+React applications can use the optional provider and hook:
+
+```tsx
+import { TraceUXProvider, useTraceUX } from '@trace-ux/tracker/react';
+
+function Checkout() {
+  const traceux = useTraceUX();
+  return <button onClick={() => traceux.track('checkout_started')}>Checkout</button>;
+}
+
+export function App() {
+  return (
+    <TraceUXProvider siteKey="YOUR_SITE_KEY" origin="https://your-server.example.com" widget>
+      <Checkout />
+    </TraceUXProvider>
+  );
+}
+```
+
+The same package also keeps the existing HTML and Google Tag Manager IIFE
+installation unchanged. If an npm/React integration and `/t.js` happen to be
+present on one page, the first initialized tracker owns the page and the other
+path reuses that handle rather than recording a second session.
 
 ## Install on a VPS (one script)
 
