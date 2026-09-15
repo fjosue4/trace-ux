@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AnnouncementEngagement, AnnouncementEngagementEntry, api } from '../../../../../api';
+import { AnnouncementEngagement, AnnouncementEngagementEntry, api, ApiError } from '../../../../../api';
 
 export type TicketTarget = {
   visitorKey: string;
@@ -26,8 +26,15 @@ export function useEngagementModal(announcementId: number | null, announcementTi
       .then((next) => {
         if (!cancelled) setEngagement(next);
       })
-      .catch(() => {
-        if (!cancelled) setError('Could not load who engaged with this announcement.');
+      .catch((caught) => {
+        if (cancelled) return;
+        // Say which failure this is. A 404 here means the server predates the
+        // engagement endpoint, which is a rebuild away, not a data problem.
+        if (caught instanceof ApiError && caught.status === 404) {
+          setError('This TraceUX server does not have the engagement endpoint yet — rebuild and restart it.');
+          return;
+        }
+        setError(caught instanceof Error ? caught.message : 'Could not load who engaged with this announcement.');
       });
     return () => {
       cancelled = true;

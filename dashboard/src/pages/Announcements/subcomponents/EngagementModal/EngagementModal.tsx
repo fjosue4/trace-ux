@@ -16,9 +16,13 @@ type EngagementModalProps = {
 };
 
 // A visitor is only nameable when the host page passed one to identify().
-// Everyone else is a browser, so say that rather than dressing up a random key.
+// Everyone else still gets a row and a short key to tell them apart — missing
+// identity is a fact to report, never a reason to hide what they wrote.
 function visitorLabel(entry: AnnouncementEngagementEntry) {
-  return entry.user_id?.trim() || 'Anonymous visitor';
+  const identified = entry.user_id?.trim();
+  if (identified) return identified;
+  const shortKey = entry.visitor_key ? entry.visitor_key.slice(0, 8) : '';
+  return shortKey ? `Unknown visitor · ${shortKey}` : 'Unknown visitor';
 }
 
 export default function EngagementModal({ announcement, onClose }: EngagementModalProps) {
@@ -81,7 +85,7 @@ export default function EngagementModal({ announcement, onClose }: EngagementMod
                       <Button size="sm" variant="secondary" onClick={() => openTicketFor(entry, 'comment')}>
                         Start a ticket
                       </Button>
-                      <p className="engagement-row__body">{entry.body}</p>
+                      <p className="engagement-row__body">{entry.body?.trim() || <em>(empty comment)</em>}</p>
                     </li>
                   ))}
                 </ul>

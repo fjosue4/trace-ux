@@ -51,13 +51,14 @@
 
     &:last-child { border-bottom: 0; }
 
+    // Wrap rather than clip: an identifier cut off mid-string tells the reader
+    // less than nothing, and this column holds keys as well as names.
     &__who {
       min-width: 0;
-      overflow: hidden;
       font-size: .82rem;
       font-weight: 600;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
     }
 
     &__when {
