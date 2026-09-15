@@ -8,8 +8,8 @@
  * localStorage.trace_ux_optout=1 disables tracking entirely.
  */
 import { record } from '@rrweb/record';
-import { mountUnifiedWidget, type WidgetCfg, type WidgetHandle } from './widget';
 import type { eventWithTime } from '@rrweb/types';
+import type { WidgetCfg, WidgetHandle } from './widget';
 
 type SurveyQuestionCfg = {
   id: string;
@@ -42,7 +42,13 @@ type FeedbackCfg = {
   trigger?: { mode?: string; pages?: string[]; actions?: string[] };
 };
 
-type LogSeverity = 'debug' | 'info' | 'warn' | 'error';
+export type LogSeverity = 'debug' | 'info' | 'warn' | 'error';
+
+export type TraceUXIdentity = {
+  userId?: string;
+  clientId?: string;
+  remoteId?: string;
+};
 
 type LogCfg = {
   enabled: boolean;
@@ -72,28 +78,53 @@ type PendingLog = {
 };
 
 // Public API on window.TraceUX for the host page.
-interface TraceUXFeedbackInput {
+export interface TraceUXFeedbackInput {
   rating?: number; // 1-5 (stars) or 0-10 (NPS); derived from answers when omitted
   comment?: string;
   surveyId?: string;
   answers?: { id: string; label?: string; value: string }[];
 }
 
-interface TraceUXApi {
+export interface TraceUXOptions extends TraceUXIdentity {
+  /** The site key shown in the TraceUX dashboard. */
+  siteKey: string;
+  /** The TraceUX server origin, for example https://traceux.example.com. */
+  origin: string;
+  /** Load the optional announcements/support/feedback widget when configured. */
+  widget?: boolean;
+}
+
+export interface TraceUXHandle {
   /** Attach/replace visitor identity mid-session (e.g. right after login). */
-  identify: (fields: { userId?: string; clientId?: string; remoteId?: string }) => void;
+  identify: (fields: TraceUXIdentity) => void;
   /** Emit a named custom event, visible as seekable activity in the replay. */
   track: (name: string, trackId?: string) => void;
+  /** Record a user lifecycle state as a seekable custom activity. */
+  setUserStatus: (status: string) => void;
+  /** Alias for setUserStatus for integrations that prefer update semantics. */
+  updateUserStatus: (status: string) => void;
+  /** Record an application log when the server-side log setting allows it. */
+  log: (severity: LogSeverity, message: unknown, ...details: unknown[]) => void;
+  debug: (message: unknown, ...details: unknown[]) => void;
+  info: (message: unknown, ...details: unknown[]) => void;
+  warn: (message: unknown, ...details: unknown[]) => void;
+  error: (message: unknown, ...details: unknown[]) => void;
   /** Submit in-app feedback/survey response, linked to the current session. */
   feedback: (input: TraceUXFeedbackInput) => void;
   /** Request a short-lived demo replay link without exposing the session ID. */
   claimReplay: () => Promise<{ url: string; expires_at: number }>;
+  /** Stop recording, flush pending data, and remove tracker listeners. */
+  stop: () => void;
 }
+
+/** Backwards-compatible name for integrations that used the global API shape. */
+export type TraceUXApi = TraceUXHandle;
 
 declare global {
   interface Window {
     TraceUX?: TraceUXApi;
     __traceUXStarted?: boolean;
+    __traceUXInstance?: TraceUXHandle;
   }
 }
 
@@ -127,45 +158,179 @@ interface StorageLike {
   set(key: string, value: string): void;
 }
 
-(async () => {
-  // document.currentScript can be null when a tag manager injects this async
-  // script. Fall back to the matching tracker tag so the public API still
-  // initializes on GTM-managed pages.
-  const script =
-    (document.currentScript as HTMLScriptElement | null) ||
-    (Array.from(document.scripts).find((candidate) => {
-      const element = candidate as HTMLScriptElement;
-      return element.dataset.site && new URL(element.src, location.href).pathname.endsWith('/t.js');
-    }) as HTMLScriptElement | undefined) ||
-    null;
-  if (!script) return;
-  const siteKey = script.dataset.site;
-  if (!siteKey) return;
+type DeferredClaim = {
+  resolve: (value: { url: string; expires_at: number }) => void;
+  reject: (reason?: unknown) => void;
+};
 
-  // A page can receive the snippet from both a static tag and a tag manager.
-  // Only one recorder may own the page or every copy will emit its own stream.
-  if (window.__traceUXStarted) return;
+type QueuedHandle = TraceUXHandle & {
+  activate: (runtime: TraceUXHandle) => void;
+  fail: () => void;
+  isFailed: () => boolean;
+};
+
+function unavailableReplay(): Promise<{ url: string; expires_at: number }> {
+  return Promise.reject(new Error('TraceUX is not active.'));
+}
+
+function createNoopHandle(): TraceUXHandle {
+  return {
+    identify: () => {},
+    track: () => {},
+    setUserStatus: () => {},
+    updateUserStatus: () => {},
+    log: () => {},
+    debug: () => {},
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+    feedback: () => {},
+    claimReplay: unavailableReplay,
+    stop: () => {},
+  };
+}
+
+function createQueuedHandle(): QueuedHandle {
+  let runtime: TraceUXHandle | null = null;
+  let failed = false;
+  const pending: Array<(next: TraceUXHandle) => void> = [];
+  const claims: DeferredClaim[] = [];
+
+  function dispatch(action: (next: TraceUXHandle) => void) {
+    if (runtime) {
+      action(runtime);
+    } else if (!failed) {
+      pending.push(action);
+    }
+  }
+
+  const handle: QueuedHandle = {
+    identify(fields) {
+      dispatch((next) => next.identify(fields));
+    },
+    track(name, trackId) {
+      dispatch((next) => next.track(name, trackId));
+    },
+    setUserStatus(status) {
+      dispatch((next) => next.setUserStatus(status));
+    },
+    updateUserStatus(status) {
+      dispatch((next) => next.updateUserStatus(status));
+    },
+    log(severity, message, ...details) {
+      dispatch((next) => next.log(severity, message, ...details));
+    },
+    debug(message, ...details) {
+      dispatch((next) => next.debug(message, ...details));
+    },
+    info(message, ...details) {
+      dispatch((next) => next.info(message, ...details));
+    },
+    warn(message, ...details) {
+      dispatch((next) => next.warn(message, ...details));
+    },
+    error(message, ...details) {
+      dispatch((next) => next.error(message, ...details));
+    },
+    feedback(input) {
+      dispatch((next) => next.feedback(input));
+    },
+    claimReplay() {
+      if (runtime) return runtime.claimReplay();
+      if (failed) return unavailableReplay();
+      return new Promise((resolve, reject) => claims.push({ resolve, reject }));
+    },
+    stop() {
+      if (runtime) {
+        runtime.stop();
+        return;
+      }
+      failed = true;
+      pending.length = 0;
+      for (const claim of claims.splice(0)) claim.reject(new Error('TraceUX was stopped.'));
+    },
+    activate(next) {
+      if (failed) {
+        next.stop();
+        for (const claim of claims.splice(0)) claim.reject(new Error('TraceUX was stopped.'));
+        return;
+      }
+      runtime = next;
+      for (const action of pending.splice(0)) action(next);
+      for (const claim of claims.splice(0)) {
+        next.claimReplay().then(claim.resolve, claim.reject);
+      }
+    },
+    fail() {
+      failed = true;
+      pending.length = 0;
+      for (const claim of claims.splice(0)) claim.reject(new Error('TraceUX is not active.'));
+    },
+    isFailed() {
+      return failed;
+    },
+  };
+  return handle;
+}
+
+export function init(options: TraceUXOptions): TraceUXHandle {
+  const noop = createNoopHandle();
+  if (typeof window === 'undefined' || typeof document === 'undefined') return noop;
+
+  const siteKey = String(options?.siteKey || '').trim();
+  if (!siteKey) throw new Error('TraceUX init requires a siteKey.');
+
+  let origin: string;
+  try {
+    const parsed = new URL(String(options?.origin || ''));
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('unsupported protocol');
+    origin = parsed.origin;
+  } catch {
+    throw new Error('TraceUX init requires a valid http(s) origin.');
+  }
+
+  // A page can receive the snippet from both a static tag and an npm/React
+  // integration. Only one recorder may own the page or every copy will emit
+  // its own stream. Return the existing handle when this is the second caller
+  // so both integrations can safely share the same instance.
+  if (window.__traceUXStarted) return window.__traceUXInstance || noop;
   window.__traceUXStarted = true;
 
+  const handle = createQueuedHandle();
+  window.__traceUXInstance = handle;
+
   try {
-    if (navigator.doNotTrack === '1' || localStorage.getItem('trace_ux_optout') === '1') return;
+    if (navigator.doNotTrack === '1' || localStorage.getItem('trace_ux_optout') === '1') {
+      handle.fail();
+      return handle;
+    }
   } catch {
     /* storage blocked: proceed anyway; tracking still honors the server config */
   }
 
-  const origin = new URL(script.src).origin;
+  void start(options, origin, siteKey, handle).catch(() => {
+    if (!handle.isFailed()) handle.fail();
+  });
+
+  return handle;
+}
+
+async function start(options: TraceUXOptions, origin: string, siteKey: string, handle: QueuedHandle) {
   const ingestURL = `${origin}/api/ingest/${encodeURIComponent(siteKey)}`;
 
-  // Visitor identity: snippet attributes (data-user-id etc.) at init, later
-  // replaced/augmented via window.TraceUX.identify() (e.g. after login).
+  // Visitor identity is passed as options for npm/React consumers and is
+  // replaced or augmented later through identify().
   const identity = {
-    user_id: script.dataset.userId || '',
-    client_id: script.dataset.clientId || '',
-    remote_id: script.dataset.remoteId || '',
+    user_id: String(options.userId || ''),
+    client_id: String(options.clientId || ''),
+    remote_id: String(options.remoteId || ''),
   };
 
   const cfg = await fetchConfig(origin, siteKey);
-  if (Math.random() > cfg.sample_rate) return; // sampled out for this visit
+  if (Math.random() > cfg.sample_rate) {
+    handle.fail();
+    return; // sampled out for this visit
+  }
 
   // ---- session identity (per tab; new visit after SESSION_TTL_MS idle) ----
   // pageIdx and activeMs live in sessionStorage so a multi-page visit is one
@@ -184,7 +349,10 @@ interface StorageLike {
   // until the first tick notices.
   if (stale || activeMs >= MAX_SESSION_MS) {
     sessionId = newId();
-    if (!sessionId) return;
+    if (!sessionId) {
+      handle.fail();
+      return;
+    }
     seq = 0;
     logSeq = 0;
     pageIdx = -1;
@@ -199,6 +367,10 @@ interface StorageLike {
   let lastEventAt = startedAt; // last real user interaction (any recorded event)
   let wakeArmed = false;
   let restoreConsole: (() => void) | undefined;
+  let disposed = false;
+  let flushTimer: ReturnType<typeof setInterval> | undefined;
+  let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+  let hideTimer: ReturnType<typeof setTimeout> | undefined;
 
   // ---- transport ----
   function send(batch: unknown, useBeacon: boolean) {
@@ -336,6 +508,7 @@ interface StorageLike {
   }
 
   function sendCustom(name: string, trackId: string) {
+    if (stopped || disposed) return;
     send(
       {
         type: 'custom',
@@ -353,6 +526,7 @@ interface StorageLike {
   }
 
   function sendFeedback(input: TraceUXFeedbackInput) {
+    if (disposed) return;
     const rating = Math.round(Number(input && input.rating)) || 0;
     if (rating < 0 || rating > 10) return;
     const answers = (input.answers || []).slice(0, 20).map((a) => ({
@@ -391,12 +565,9 @@ interface StorageLike {
   }
 
   function onRouteChange() {
+    if (disposed) return;
     trackPage();
-    try {
-      mountWidgetIfConfigured();
-    } catch {
-      /* widget must never break the host page */
-    }
+    mountWidgetIfConfigured();
   }
 
   // Every way a page's URL can change without a document load. pushState and
@@ -405,6 +576,7 @@ interface StorageLike {
   // filters and tab state.
   let lastTrackedURL = location.href;
   function onURLMaybeChanged() {
+    if (disposed) return;
     if (location.href === lastTrackedURL) return; // same URL: not a navigation
     lastTrackedURL = location.href;
     onRouteChange();
@@ -434,19 +606,17 @@ interface StorageLike {
   // frame.
   let resizeTimer: ReturnType<typeof setTimeout> | undefined;
   let lastSentViewport = `${window.innerWidth}x${window.innerHeight}`;
-  window.addEventListener(
-    'resize',
-    () => {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => {
-        const now = `${window.innerWidth}x${window.innerHeight}`;
-        if (now === lastSentViewport) return;
-        lastSentViewport = now;
-        sendHello();
-      }, 400);
-    },
-    { passive: true },
-  );
+  const onResize = () => {
+    if (disposed) return;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      const now = `${window.innerWidth}x${window.innerHeight}`;
+      if (now === lastSentViewport || disposed) return;
+      lastSentViewport = now;
+      sendHello();
+    }, 400);
+  };
+  window.addEventListener('resize', onResize, { passive: true });
 
   // ---- recording ----
   function startRecording() {
@@ -504,62 +674,17 @@ interface StorageLike {
     );
   }
 
-  // ---- host-page API ----
-  window.TraceUX = {
-    identify(fields) {
-      if (fields.userId) identity.user_id = fields.userId;
-      if (fields.clientId) identity.client_id = fields.clientId;
-      if (fields.remoteId) identity.remote_id = fields.remoteId;
-      sendHello(); // server adopts non-empty ids for the running session
-    },
-    track(name, trackId) {
-      sendCustom(name || 'event', trackId || '');
-      try {
-        mountWidgetIfConfigured(name || 'event');
-      } catch {
-        /* widget must never break the host page */
-      }
-    },
-    feedback(input) {
-      sendFeedback(input);
-    },
-    async claimReplay() {
-      // Flush first so the server has the current visit before validating it.
-      flush();
-      ping();
-      await new Promise((resolve) => setTimeout(resolve, 350));
-      const res = await fetch(`${origin}/api/demo/claim/${encodeURIComponent(siteKey)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'omit',
-        body: JSON.stringify({ session_id: sessionId }),
-      });
-      if (!res.ok) throw new Error('Temporary replay access is unavailable.');
-      const link = (await res.json()) as { url: string; expires_at: number };
-      // Resolve the server's relative share path against the tracker origin;
-      // the landing page may be hosted on a different origin.
-      return { ...link, url: new URL(link.url, origin).toString() };
-    },
-  };
-
   // Tracked clicks: any element with a trace-ux-track-id attribute reports itself as
   // seekable activity ("trace-ux-track").
-  document.addEventListener(
-    'click',
-    (e) => {
-      const el = (e.target as Element | null)?.closest?.('[trace-ux-track-id]');
-      if (el) {
-        const trackId = el.getAttribute('trace-ux-track-id') || '';
-        sendCustom('click', trackId);
-        try {
-          mountWidgetIfConfigured(trackId);
-        } catch {
-          /* widget must never break the host page */
-        }
-      }
-    },
-    { capture: true, passive: true },
-  );
+  const onTrackedClick = (e: MouseEvent) => {
+    if (disposed) return;
+    const el = (e.target as Element | null)?.closest?.('[trace-ux-track-id]');
+    if (!el) return;
+    const trackId = el.getAttribute('trace-ux-track-id') || '';
+    sendCustom('click', trackId);
+    mountWidgetIfConfigured(trackId);
+  };
+  document.addEventListener('click', onTrackedClick, { capture: true, passive: true });
 
   let unifiedWidget: WidgetHandle | null = null;
 
@@ -589,7 +714,13 @@ interface StorageLike {
     return true;
   }
 
+  let widgetLoading: Promise<void> | null = null;
+  let pendingWidgetAction: string | undefined;
+
   function mountWidgetIfConfigured(triggerAction?: string) {
+    // The npm/React integration must opt into the widget explicitly. The
+    // script wrapper passes widget: true to preserve the legacy behavior.
+    if (options.widget !== true || disposed) return;
     const widgetCfg = cfg.widget;
     if (!widgetCfg || !widgetCfg.enabled) return;
 
@@ -599,35 +730,105 @@ interface StorageLike {
       return;
     }
 
+    if (triggerAction && feedbackAvailable(triggerAction)) pendingWidgetAction = triggerAction;
+    if (widgetLoading) return;
+
     const feedbackNow = feedbackAvailable(triggerAction);
     const updatesNow = !!widgetCfg.updates_enabled;
     const ticketsNow = !!widgetCfg.tickets_enabled;
     if (!feedbackNow && !updatesNow && !ticketsNow) return;
 
-    try {
-      unifiedWidget = mountUnifiedWidget({
-        origin,
-        siteKey: siteKey as string,
-        config: { ...widgetCfg, feedback_enabled: feedbackNow, tickets_enabled: ticketsNow },
-        survey: {
-          title: cfg.feedback?.title,
-          type: cfg.feedback?.type,
-          survey_id: cfg.feedback?.survey_id,
-          questions: cfg.feedback?.questions,
-        },
-        submitFeedback: (input) => sendFeedback(input),
-        newId,
-        sessionId: () => sessionId,
-        identity: () => ({ userId: identity.user_id }),
+    // Keep motion and the widget DOM out of the npm entry until a configured
+    // site actually needs it. In the IIFE build esbuild inlines this import,
+    // retaining the single-file /t.js contract.
+    widgetLoading = import('./widget.js')
+      .then(({ mountUnifiedWidget }) => {
+        if (disposed) return;
+        const action = pendingWidgetAction;
+        pendingWidgetAction = undefined;
+        unifiedWidget = mountUnifiedWidget({
+          origin,
+          siteKey,
+          config: {
+            ...widgetCfg,
+            feedback_enabled: feedbackAvailable(action),
+            tickets_enabled: ticketsNow,
+          },
+          survey: {
+            title: cfg.feedback?.title,
+            type: cfg.feedback?.type,
+            survey_id: cfg.feedback?.survey_id,
+            questions: cfg.feedback?.questions,
+          },
+          submitFeedback: (input) => sendFeedback(input),
+          newId,
+          sessionId: () => sessionId,
+          identity: () => ({ userId: identity.user_id }),
+        });
+        // An action-triggered survey opens immediately, as it did before the merge.
+        if (action && feedbackAvailable(action)) unifiedWidget?.open('feedback');
+      })
+      .catch(() => {
+        // The widget must never break the host page or stop the recording.
+        unifiedWidget = null;
+        pendingWidgetAction = undefined;
+      })
+      .finally(() => {
+        widgetLoading = null;
       });
-    } catch {
-      /* the widget must never break the host page */
-      unifiedWidget = null;
-      return;
-    }
-    // An action-triggered survey opens immediately, as it did before the merge.
-    if (triggerAction && feedbackNow) unifiedWidget?.open('feedback');
   }
+
+  function applyIdentity(fields: TraceUXIdentity, notify = true) {
+    if (fields?.userId) identity.user_id = String(fields.userId);
+    if (fields?.clientId) identity.client_id = String(fields.clientId);
+    if (fields?.remoteId) identity.remote_id = String(fields.remoteId);
+    if (notify && !disposed && !stopped) {
+      sendHello(); // server adopts non-empty ids for the running session
+    }
+  }
+
+  async function claimReplay() {
+    if (disposed || stopped) throw new Error('TraceUX is not active.');
+    // Flush first so the server has the current visit before validating it.
+    flush();
+    ping();
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    const res = await fetch(`${origin}/api/demo/claim/${encodeURIComponent(siteKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'omit',
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+    if (!res.ok) throw new Error('Temporary replay access is unavailable.');
+    const link = (await res.json()) as { url: string; expires_at: number };
+    // Resolve the server's relative share path against the tracker origin;
+    // the landing page may be hosted on a different origin.
+    return { ...link, url: new URL(link.url, origin).toString() };
+  }
+
+  const runtime: TraceUXHandle = {
+    identify: (fields) => applyIdentity(fields),
+    track: (name, trackId) => {
+      const normalizedName = String(name || 'event').slice(0, 100);
+      sendCustom(normalizedName, String(trackId || '').slice(0, 100));
+      mountWidgetIfConfigured(normalizedName);
+    },
+    setUserStatus: (status) => sendCustom('user_status', String(status || '').slice(0, 100)),
+    updateUserStatus: (status) => sendCustom('user_status', String(status || '').slice(0, 100)),
+    log: (severity, message, ...details) => {
+      if (typeof severity !== 'string' || !(severity in LOG_SEVERITY_RANK)) return;
+      captureLog(severity, [message, ...details]);
+    },
+    debug: (message, ...details) => captureLog('debug', [message, ...details]),
+    info: (message, ...details) => captureLog('info', [message, ...details]),
+    warn: (message, ...details) => captureLog('warn', [message, ...details]),
+    error: (message, ...details) => captureLog('error', [message, ...details]),
+    feedback: (input) => sendFeedback(input),
+    claimReplay,
+    stop: shutdown,
+  };
+
+  if (handle.isFailed()) return;
 
   // ---- bootstrap ----
   //
@@ -643,18 +844,14 @@ interface StorageLike {
   startLogTracking();
   trackPage();
 
-  try {
-    mountWidgetIfConfigured();
-  } catch {
-    /* widget must never break the host page or stop the recording */
-  }
+  mountWidgetIfConfigured();
 
   // ---- session lifecycle ----
 
   // Finalizes the current visit: ship what's pending, stop recording, and arm
   // wake listeners so the next deliberate interaction starts a new visit.
   function endSession() {
-    if (stopped) return;
+    if (stopped || disposed) return;
     stopped = true;
     flush(true);
     flushLogs(true);
@@ -669,6 +866,7 @@ interface StorageLike {
   // the visit is still live and its buffered events would otherwise carry the
   // NEW session id. Wake-from-dead sessions skip it: endSession already flushed.
   function newSession(finalize = false) {
+    if (disposed) return;
     if (finalize && !stopped) {
       flush(true);
       flushLogs(true);
@@ -703,6 +901,7 @@ interface StorageLike {
   // A dead visit wakes on deliberate input (click/key/scroll), never on mere
   // mouse movement — a passing cursor shouldn't start recording someone.
   function onWake() {
+    if (disposed) return;
     disarmWake();
     newSession();
   }
@@ -727,11 +926,13 @@ interface StorageLike {
   // not on event count. This keeps noisy pages from opening a request loop:
   // one recording request and, when needed, one logs request per digest tick.
   const flushIntervalMs = Math.max(5_000, cfg.flush_interval_ms || 5_000);
-  setInterval(() => {
+  flushTimer = setInterval(() => {
+    if (disposed) return;
     flush();
     flushLogs();
   }, flushIntervalMs);
-  setInterval(() => {
+  heartbeatTimer = setInterval(() => {
+    if (disposed) return;
     const now = Date.now();
     if (stopped || document.visibilityState !== 'visible') {
       lastTick = now;
@@ -756,15 +957,17 @@ interface StorageLike {
     lastTick = now;
   }, PING_INTERVAL_MS);
 
-  window.addEventListener('pagehide', () => {
+  const onPageHide = () => {
+    if (disposed) return;
     flush(true);
     flushLogs(true);
     if (!stopped) ping(true);
-  });
+  };
+  window.addEventListener('pagehide', onPageHide);
 
   // Long-hidden tabs end the visit; returning starts a fresh session.
-  let hideTimer: ReturnType<typeof setTimeout> | undefined;
-  document.addEventListener('visibilitychange', () => {
+  const onVisibilityChange = () => {
+    if (disposed) return;
     if (document.visibilityState === 'hidden') {
       flush(true);
       flushLogs(true);
@@ -774,7 +977,49 @@ interface StorageLike {
       clearTimeout(hideTimer);
       if (stopped) newSession();
     }
-  });
+  };
+  document.addEventListener('visibilitychange', onVisibilityChange);
+
+  function shutdown() {
+    if (disposed) return;
+    pendingWidgetAction = undefined;
+    if (!stopped) {
+      endSession();
+    } else {
+      flush(true);
+      flushLogs(true);
+      stopRecording?.();
+      restoreConsole?.();
+    }
+    disposed = true;
+    disarmWake();
+    clearInterval(flushTimer);
+    clearInterval(heartbeatTimer);
+    clearTimeout(hideTimer);
+    clearTimeout(resizeTimer);
+    unifiedWidget?.destroy();
+    unifiedWidget = null;
+    document.removeEventListener('click', onTrackedClick, { capture: true });
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.removeEventListener('pagehide', onPageHide);
+    window.removeEventListener('resize', onResize);
+    window.removeEventListener('popstate', onURLMaybeChanged);
+    window.removeEventListener('hashchange', onURLMaybeChanged);
+    try {
+      history.pushState = origPushState;
+      history.replaceState = origReplaceState;
+    } catch {
+      /* another integration may have replaced the history methods */
+    }
+    // stop() explicitly releases ownership so a React provider can be mounted
+    // again later. While active, the shared guard still prevents HTML, GTM,
+    // npm, and React integrations from creating a second recorder.
+    if (window.__traceUXInstance === handle) {
+      window.__traceUXStarted = false;
+      delete window.__traceUXInstance;
+      if (window.TraceUX === handle) delete window.TraceUX;
+    }
+  }
 
   // ---- helpers ----
   function newId(): string {
@@ -832,4 +1077,6 @@ interface StorageLike {
       clearTimeout(bail);
     }
   }
-})();
+
+  handle.activate(runtime);
+}

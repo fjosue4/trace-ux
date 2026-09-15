@@ -6,6 +6,7 @@
     "lib": ["ES2018", "DOM", "DOM.Iterable"],
     "strict": true,
     "noEmit": true,
+    "declaration": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true
