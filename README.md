@@ -1,5 +1,9 @@
 # TraceUX
 
+[![npm](https://img.shields.io/npm/v/@trace-ux/tracker?label=%40trace-ux%2Ftracker&color=2f7d4a)](https://www.npmjs.com/package/@trace-ux/tracker)
+[![Live demo](https://img.shields.io/badge/live%20demo-trace--ux.builtbyfrank.dev-2f7d4a)](https://trace-ux.builtbyfrank.dev/)
+[![License](https://img.shields.io/badge/license-Community%20Source-6b786f)](LICENSE)
+
 The complete UX bundle for products that want to understand, hear, and update their users.
 
 Self-hosted session replay, in-product feedback, and announcements with
@@ -105,8 +109,9 @@ Then:
 ### npm and React integrations
 
 For applications that prefer code over a script tag, install the tracker
-package. The server origin is required because npm/React integrations do not
-have a script URL from which to infer it:
+package — [**@trace-ux/tracker** on npm](https://www.npmjs.com/package/@trace-ux/tracker).
+The server origin is required because npm/React integrations do not have a
+script URL from which to infer it:
 
 ```bash
 npm install @trace-ux/tracker
