@@ -1,0 +1,78 @@
+@use 'abstracts' as *;
+
+.health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.2rem;
+  margin-bottom: 1.2rem;
+}
+
+.health-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+
+  &__head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    color: $muted;
+
+    h3 { margin: 0; font-size: 0.95rem; color: $ink; }
+  }
+
+  &__big {
+    margin-left: auto;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: $ink;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.meter {
+  display: flex;
+  height: 8px;
+  border-radius: $radius-pill;
+  background: $surface-2;
+  border: 1px solid $line;
+  overflow: hidden;
+
+  &__fill {
+    height: 100%;
+    background: $muted;
+
+    &--shot { background: $accent; }
+    &.is-hot { background: $danger; }
+  }
+}
+
+.health-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.health-store {
+  margin-bottom: 1.2rem;
+
+  &__row {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+
+    p { margin: 0.3rem 0 0; max-width: 46rem; }
+  }
+
+  &__counts { display: flex; gap: 1.6rem; }
+  &__count {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    strong { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+  }
+}

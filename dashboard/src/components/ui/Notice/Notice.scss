@@ -1,0 +1,16 @@
+@use 'abstracts' as *;
+
+.notice {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  border-radius: $radius;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.88rem;
+  border: 1px solid transparent;
+  margin: 0.6rem 0;
+
+  &--success { background: $success-soft; color: $success; border-color: color-mix(in srgb, #{$success} 25%, transparent); }
+  &--error { background: $danger-soft; color: $danger; border-color: color-mix(in srgb, #{$danger} 25%, transparent); }
+  &--info { background: $accent-soft; color: $accent; border-color: color-mix(in srgb, #{$accent} 22%, transparent); }
+}

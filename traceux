@@ -8,7 +8,7 @@ usage() {
   cat <<'USAGE'
 TraceUX local development launcher
 
-  ./traceux --start     start the Go API and Vite dashboard together
+  ./traceux --start     replace any previous local run and start the API + dashboard
   ./traceux --help      show this help
 
 The dashboard is available at http://127.0.0.1:5173 and the API at
@@ -55,6 +55,90 @@ else
   TRACE_UX_DEV_API="http://$TRACE_UX_ADDR"
 fi
 
+TRACE_UX_API_PORT="${TRACE_UX_ADDR##*:}"
+TRACE_UX_RUN_STATE="${TMPDIR:-/tmp}/trace-ux-dev-$(id -u).pids"
+
+process_is_traceux() {
+  local pid="$1"
+  local command_line working_dir
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  [[ "$pid" != "$$" ]] || return 1
+  command_line="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+  working_dir="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | awk 'substr($0, 1, 1) == "n" { print substr($0, 2); exit }')"
+  [[ "$command_line" == *"$ROOT_DIR"* ]] ||
+    [[ "$working_dir" == "$ROOT_DIR" || "$working_dir" == "$ROOT_DIR/"* ]]
+}
+
+stop_process() {
+  local pid="$1"
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 0
+  if ! kill -0 "$pid" 2>/dev/null; then
+    return 0
+  fi
+  echo "traceux: stopping previous process $pid"
+  kill "$pid" 2>/dev/null || true
+  for _ in {1..50}; do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  kill -KILL "$pid" 2>/dev/null || true
+}
+
+stop_previous_state() {
+  [[ -r "$TRACE_UX_RUN_STATE" ]] || return 0
+  local pid
+  while IFS= read -r pid; do
+    if process_is_traceux "$pid"; then
+      stop_process "$pid"
+    fi
+  done < "$TRACE_UX_RUN_STATE"
+}
+
+stop_traceux_dev_processes() {
+  command -v ps >/dev/null 2>&1 || return 0
+  local pid
+  while IFS= read -r pid; do
+    if process_is_traceux "$pid"; then
+      stop_process "$pid"
+    fi
+  done < <(
+    ps -axo pid=,command= 2>/dev/null |
+      awk -v root="$ROOT_DIR" 'index($0, root "/dashboard") && ($0 ~ /vite/ || $0 ~ /npm run dev/) { print $1 }'
+  )
+}
+
+stop_traceux_listener() {
+  local port="$1"
+  command -v lsof >/dev/null 2>&1 || return 0
+  local pid
+  local found=0
+  while IFS= read -r pid; do
+    [[ -n "$pid" ]] || continue
+    found=1
+    if process_is_traceux "$pid"; then
+      stop_process "$pid"
+    else
+      echo "traceux: leaving port $port in use by unrelated process $pid"
+    fi
+  done < <(lsof -nP -t -iTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+  [[ "$found" -eq 0 ]] || return 0
+}
+
+stop_previous_run() {
+  stop_previous_state
+  # This also catches a Vite process that moved to another port during an
+  # earlier duplicate start, while the port-specific checks catch a go-run
+  # child whose temporary compiled command does not contain ROOT_DIR.
+  stop_traceux_dev_processes
+  stop_traceux_listener "$TRACE_UX_API_PORT"
+  stop_traceux_listener "$TRACE_UX_VITE_PORT"
+  rm -f "$TRACE_UX_RUN_STATE"
+}
+
+stop_previous_run
+
 echo "traceux: configured admin username: admin"
 echo "traceux: configured TRACE_UX_PASSWORD: $TRACE_UX_PASSWORD"
 echo "traceux: note: this is the configured/bootstrap password, not a password already changed in the database"
@@ -69,6 +153,9 @@ cleanup() {
   [[ -z "$frontend_pid" ]] || kill "$frontend_pid" 2>/dev/null || true
   [[ -z "$backend_pid" ]] || wait "$backend_pid" 2>/dev/null || true
   [[ -z "$frontend_pid" ]] || wait "$frontend_pid" 2>/dev/null || true
+  if [[ -r "$TRACE_UX_RUN_STATE" ]] && [[ "$(head -n 1 "$TRACE_UX_RUN_STATE" 2>/dev/null || true)" == "$$" ]]; then
+    rm -f "$TRACE_UX_RUN_STATE"
+  fi
   exit "$status"
 }
 
@@ -93,6 +180,8 @@ echo "traceux: starting dashboard at http://$TRACE_UX_VITE_HOST:$TRACE_UX_VITE_P
   exec npm run dev -- --host "$TRACE_UX_VITE_HOST" --port "$TRACE_UX_VITE_PORT"
 ) &
 frontend_pid=$!
+umask 077
+printf '%s\n%s\n%s\n' "$$" "$backend_pid" "$frontend_pid" > "$TRACE_UX_RUN_STATE"
 
 while true; do
   if ! kill -0 "$backend_pid" 2>/dev/null; then

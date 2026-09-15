@@ -1,0 +1,153 @@
+// Sessions use one continuous list surface: compact headers, quiet dividers,
+// and stacked facts inside each row, like a modern data table.
+@use 'abstracts' as *;
+
+.sessions-table.table-wrap {
+  background: $surface;
+  border: 1px solid $line;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-sm;
+  overflow-x: auto;
+}
+.sessions-table .table {
+  border-collapse: collapse;
+  border-spacing: 0;
+
+  thead { background: transparent; }
+
+  th {
+    padding-top: 0.82rem;
+    padding-bottom: 0.72rem;
+    &:last-child { text-align: center; }
+  }
+  td {
+    padding-top: 0.86rem;
+    padding-bottom: 0.86rem;
+    vertical-align: middle;
+    background: $surface;
+    border-bottom: 1px solid $line;
+    &:last-child { text-align: center; }
+  }
+  tbody tr {
+    &:last-child td { border-bottom: 0; }
+    &:hover td { background: $surface-2; }
+  }
+}
+.session-cell {
+  display: grid;
+  gap: 0.12rem;
+  min-width: 0;
+  line-height: 1.25;
+  white-space: normal;
+
+  &__primary,
+  &__meta {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  &__primary { color: $ink; font-size: 0.88rem; font-weight: 650; }
+  &__meta {
+    color: $muted;
+    font-size: 0.76rem;
+    strong { color: $ink-2; font-weight: 650; }
+  }
+
+  &--visit {
+    .badge { width: fit-content; }
+    .session-cell__status { margin-top: 0.24rem; }
+    .session-cell__meta { font-variant-numeric: tabular-nums; }
+  }
+  &--country {
+    .session-cell__primary { font-weight: 650; }
+    .session-cell__meta { letter-spacing: 0.04em; }
+  }
+  &--pages {
+    justify-items: start;
+
+    .session-cell__primary { display: block; font-variant-numeric: tabular-nums; }
+    .session-cell__primary--plain { color: $ink; }
+  }
+}
+
+.session-context {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.62rem;
+  min-width: 0;
+
+  &__icon {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    margin-top: 0.05rem;
+    border: 1px solid $line;
+    border-radius: $radius-pill;
+    background: $accent-soft;
+    color: $accent;
+  }
+
+  .session-cell { min-width: 0; }
+}
+
+.play-btn {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  display: inline-grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 0;
+  overflow: hidden;
+  line-height: 0;
+  border-radius: 50%;
+
+  svg { display: block; width: 12px; height: 12px; flex: 0 0 auto; margin: 0; }
+}
+
+.session-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1.2rem; }
+.session-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.85rem 1.3rem;
+
+  &__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.82rem;
+    color: $muted;
+  }
+  &__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: $radius-pill;
+
+    &--live { background: $accent; box-shadow: 0 0 0 4px $accent-soft; animation: stat-pulse 2s ease-in-out infinite; }
+    &--done { background: $muted; }
+  }
+  &__num { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+}
+@keyframes stat-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (max-width: 640px) {
+  .session-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
+    margin-bottom: 1rem;
+  }
+  .session-stat { min-width: 0; padding: 0.9rem 1rem; }
+  .session-stat__label { align-items: flex-start; line-height: 1.25; }
+  .session-stat__num { font-size: 1.35rem; }
+  .play-btn { width: 36px; min-width: 36px; }
+}

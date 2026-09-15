@@ -1,0 +1,78 @@
+// Kept as plain global CSS (not a CSS module): `.table-wrap`/`.table` are
+// targeted by other pages' stylesheets (Sessions.css) as descendant selectors.
+@use 'abstracts' as *;
+
+.table-wrap {
+  background: $surface;
+  border: 1px solid $line;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-sm;
+  overflow-x: auto;
+  overflow-y: hidden;
+  transition: border-color $duration-fast $ease-out;
+
+  &:hover { border-color: $line-strong; }
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.875rem;
+
+  &--fixed {
+    table-layout: fixed;
+
+    th, td { padding-left: 0.8rem; padding-right: 0.8rem; }
+    td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    th:last-child, td:last-child { padding-left: 0.3rem; padding-right: 0.6rem; }
+  }
+
+  th {
+    text-align: left;
+    padding: 0.78rem 1.1rem;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: $muted;
+    border-bottom: 1px solid $line;
+    white-space: nowrap;
+    line-height: 1.2;
+  }
+
+  td {
+    padding: 1rem 1.1rem;
+    border-bottom: 1px solid $line;
+    vertical-align: middle;
+    line-height: 1.35;
+  }
+
+  tbody tr {
+    transition: background-color $duration-fast $ease-out;
+    &:last-child td { border-bottom: none; }
+    &:hover { background: $surface-2; }
+  }
+
+  tr.is-clickable { cursor: pointer; }
+
+  .chip {
+    display: inline-block;
+    padding: 0.18rem 0.7rem;
+    border-radius: $radius-pill;
+    background: $surface-2;
+    font-size: 0.8rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 640px) {
+  .table-wrap { border-radius: $radius; }
+  .table {
+    min-width: 760px;
+    th, td { padding-top: 0.78rem; padding-bottom: 0.78rem; }
+  }
+}

@@ -1,6 +1,6 @@
-// The unified TraceUX widget: one launcher, one panel, two sections.
+// The unified TraceUX widget: one launcher, one panel, and the enabled sections.
 //
-// "What's new" (announcements) and "Feedback" (the survey) used to be two
+// "What's new" (announcements), "Support" (tickets), and "Feedback" (the survey) used to be
 // independent shadow-DOM widgets stacked on top of each other in the corner of
 // the page. They are now one surface. When a site enables both, the panel
 // carries a tab strip; when it enables only one, the tab strip is omitted and
@@ -31,11 +31,14 @@ export type WidgetCfg = {
   enabled: boolean;
   updates_enabled: boolean;
   feedback_enabled: boolean;
+  tickets_enabled: boolean;
   position?: string;
   title?: string;
   updates_label?: string;
   feedback_label?: string;
+  tickets_label?: string;
   poll_interval_ms?: number;
+  ticket_poll_interval_ms?: number;
   appearance?: WidgetAppearanceCfg;
 };
 
@@ -65,8 +68,44 @@ export type Announcement = {
   published_at: number;
   reactions: number;
   comments: number;
+  status?: string;
+  updated_at?: number;
   liked?: boolean;
   read?: boolean;
+};
+
+type TicketStatus = 'open' | 'in_progress' | 'under_review' | 'closed';
+type Ticket = {
+  id: number;
+  subject: string;
+  status: TicketStatus;
+  name?: string;
+  email?: string;
+  user_id?: string;
+  session_id?: string;
+  page_url?: string;
+  message_count: number;
+  last_message_at: number;
+  last_message_author: 'visitor' | 'staff';
+  created_at: number;
+  updated_at: number;
+};
+type TicketMessage = {
+  id: number;
+  ticket_id: number;
+  author: 'visitor' | 'staff';
+  user_id: number;
+  author_name?: string;
+  body: string;
+  created_at: number;
+};
+type TicketThread = { ticket: Ticket; messages: TicketMessage[] };
+type WidgetSocketEvent = {
+  type: string;
+  id?: number;
+  announcement?: Announcement;
+  ticket?: Ticket;
+  message?: TicketMessage;
 };
 
 export type WidgetHost = {
@@ -82,15 +121,24 @@ export type WidgetHost = {
     answers: { id: string; label?: string; value: string }[];
   }) => void;
   newId: () => string;
+  /** The current recording session, attached to newly opened tickets. */
+  sessionId: () => string;
+  /** The current tracker identity; a non-empty user id skips the email field. */
+  identity: () => { userId: string };
 };
 
 export type WidgetHandle = {
-  open: (section?: 'updates' | 'feedback') => void;
+  open: (section?: 'updates' | 'tickets' | 'feedback') => void;
   close: () => void;
   destroy: () => void;
 };
 
-type Section = 'updates' | 'feedback';
+type Section = 'updates' | 'tickets' | 'feedback';
+type SectionDefinition = {
+  id: Section;
+  label: string;
+  build: () => HTMLElement;
+};
 
 // ---- motion ----------------------------------------------------------------
 
@@ -145,6 +193,7 @@ const ICONS = {
   comment: '<path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.4 8.4 0 0 1-3.8-.9L3 20.5l1.5-4.6A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4z"/>',
   megaphone: '<path d="m3 11 15-7v16L3 13zM3 11v2a3 3 0 0 0 3 3h1v-6H6a3 3 0 0 0-3 1z"/>',
   spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>',
+  lifebuoy: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="m5.6 5.6 4.3 4.3M14.1 14.1l4.3 4.3M18.4 5.6l-4.3 4.3M9.9 14.1l-4.3 4.3"/>',
   check: '<path d="m20 6-11 11-5-5"/>',
   external: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>',
 };
@@ -174,12 +223,19 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   const accent = ap.accent || '#2f7d4a';
   const dark = ap.theme === 'dark';
   const position = cfg.position === 'left' ? 'left' : 'right';
+  const sections: SectionDefinition[] = [
+    cfg.updates_enabled && { id: 'updates', label: cfg.updates_label || "What's new", build: buildUpdatesList },
+    cfg.tickets_enabled && { id: 'tickets', label: cfg.tickets_label || 'Support', build: buildTicketsView },
+    cfg.feedback_enabled && { id: 'feedback', label: cfg.feedback_label || 'Feedback', build: buildFeedback },
+  ].filter(Boolean) as SectionDefinition[];
+  if (!sections.length) return null;
 
   // Visitor key: stable per browser + site, used for likes/reads/comments.
   let visitor = '';
   try {
     const storageKey = `trace_ux_visitor_${host.siteKey}`;
     visitor = localStorage.getItem(storageKey) || host.newId();
+    if (visitor.length < 8 || visitor.length > 100) visitor = host.newId();
     localStorage.setItem(storageKey, visitor);
   } catch {
     visitor = host.newId();
@@ -203,29 +259,109 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   root.style.setProperty('--w-radius', `${ap.radius || 18}px`);
   root.style.setProperty('--w-max-width', `${ap.max_width || 440}px`);
   root.style.setProperty('--w-space', `${ap.spacing || 16}px`);
-  root.style.setProperty('direction', position === 'left' ? 'rtl' : 'ltr');
 
-  // Everything inside the panel reads left-to-right; only the corner the
-  // widget anchors to flips, which is what the logical `inset-inline-end`
-  // properties in the stylesheet key off.
-  const ltr = <T extends HTMLElement>(node: T): T => {
-    node.style.direction = 'ltr';
-    return node;
-  };
+  // The corner is a class, not a `direction` flip. An earlier build set
+  // `direction: rtl` on .root and anchored with `inset-inline-end`, but the
+  // launcher, panel and toast are all position: fixed and each carried an
+  // explicit `direction: ltr` so their contents read normally — and a logical
+  // inset resolves against the box's *own* direction, so inset-inline-end
+  // always meant `right` and the widget never left the right corner.
+  if (position === 'left') root.classList.add('root--left');
 
   // ---- state ----
   let announcements: Announcement[] = [];
   let seenIds = new Set<number>();
-  let section: Section = cfg.updates_enabled ? 'updates' : 'feedback';
+  let section: Section = sections[0].id;
   let panelOpen = false;
   let submitted = false;
   let destroyed = false;
+	let tickets: Ticket[] = [];
+	let ticketThread: TicketThread | null = null;
+	type TicketView = { kind: 'list' } | { kind: 'thread'; id: number } | { kind: 'new' };
+	let ticketView: TicketView = { kind: 'list' };
+	let ticketLoading = false;
+	let ticketError = '';
+	let lastTicketFetch = 0;
+	let hasLiveTicket = false;
+	let ticketRetryPending = false;
+	let ticketInterval = Math.max(15_000, cfg.ticket_poll_interval_ms || 15_000);
+	const ticketBaseInterval = ticketInterval;
+	let ticketTimer: ReturnType<typeof setTimeout> | undefined;
+	let ticketRequest = 0;
+	// Anything typed but not sent yet. Every ticket view is thrown away and
+	// rebuilt on each repaint — a background poll, a tab switch, the panel
+	// closing on a click elsewhere on the page — so a draft that lives only in
+	// the DOM is lost on all of them. Keeping it here is what survives.
+	let ticketDraft = { subject: '', email: '', body: '' };
+	const ticketReplyDrafts = new Map<number, string>();
 
-  const bothSections = cfg.updates_enabled && cfg.feedback_enabled;
+	// Mirrors a field into the draft and seeds it from whatever is already there.
+	const bindDraft = (
+		field: HTMLInputElement | HTMLTextAreaElement,
+		name: string,
+		read: () => string,
+		write: (value: string) => void,
+	) => {
+		field.name = name;
+		field.value = read();
+		field.addEventListener('input', () => write(field.value));
+	};
+	let widgetSocket: WebSocket | null = null;
+	let widgetSocketRetryTimer: ReturnType<typeof setTimeout> | undefined;
+	let widgetSocketRetryCount = 0;
+	let widgetSocketConnected = false;
+
+	const ticketStorageKey = `trace_ux_tickets_${host.siteKey}`;
+	const ticketReadStorageKey = `trace_ux_ticket_reads_${host.siteKey}`;
+	const ticketReadMarkers = new Map<number, number>();
+	const ticketToastMarkers = new Map<number, number>();
+	const ticketNotificationRequests = new Set<number>();
+	try {
+		const stored = JSON.parse(localStorage.getItem(ticketReadStorageKey) || '{}') as Record<string, unknown>;
+		Object.entries(stored).forEach(([id, count]) => {
+			if (typeof count === 'number' && Number.isFinite(count) && count >= 0) ticketReadMarkers.set(Number(id), count);
+		});
+	} catch {
+		/* unread markers are optional; the live widget still works without storage */
+	}
+	function hasTicketHistory() {
+		try {
+			return localStorage.getItem(ticketStorageKey) === '1';
+		} catch {
+			return false;
+		}
+	}
+	function markTicketHistory() {
+		try {
+			localStorage.setItem(ticketStorageKey, '1');
+		} catch {
+			/* storage is optional; the in-memory thread still works */
+		}
+	}
+	function isTicketUnread(ticket: Ticket) {
+		return ticket.last_message_author === 'staff' && ticket.message_count > (ticketReadMarkers.get(ticket.id) || 0);
+	}
+	function unreadTicketCount() {
+		return tickets.filter(isTicketUnread).length;
+	}
+	function markTicketRead(ticket: Ticket) {
+		const current = ticketReadMarkers.get(ticket.id) || 0;
+		if (ticket.message_count <= current) return;
+		ticketReadMarkers.set(ticket.id, ticket.message_count);
+		try {
+			const stored: Record<string, number> = {};
+			ticketReadMarkers.forEach((count, id) => { stored[String(id)] = count; });
+			localStorage.setItem(ticketReadStorageKey, JSON.stringify(stored));
+		} catch {
+			/* storage is optional */
+		}
+		syncBadges();
+	}
+
   const unreadCount = () => announcements.filter((a) => !a.read).length;
 
   // ---- launcher ----
-  const launcher = ltr(el('button', 'launcher'));
+  const launcher = el('button', 'launcher');
   launcher.type = 'button';
   launcher.setAttribute('aria-expanded', 'false');
   launcher.setAttribute('aria-haspopup', 'dialog');
@@ -242,9 +378,10 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 
   // Falling back to the built-in mark also restores the labelled pill, so a
   // broken image never leaves a blank circle in the corner of the page.
+  const builtInIcon = cfg.updates_enabled ? ICONS.megaphone : cfg.tickets_enabled ? ICONS.lifebuoy : ICONS.spark;
   const useDefaultMark = () => {
     launcher.classList.remove('launcher--icon');
-    launcherIcon.replaceChildren(svg(cfg.updates_enabled ? ICONS.megaphone : ICONS.spark));
+    launcherIcon.replaceChildren(svg(builtInIcon));
     if (!launcher.contains(launcherLabel)) launcherIcon.after(launcherLabel);
   };
 
@@ -260,12 +397,12 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     // The label still names the control for assistive tech.
     launcher.setAttribute('aria-label', launcherText);
   } else {
-    launcherIcon.appendChild(svg(cfg.updates_enabled ? ICONS.megaphone : ICONS.spark));
+    launcherIcon.appendChild(svg(builtInIcon));
     launcher.append(launcherIcon, launcherLabel, launcherBadge);
   }
 
   // ---- panel shell ----
-  const panel = ltr(el('div', 'panel'));
+  const panel = el('div', 'panel');
   panel.setAttribute('role', 'dialog');
   panel.setAttribute('aria-modal', 'false');
   panel.setAttribute('aria-label', cfg.title || 'Help and updates');
@@ -282,27 +419,36 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 
   const tabs = el('div', 'tabs');
   tabs.setAttribute('role', 'tablist');
-  const tabUpdates = el('button', 'tab');
-  const tabFeedback = el('button', 'tab');
   const tabMarker = el('div', 'tabs__marker');
   const updatesCount = el('span', 'tab__count');
   updatesCount.hidden = true;
-
-  tabUpdates.type = 'button';
-  tabUpdates.setAttribute('role', 'tab');
-  tabUpdates.append(document.createTextNode(cfg.updates_label || "What's new"), updatesCount);
-  tabFeedback.type = 'button';
-  tabFeedback.setAttribute('role', 'tab');
-  tabFeedback.textContent = cfg.feedback_label || 'Feedback';
-  tabs.append(tabUpdates, tabFeedback, tabMarker);
-  tabs.hidden = !bothSections;
+  const ticketsCount = el('span', 'tab__count');
+  ticketsCount.hidden = true;
+  const tabButtons = new Map<Section, HTMLButtonElement>();
+  sections.forEach((item) => {
+    const tab = el('button', 'tab');
+    tab.type = 'button';
+    tab.setAttribute('role', 'tab');
+    tab.appendChild(document.createTextNode(item.label));
+    if (item.id === 'updates') tab.appendChild(updatesCount);
+    if (item.id === 'tickets') tab.appendChild(ticketsCount);
+    tabButtons.set(item.id, tab);
+    tab.addEventListener('click', () => {
+      const currentIndex = sections.findIndex((candidate) => candidate.id === section);
+      const nextIndex = sections.findIndex((candidate) => candidate.id === item.id);
+      showSection(item.id, nextIndex >= currentIndex ? 1 : -1);
+    });
+    tabs.appendChild(tab);
+  });
+  tabs.appendChild(tabMarker);
+  tabs.hidden = sections.length < 2;
 
   const body = el('div', 'body');
   panel.append(head, tabs, body);
   root.append(panel, launcher);
 
   // ---- toast: a newly published post announcing itself ----
-  const toast = ltr(el('div', 'panel'));
+  const toast = el('div', 'panel');
   toast.hidden = true;
   toast.style.transformOrigin = position === 'left' ? 'bottom left' : 'bottom right';
   toast.setAttribute('role', 'status');
@@ -334,6 +480,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
    *  overflow on either axis. */
   function swapView(build: () => HTMLElement, dir: 1 | -1) {
     const next = build();
+    body.classList.toggle('body--ticket-thread', next.classList.contains('ticket-view--thread'));
     body.replaceChildren(next);
     body.scrollTop = 0;
     animate(
@@ -355,18 +502,23 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   }
 
   function syncBadges() {
-    const n = unreadCount();
+    const n = unreadCount() + unreadTicketCount();
     launcherBadge.hidden = n === 0;
     launcherBadge.textContent = String(n);
     if (hasCustomIcon) {
       launcher.setAttribute('aria-label', n ? `${launcherText} (${n} unread)` : launcherText);
     }
-    updatesCount.hidden = n === 0;
-    updatesCount.textContent = String(n);
+    const announcementsUnread = unreadCount();
+    updatesCount.hidden = announcementsUnread === 0;
+    updatesCount.textContent = String(announcementsUnread);
+    const ticketsUnread = unreadTicketCount();
+    ticketsCount.hidden = ticketsUnread === 0;
+    ticketsCount.textContent = String(ticketsUnread);
   }
 
   function moveTabMarker(animated = true) {
-    const active = section === 'updates' ? tabUpdates : tabFeedback;
+    const active = tabButtons.get(section);
+    if (!active || tabs.hidden) return;
     const width = active.offsetWidth;
     const offset = active.offsetLeft - tabs.offsetLeft;
     tabMarker.style.width = `${width}px`;
@@ -523,6 +675,466 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     swapView(() => buildDetail(a), 1);
   }
 
+  // ---- tickets --------------------------------------------------------------
+  function ticketStatusLabel(status: TicketStatus): string {
+    switch (status) {
+      case 'in_progress': return 'In progress';
+      case 'under_review': return 'Under review';
+      case 'closed': return 'Closed';
+      default: return 'Open';
+    }
+  }
+
+  function ticketRelativeTime(unix: number): string {
+    if (!unix) return '';
+    const seconds = Math.max(0, Math.floor(Date.now() / 1000) - unix);
+    if (seconds < 60) return 'just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
+    return new Date(unix * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+
+  function ticketRequester(ticket: Ticket): string {
+    return ticket.name || ticket.email || 'You';
+  }
+
+  function ticketURL(path = ''): string {
+    return `${host.origin}/api/support/${encodeURIComponent(host.siteKey)}/tickets${path}`;
+  }
+
+  function postTicket(path: string, payload: object): Promise<Response> {
+    return fetch(ticketURL(path), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visitor_key: visitor, ...payload }),
+    });
+  }
+
+  function repaintTicketView() {
+    if (destroyed || !panelOpen || section !== 'tickets') return;
+    // Replacing the view moves focus to the panel, so remember which field the
+    // visitor was in and where the caret sat, and put both back afterwards. A
+    // reply arriving on the poll must not interrupt someone mid-sentence.
+    const focused = shadow.activeElement as HTMLInputElement | HTMLTextAreaElement | null;
+    const focusName = focused && focused.name && body.contains(focused) ? focused.name : '';
+    const caret = focusName && typeof focused?.selectionStart === 'number' ? focused.selectionStart : null;
+
+    const next = buildTicketsView();
+    body.classList.toggle('body--ticket-thread', next.classList.contains('ticket-view--thread'));
+    body.replaceChildren(next);
+
+    if (!focusName) return;
+    const restored = body.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${focusName}"]`);
+    if (!restored) return;
+    restored.focus();
+    if (caret === null) return;
+    try {
+      restored.setSelectionRange(caret, caret);
+    } catch {
+      /* number and email inputs reject setSelectionRange in some browsers */
+    }
+  }
+
+  function buildTicketsList(): HTMLElement {
+    const view = el('div', 'view ticket-view');
+    if (ticketError) view.appendChild(el('div', 'ticket-error', ticketError));
+    if (!tickets.length) {
+      const empty = el('div', 'empty ticket-empty');
+      const mark = el('div', 'empty__mark');
+      mark.appendChild(svg(ICONS.lifebuoy));
+      const start = el('button', 'submit', 'Start a ticket');
+      start.type = 'button';
+      start.addEventListener('click', () => {
+        ticketError = '';
+        ticketView = { kind: 'new' };
+        swapView(buildTicketsView, 1);
+      });
+      empty.append(
+        mark,
+        el('p', 'empty__title', 'How can we help?'),
+        el('p', 'empty__note', 'Send a message to the support team and keep the conversation here.'),
+        start,
+      );
+      view.appendChild(empty);
+      return view;
+    }
+
+    const items: HTMLElement[] = [];
+    tickets.forEach((ticket) => {
+      const item = el('button', 'item ticket-item');
+      item.type = 'button';
+      const top = el('div', 'item__top');
+      top.append(
+        el('span', 'ticket-item__subject', ticket.subject),
+        el('span', `ticket-status ticket-status--${ticket.status}`, ticketStatusLabel(ticket.status)),
+      );
+      const excerpt = el('p', 'item__excerpt', ticket.last_message_author === 'visitor'
+        ? 'Waiting for a reply from support'
+        : 'Last reply from support');
+      const meta = el('div', 'item__meta');
+      meta.append(
+        el('span', undefined, ticketRequester(ticket)),
+        el('span', undefined, '·'),
+        el('span', undefined, ticketRelativeTime(ticket.last_message_at)),
+      );
+      item.append(top, excerpt, meta);
+      item.addEventListener('click', () => openTicketThread(ticket.id));
+      items.push(item);
+      view.appendChild(item);
+    });
+
+    const footer = el('div', 'ticket-footer');
+    const newTicket = el('button', 'submit', 'New ticket');
+    newTicket.type = 'button';
+    newTicket.addEventListener('click', () => {
+      ticketError = '';
+      ticketView = { kind: 'new' };
+      swapView(buildTicketsView, 1);
+    });
+    footer.appendChild(newTicket);
+    view.appendChild(footer);
+    queueMicrotask(() => stagger(items));
+    return view;
+  }
+
+  function buildTicketMessage(message: TicketMessage): HTMLElement {
+    const bubble = el('div', `ticket-message ticket-message--${message.author}`);
+    const author = message.author === 'staff' ? message.author_name || 'Support' : 'You';
+    bubble.append(
+      el('div', 'ticket-message__author', author),
+      el('p', 'ticket-message__body', message.body),
+      el('div', 'ticket-message__time', ticketRelativeTime(message.created_at)),
+    );
+    return bubble;
+  }
+
+  function buildTicketThread(): HTMLElement {
+    const view = el('div', 'view ticket-view ticket-view--thread');
+    const detail = el('div', 'ticket-thread');
+    const back = el('button', 'back');
+    back.type = 'button';
+    back.append(svg(ICONS.back), document.createTextNode('All tickets'));
+    back.addEventListener('click', () => {
+      ticketView = { kind: 'list' };
+      ticketThread = null;
+      ticketError = '';
+      swapView(buildTicketsView, -1);
+    });
+    detail.appendChild(back);
+
+    if (!ticketThread) {
+      detail.appendChild(el('p', 'ticket-loading', ticketError || 'Loading ticket…'));
+      view.appendChild(detail);
+      return view;
+    }
+
+    const ticket = ticketThread.ticket;
+    const heading = el('div', 'ticket-thread__heading');
+    heading.append(
+      el('span', 'eyebrow', `Ticket #${ticket.id}`),
+      el('span', `ticket-status ticket-status--${ticket.status}`, ticketStatusLabel(ticket.status)),
+    );
+    detail.appendChild(heading);
+    detail.appendChild(el('h3', 'detail__title', ticket.subject));
+    const meta = el('div', 'ticket-thread__meta');
+    meta.append(el('span', undefined, ticketRelativeTime(ticket.created_at)));
+    detail.appendChild(meta);
+
+    const messages = el('div', 'ticket-messages');
+    ticketThread.messages.forEach((message) => {
+      messages.appendChild(buildTicketMessage(message));
+    });
+    detail.appendChild(messages);
+
+    if (ticket.status === 'closed') {
+      detail.appendChild(el('div', 'ticket-closed', 'This ticket is closed.'));
+    } else {
+      const composer = el('form', 'ticket-composer');
+      const input = el('textarea', 'ticket-composer__input');
+      input.maxLength = 4000;
+      input.placeholder = 'Reply to support…';
+      input.setAttribute('aria-label', 'Reply to support');
+      bindDraft(
+        input,
+        'reply',
+        () => ticketReplyDrafts.get(ticket.id) || '',
+        (v) => ticketReplyDrafts.set(ticket.id, v),
+      );
+      const actions = el('div', 'ticket-composer__actions');
+      const error = el('div', 'ticket-error');
+      error.hidden = true;
+      const send = el('button', 'submit', 'Send');
+      send.type = 'submit';
+      actions.append(error, send);
+      composer.append(input, actions);
+      composer.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const bodyText = input.value.trim();
+        if (!bodyText) {
+          error.textContent = 'Write a message first.';
+          error.hidden = false;
+          return;
+        }
+        input.disabled = true;
+        send.disabled = true;
+        const res = await postTicket(`/${ticket.id}/messages`, { body: bodyText }).catch(() => null);
+        if (!res || !res.ok) {
+          error.textContent = res?.status === 409 ? 'This ticket is closed.' : res?.status === 429 ? 'This ticket has reached its message limit.' : 'That reply could not be sent.';
+          error.hidden = false;
+          input.disabled = false;
+          send.disabled = false;
+          return;
+        }
+        try {
+          ticketThread = (await res.json()) as TicketThread;
+          ticketReplyDrafts.delete(ticket.id);
+          tickets = tickets.map((item) => item.id === ticket.id ? ticketThread?.ticket || item : item);
+          syncBadges();
+          ticketError = '';
+          repaintTicketView();
+          scrollTicketMessagesToLatest();
+        } catch {
+          error.textContent = 'That reply could not be displayed.';
+          error.hidden = false;
+          input.disabled = false;
+          send.disabled = false;
+        }
+      });
+      detail.appendChild(composer);
+    }
+    view.appendChild(detail);
+    return view;
+  }
+
+  function buildNewTicket(): HTMLElement {
+    const view = el('div', 'view ticket-view');
+    const form = el('form', 'ticket-new');
+    const back = el('button', 'back');
+    back.type = 'button';
+    back.append(svg(ICONS.back), document.createTextNode('All tickets'));
+    back.addEventListener('click', () => {
+      ticketView = { kind: 'list' };
+      ticketError = '';
+      swapView(buildTicketsView, -1);
+    });
+    form.appendChild(back);
+    form.appendChild(el('h3', 'detail__title', 'Start a ticket'));
+    form.appendChild(el('p', 'ticket-new__intro', 'Tell us what you need help with and we’ll follow up here.'));
+
+    const subject = el('input', 'field');
+    subject.type = 'text';
+    subject.maxLength = 120;
+    subject.required = true;
+    subject.placeholder = 'What can we help with?';
+    subject.setAttribute('aria-label', 'Subject');
+    bindDraft(subject, 'subject', () => ticketDraft.subject, (v) => (ticketDraft.subject = v));
+    const subjectLabel = el('label', 'ticket-new__field');
+    subjectLabel.append(el('span', undefined, 'Subject'), subject);
+    form.appendChild(subjectLabel);
+
+    const userId = host.identity().userId || '';
+    const hasUserId = userId.trim() !== '';
+    let email: HTMLInputElement | undefined;
+    if (!hasUserId) {
+      email = el('input', 'field');
+      email.type = 'email';
+      email.maxLength = 200;
+      email.required = true;
+      email.placeholder = 'you@example.com';
+      email.setAttribute('aria-label', 'Email');
+      bindDraft(email, 'email', () => ticketDraft.email, (v) => (ticketDraft.email = v));
+      const emailLabel = el('label', 'ticket-new__field');
+      emailLabel.append(el('span', undefined, 'Email'), email);
+      form.appendChild(emailLabel);
+    }
+
+    const message = el('textarea', 'ticket-new__message');
+    message.maxLength = 4000;
+    message.required = true;
+    message.placeholder = 'Describe the issue…';
+    message.setAttribute('aria-label', 'Message');
+    bindDraft(message, 'body', () => ticketDraft.body, (v) => (ticketDraft.body = v));
+    const messageLabel = el('label', 'ticket-new__field');
+    messageLabel.append(el('span', undefined, 'Message'), message);
+    form.appendChild(messageLabel);
+
+    const error = el('div', 'ticket-error');
+    error.hidden = true;
+    const submit = el('button', 'submit', 'Send ticket');
+    submit.type = 'submit';
+    form.append(error, submit);
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const subjectText = subject.value.trim();
+      const messageText = message.value.trim();
+      const emailText = email?.value.trim() || '';
+      const emailOK = hasUserId || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailText);
+      if (!subjectText || subjectText.length > 120 || !messageText || messageText.length > 4000 || !emailOK) {
+        error.textContent = !emailOK ? 'Enter a valid email address.' : 'Add a subject and message before sending.';
+        error.hidden = false;
+        return;
+      }
+      error.hidden = true;
+      submit.disabled = true;
+      const res = await postTicket('', {
+        user_id: userId,
+        email: emailText,
+        subject: subjectText,
+        body: messageText,
+        session_id: host.sessionId(),
+        page_url: location.href,
+      }).catch(() => null);
+      if (!res || !res.ok) {
+        error.textContent = res?.status === 429 ? 'You’ve reached the ticket limit for this visitor.' : 'That ticket could not be created.';
+        error.hidden = false;
+        submit.disabled = false;
+        return;
+      }
+      try {
+        const created = (await res.json()) as Ticket;
+        ticketDraft = { subject: '', email: '', body: '' };
+        markTicketHistory();
+        tickets = [created, ...tickets.filter((item) => item.id !== created.id)];
+        hasLiveTicket = true;
+        ticketView = { kind: 'thread', id: created.id };
+        ticketThread = null;
+        ticketError = '';
+        scheduleTicketPoll();
+        repaintTicketView();
+        await loadTicketThread(created.id, false);
+      } catch {
+        error.textContent = 'The ticket was created, but could not be displayed.';
+        error.hidden = false;
+        submit.disabled = false;
+      }
+    });
+    view.appendChild(form);
+    return view;
+  }
+
+  function scrollTicketMessagesToLatest() {
+    requestAnimationFrame(() => {
+      if (destroyed || !panelOpen || section !== 'tickets' || ticketView.kind !== 'thread') return;
+      const messageList = body.querySelector<HTMLElement>('.ticket-messages');
+      if (messageList) messageList.scrollTop = messageList.scrollHeight;
+    });
+  }
+
+  function buildTicketsView(): HTMLElement {
+    if (ticketView.kind === 'new') return buildNewTicket();
+    if (ticketView.kind === 'thread') return buildTicketThread();
+    return buildTicketsList();
+  }
+
+  function openTicketThread(id: number) {
+    const ticket = tickets.find((item) => item.id === id);
+    if (ticket) markTicketRead(ticket);
+    ticketView = { kind: 'thread', id };
+    ticketThread = null;
+    ticketError = '';
+    ticketLoading = true;
+    swapView(buildTicketsView, 1);
+    void loadTicketThread(id, false);
+  }
+
+  async function loadTicketThread(id: number, render = true) {
+    if (destroyed || !cfg.tickets_enabled) return;
+    const request = ++ticketRequest;
+    ticketLoading = true;
+    if (render) repaintTicketView();
+    let res: Response;
+    try {
+      res = await fetch(`${ticketURL(`/${id}`)}?visitor=${encodeURIComponent(visitor)}`);
+    } catch {
+      if (request === ticketRequest) {
+        ticketLoading = false;
+        ticketError = 'Could not load this ticket.';
+        repaintTicketView();
+      }
+      return;
+    }
+    if (request !== ticketRequest || destroyed) return;
+    if (!res.ok) {
+      ticketLoading = false;
+      ticketError = res.status === 404 ? 'This ticket is no longer available.' : 'Could not load this ticket.';
+      repaintTicketView();
+      return;
+    }
+    try {
+      ticketThread = (await res.json()) as TicketThread;
+      ticketLoading = false;
+      ticketError = '';
+      if (panelOpen && section === 'tickets' && ticketView.kind === 'thread' && ticketView.id === id) {
+        markTicketRead(ticketThread.ticket);
+      }
+      if (ticketView.kind === 'thread' && ticketView.id === id) {
+        repaintTicketView();
+        scrollTicketMessagesToLatest();
+      }
+    } catch {
+      ticketLoading = false;
+      ticketError = 'Could not load this ticket.';
+      repaintTicketView();
+    }
+  }
+
+  async function loadTickets() {
+    if (!cfg.tickets_enabled || destroyed) return;
+    let res: Response;
+    try {
+      res = await fetch(`${ticketURL()}?visitor=${encodeURIComponent(visitor)}`);
+    } catch {
+      return;
+    }
+    if (res.status === 429) {
+      ticketRetryPending = true;
+      ticketInterval = Math.min(ticketInterval * 2, 15 * 60_000);
+      scheduleTicketPoll();
+      return;
+    }
+    if (!res.ok) return;
+    let next: Ticket[];
+    try {
+      next = (await res.json()) as Ticket[];
+    } catch {
+      return;
+    }
+    if (!Array.isArray(next) || destroyed) return;
+    ticketInterval = ticketBaseInterval;
+    ticketRetryPending = false;
+    tickets = next;
+    hasLiveTicket = next.some((ticket) => ticket.status !== 'closed');
+    lastTicketFetch = Date.now();
+    syncBadges();
+    if (panelOpen && section === 'tickets') {
+      if (ticketView.kind === 'thread') {
+        void loadTicketThread(ticketView.id, false);
+      } else if (ticketView.kind === 'list') {
+        // The compose form shows nothing the ticket list feeds, so a poll has
+        // no reason to rebuild it underneath whoever is filling it in.
+        repaintTicketView();
+      }
+    }
+    if (!panelOpen) {
+      const unread = next.find(
+        (ticket) => isTicketUnread(ticket) && ticketToastMarkers.get(ticket.id) !== ticket.message_count,
+      );
+      if (unread) void loadTicketNotification(unread);
+    }
+    scheduleTicketPoll();
+  }
+
+  function scheduleTicketPoll() {
+    clearTimeout(ticketTimer);
+    if (widgetSocketConnected || !cfg.tickets_enabled || destroyed || (!hasLiveTicket && !ticketRetryPending)) return;
+    ticketTimer = setTimeout(async () => {
+      if (destroyed) return;
+      if (document.visibilityState === 'visible') await loadTickets();
+      else scheduleTicketPoll();
+    }, ticketInterval);
+  }
+
   // ---- feedback ----
   function buildFeedback(): HTMLElement {
     const view = el('div', 'view');
@@ -648,9 +1260,9 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       if (mark) {
         animate(mark, { transform: ['scale(.6)', 'scale(1)'] }, { duration: dur(0.42), ease: EASE_POP });
       }
-      // Only auto-close when feedback is the whole widget; with both sections
+      // Only auto-close when feedback is the whole widget; with multiple sections
       // enabled the visitor may still want to read the updates.
-      if (!bothSections) setTimeout(() => closePanel(), 2200);
+      if (sections.length < 2) setTimeout(() => closePanel(), 2200);
     });
     form.appendChild(submit);
 
@@ -672,20 +1284,25 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 
   // ---- section switching ----
   function showSection(next: Section, dir: 1 | -1 = 1) {
+    const selected = sections.find((item) => item.id === next);
+    if (!selected) return;
     section = next;
-    tabUpdates.setAttribute('aria-selected', String(next === 'updates'));
-    tabFeedback.setAttribute('aria-selected', String(next === 'feedback'));
-    swapView(() => (next === 'updates' ? buildUpdatesList() : buildFeedback()), dir);
-    if (bothSections) moveTabMarker();
+    tabButtons.forEach((tab, id) => tab.setAttribute('aria-selected', String(id === next)));
+    swapView(selected.build, dir);
+    if (sections.length > 1) moveTabMarker();
+    if (next === 'tickets') {
+      // A cached thread renders its messages immediately from swapView above,
+      // with no fetch to hang a scroll off afterward — reopening the panel or
+      // switching back into this tab must still land on the latest message.
+      if (ticketView.kind === 'thread') scrollTicketMessagesToLatest();
+      if (Date.now() - lastTicketFetch > 30_000) void loadTickets();
+    }
   }
-
-  tabUpdates.addEventListener('click', () => showSection('updates', -1));
-  tabFeedback.addEventListener('click', () => showSection('feedback', 1));
 
   // ---- open / close ----
   function openPanel(target?: Section) {
     hideToast();
-    if (target && ((target === 'updates' && cfg.updates_enabled) || (target === 'feedback' && cfg.feedback_enabled))) {
+    if (target && sections.some((item) => item.id === target)) {
       section = target;
     }
     if (panelOpen) {
@@ -696,7 +1313,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     panel.hidden = false;
     launcher.setAttribute('aria-expanded', 'true');
     showSection(section);
-    if (bothSections) requestAnimationFrame(() => moveTabMarker(false));
+    if (sections.length > 1) requestAnimationFrame(() => moveTabMarker(false));
     animateIn(panel);
     animate(launcher, { transform: ['none', 'scale(.94)', 'none'] }, { duration: dur(0.22), ease: EASE_OUT });
   }
@@ -723,7 +1340,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   document.addEventListener('click', onDocClick);
   document.addEventListener('keydown', onKeydown);
 
-  // ---- toast for freshly published updates ----
+  // ---- toast for freshly published updates or support replies ----
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
   function hideToast() {
@@ -734,13 +1351,19 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     });
   }
 
-  function showToast(a: Announcement) {
+  function showPreviewToast(
+    labelText: string,
+    titleText: string,
+    excerptText: string,
+    actionText: string,
+    onOpen: () => void,
+  ) {
     if (panelOpen || destroyed) return;
     const wrap = el('div', 'detail');
     wrap.style.padding = '16px 18px';
 
     const header = el('div', 'item__top');
-    header.appendChild(el('span', 'eyebrow', a.release_label || 'New update'));
+    header.appendChild(el('span', 'eyebrow', labelText));
     const dismiss = el('button', 'icon-btn');
     dismiss.type = 'button';
     dismiss.setAttribute('aria-label', 'Dismiss');
@@ -758,20 +1381,254 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     open.type = 'button';
     open.style.padding = '0';
     open.style.borderBottom = '0';
-    open.appendChild(el('h3', 'item__title', a.title));
-    const excerpt = (a.summary || a.body || '').trim();
-    if (excerpt) open.appendChild(el('p', 'item__excerpt', excerpt));
-    open.appendChild(el('p', 'detail__link', 'Read update'));
-    open.addEventListener('click', () => {
-      hideToast();
-      openPanel('updates');
-      openDetail(a);
-    });
+    open.setAttribute('aria-label', actionText);
+    open.appendChild(el('h3', 'item__title', titleText));
+    if (excerptText) open.appendChild(el('p', 'item__excerpt', excerptText));
+    open.appendChild(el('p', 'detail__link', actionText));
+    open.addEventListener('click', onOpen);
 
     wrap.append(header, open);
     toast.replaceChildren(wrap);
     toast.hidden = false;
+    clearTimeout(toastTimer);
     animateIn(toast);
+  }
+
+  function showToast(a: Announcement) {
+    const excerpt = (a.summary || a.body || '').trim();
+    showPreviewToast(a.release_label || 'New update', a.title, excerpt, 'Read update', () => {
+      hideToast();
+      openPanel('updates');
+      openDetail(a);
+    });
+  }
+
+  function showTicketToast(ticket: Ticket, message: string) {
+    showPreviewToast(
+      'Support reply',
+      ticket.subject,
+      message.trim() || 'Support replied to your ticket.',
+      'Open conversation',
+      () => {
+        hideToast();
+        openPanel('tickets');
+        openTicketThread(ticket.id);
+      },
+    );
+  }
+
+  async function loadTicketNotification(ticket: Ticket) {
+    if (
+      destroyed ||
+      panelOpen ||
+      !isTicketUnread(ticket) ||
+      ticketToastMarkers.get(ticket.id) === ticket.message_count ||
+      ticketNotificationRequests.has(ticket.id)
+    ) return;
+
+    ticketNotificationRequests.add(ticket.id);
+    try {
+      const res = await fetch(`${ticketURL(`/${ticket.id}`)}?visitor=${encodeURIComponent(visitor)}`);
+      if (!res.ok || destroyed) return;
+      const thread = (await res.json()) as TicketThread;
+      if (!thread || !Array.isArray(thread.messages)) return;
+      const latest = thread.messages[thread.messages.length - 1];
+      if (!latest || latest.author !== 'staff') return;
+
+      const displayTicket = thread.ticket?.id === ticket.id ? thread.ticket : ticket;
+      if (panelOpen || destroyed || !isTicketUnread(displayTicket)) return;
+      if (ticketToastMarkers.get(ticket.id) === displayTicket.message_count) return;
+      ticketToastMarkers.set(ticket.id, displayTicket.message_count);
+      showTicketToast(displayTicket, latest.body);
+    } catch {
+      // The next ticket poll can retry the preview without affecting the widget.
+    } finally {
+      ticketNotificationRequests.delete(ticket.id);
+    }
+  }
+
+  function repaintUpdatesListIfVisible() {
+    if (panelOpen && section === 'updates' && body.querySelector('.item, .empty')) {
+      body.replaceChildren(buildUpdatesList());
+    }
+  }
+
+  function upsertTicketFromSocket(ticket: Ticket) {
+    tickets = [ticket, ...tickets.filter((item) => item.id !== ticket.id)].sort(
+      (a, b) => b.last_message_at - a.last_message_at || b.id - a.id,
+    );
+    hasLiveTicket = tickets.some((item) => item.status !== 'closed');
+    syncBadges();
+    if (!panelOpen || section !== 'tickets') return;
+    if (ticketView.kind === 'list') {
+      repaintTicketView();
+      return;
+    }
+    // The open thread renders from its own copy of the ticket, so a change
+    // that arrives while it is on screen — support moving it to closed, say —
+    // has to be written back and the view rebuilt. Without this the pill goes
+    // stale and, worse, a closed ticket keeps offering a reply box whose next
+    // message the server rejects. Rebuilding is safe: a repaint carries the
+    // unsent draft and the caret across.
+    if (ticketView.kind !== 'thread' || ticketView.id !== ticket.id || !ticketThread) return;
+    const statusChanged = ticketThread.ticket.status !== ticket.status;
+    ticketThread = { ...ticketThread, ticket };
+    if (statusChanged) repaintTicketView();
+  }
+
+  function removeTicketFromSocket(id: number) {
+    tickets = tickets.filter((item) => item.id !== id);
+    hasLiveTicket = tickets.some((item) => item.status !== 'closed');
+    if (ticketView.kind === 'thread' && ticketView.id === id) {
+      ticketView = { kind: 'list' };
+      ticketThread = null;
+      ticketError = 'This ticket is no longer available.';
+    }
+    syncBadges();
+    if (panelOpen && section === 'tickets') repaintTicketView();
+  }
+
+  function appendTicketMessageToView(message: TicketMessage): boolean {
+    if (!ticketThread || ticketThread.messages.some((item) => item.id === message.id)) return false;
+    ticketThread = { ...ticketThread, messages: [...ticketThread.messages, message] };
+    const messageList = body.querySelector<HTMLElement>('.ticket-messages');
+    if (messageList) {
+      messageList.appendChild(buildTicketMessage(message));
+      messageList.scrollTop = messageList.scrollHeight;
+    }
+    return true;
+  }
+
+  function handleWidgetSocketEvent(event: WidgetSocketEvent) {
+    if (event.type.startsWith('announcement.')) {
+      const announcement = event.announcement;
+      if (event.type === 'announcement.deleted' || event.type === 'announcement.archived') {
+        const id = event.id || announcement?.id;
+        if (!id) return;
+        announcements = announcements.filter((item) => item.id !== id);
+        seenIds.delete(id);
+        syncBadges();
+        repaintUpdatesListIfVisible();
+        return;
+      }
+      if (!announcement || (announcement.status && announcement.status !== 'published')) return;
+      const previous = announcements.find((item) => item.id === announcement.id);
+      const merged = previous ? { ...announcement, read: previous.read } : announcement;
+      const isFresh = !seenIds.has(merged.id);
+      seenIds.add(merged.id);
+      announcements = [merged, ...announcements.filter((item) => item.id !== merged.id)].sort(
+        (a, b) => b.published_at - a.published_at || (b.updated_at || 0) - (a.updated_at || 0) || b.id - a.id,
+      );
+      syncBadges();
+      repaintUpdatesListIfVisible();
+      if (!panelOpen && event.type === 'announcement.published' && isFresh) showToast(merged);
+      return;
+    }
+
+    if (!event.type.startsWith('ticket.')) return;
+    if (event.type === 'ticket.deleted') {
+      if (event.id) removeTicketFromSocket(event.id);
+      return;
+    }
+    const ticket = event.ticket;
+    if (!ticket) return;
+    if (event.type === 'ticket.created') markTicketHistory();
+    upsertTicketFromSocket(ticket);
+
+    if (event.type !== 'ticket.message' || !event.message) return;
+    const message = event.message;
+    const viewingThisThread =
+      panelOpen && section === 'tickets' && ticketView.kind === 'thread' && ticketView.id === ticket.id;
+    if (viewingThisThread && ticketThread) {
+      // upsertTicketFromSocket above already wrote the fresh ticket back and
+      // rebuilt the view if the status moved, so all that is left is the bubble.
+      appendTicketMessageToView(message);
+      if (message.author === 'staff') markTicketRead(ticket);
+      return;
+    }
+
+    if (message.author === 'staff' && !panelOpen && isTicketUnread(ticket)) {
+      if (ticketToastMarkers.get(ticket.id) !== ticket.message_count) {
+        ticketToastMarkers.set(ticket.id, ticket.message_count);
+        showTicketToast(ticket, message.body);
+      }
+    }
+  }
+
+  function widgetSocketURL(): string {
+    const url = new URL(`/api/widget/${encodeURIComponent(host.siteKey)}/socket`, host.origin);
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    url.searchParams.set('visitor', visitor);
+    url.searchParams.set(
+      'channels',
+      [cfg.updates_enabled && 'updates', cfg.tickets_enabled && 'tickets'].filter(Boolean).join(','),
+    );
+    return url.toString();
+  }
+
+  function scheduleWidgetSocketRetry() {
+    if (destroyed || widgetSocketRetryTimer || document.visibilityState !== 'visible') return;
+    const delay = Math.min(30_000, 1_000 * 2 ** Math.min(widgetSocketRetryCount, 5));
+    widgetSocketRetryCount += 1;
+    widgetSocketRetryTimer = setTimeout(() => {
+      widgetSocketRetryTimer = undefined;
+      connectWidgetSocket();
+    }, delay);
+  }
+
+  function connectWidgetSocket() {
+    if (
+      destroyed ||
+      (!cfg.updates_enabled && !cfg.tickets_enabled) ||
+      typeof WebSocket === 'undefined' ||
+      (widgetSocket && (widgetSocket.readyState === WebSocket.CONNECTING || widgetSocket.readyState === WebSocket.OPEN))
+    ) return;
+    let socket: WebSocket;
+    try {
+      socket = new WebSocket(widgetSocketURL());
+    } catch {
+      scheduleWidgetSocketRetry();
+      return;
+    }
+    widgetSocket = socket;
+    socket.addEventListener('open', () => {
+      if (widgetSocket !== socket || destroyed) {
+        socket.close();
+        return;
+      }
+      widgetSocketConnected = true;
+      widgetSocketRetryCount = 0;
+      clearTimeout(widgetSocketRetryTimer);
+      widgetSocketRetryTimer = undefined;
+      clearTimeout(timer);
+      clearTimeout(ticketTimer);
+      // Reconcile the short interval between the initial HTTP load and the
+      // socket handshake. Later changes arrive as socket payloads directly.
+      if (cfg.updates_enabled) void loadAnnouncements(true);
+      if (cfg.tickets_enabled) void loadTickets();
+    });
+    socket.addEventListener('message', (event) => {
+      if (widgetSocket !== socket || destroyed || typeof event.data !== 'string') return;
+      try {
+        const payload = JSON.parse(event.data) as WidgetSocketEvent;
+        if (payload && typeof payload.type === 'string') handleWidgetSocketEvent(payload);
+      } catch {
+        // Ignore malformed messages; the HTTP fallback remains available.
+      }
+    });
+    socket.addEventListener('close', () => {
+      if (widgetSocket !== socket) return;
+      widgetSocket = null;
+      widgetSocketConnected = false;
+      if (destroyed) return;
+      if (document.visibilityState === 'visible') {
+        if (cfg.updates_enabled) void loadAnnouncements(false);
+        if (cfg.tickets_enabled && hasTicketHistory()) void loadTickets();
+      }
+      scheduleNext();
+      scheduleTicketPoll();
+      scheduleWidgetSocketRetry();
+    });
   }
 
   // ---- polling ----
@@ -822,6 +1679,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 
   function scheduleNext() {
     clearTimeout(timer);
+    if (widgetSocketConnected) return;
     timer = setTimeout(async () => {
       if (destroyed) return;
       if (document.visibilityState === 'visible') await loadAnnouncements(false);
@@ -831,7 +1689,13 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 
   const onVisibility = () => {
     if (destroyed) return;
-    if (document.visibilityState === 'visible') void loadAnnouncements(false);
+    if (document.visibilityState === 'visible') {
+      if (!widgetSocket) connectWidgetSocket();
+      if (!widgetSocketConnected) {
+        void loadAnnouncements(false);
+        if (cfg.tickets_enabled && hasTicketHistory() && Date.now() - lastTicketFetch > 30_000) void loadTickets();
+      }
+    }
   };
   document.addEventListener('visibilitychange', onVisibility);
 
@@ -850,9 +1714,11 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     { duration: dur(0.4), ease: EASE_OUT },
   );
 
+  if (cfg.updates_enabled || cfg.tickets_enabled) connectWidgetSocket();
   if (cfg.updates_enabled) {
     void loadAnnouncements(true).then(scheduleNext);
   }
+  if (cfg.tickets_enabled) void loadTickets();
 
   return {
     open: (target) => openPanel(target),
@@ -860,7 +1726,12 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     destroy: () => {
       destroyed = true;
       clearTimeout(timer);
+      clearTimeout(ticketTimer);
       clearTimeout(toastTimer);
+      clearTimeout(widgetSocketRetryTimer);
+      widgetSocketRetryTimer = undefined;
+      widgetSocket?.close();
+      widgetSocket = null;
       document.removeEventListener('click', onDocClick);
       document.removeEventListener('keydown', onKeydown);
       document.removeEventListener('visibilitychange', onVisibility);

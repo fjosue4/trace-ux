@@ -1,0 +1,22 @@
+// Kept as plain global CSS (not a CSS module): `.page-head` is targeted by
+// other pages' stylesheets (Settings.css) as a descendant selector.
+@use 'abstracts' as *;
+
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+
+  &__sub { margin: 0.35rem 0 0; color: $muted; font-size: 0.9rem; max-width: 72ch; }
+  &__actions { display: flex; gap: 0.6rem; align-items: center; }
+  &__lead { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
+}
+
+@media (max-width: 520px) {
+  .page-head { align-items: flex-start; margin-bottom: 1.15rem; }
+  .page-head__actions { margin-left: auto; }
+  .page-head__sub { font-size: 0.84rem; }
+}

@@ -1,0 +1,49 @@
+@use 'abstracts' as *;
+
+.feedback-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+.feedback-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+
+  &__label {
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: $muted;
+  }
+  &__row { display: flex; align-items: baseline; gap: 0.4rem; }
+  &__num { font-size: 1.7rem; letter-spacing: -0.02em; }
+  &__avg { display: inline-flex; }
+}
+
+.rating-stars {
+  display: inline-flex;
+  gap: 1px;
+
+  span { color: $line-strong; display: inline-flex; }
+  span.on { color: $accent; }
+}
+
+.feedback-comment { max-width: 320px; }
+.feedback-session {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: $accent;
+  font-weight: 600;
+  font-size: 0.85rem;
+
+  &:hover { text-decoration: underline; }
+}
+
+@media (max-width: 640px) {
+  .feedback-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; }
+  .feedback-card__num { font-size: 1.45rem; }
+}

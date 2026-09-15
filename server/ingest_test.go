@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+
+	"trace-ux/server/store"
 )
 
 func TestCountryFromRequestUsesTrustedProxyHeaders(t *testing.T) {
@@ -56,21 +58,21 @@ func TestListSessionsFiltersCountry(t *testing.T) {
 	admin := login(t, ts.URL, "admin", "pw")
 
 	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"Country test","url":"https://country.test"}`)
-	var site Site
+	var site store.Site
 	if err := json.NewDecoder(resp.Body).Decode(&site); err != nil {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
 
-	if err := srv.store.SaveHelloWithCountry(site.ID, "country-us", "UA", "hash-us", "US", &ingestHello{URL: "https://country.test/"}); err != nil {
+	if err := srv.store.SaveHelloWithCountry(site.ID, "country-us", "UA", "hash-us", "US", &store.IngestHello{URL: "https://country.test/"}); err != nil {
 		t.Fatal(err)
 	}
-	if err := srv.store.SaveHelloWithCountry(site.ID, "country-gb", "UA", "hash-gb", "GB", &ingestHello{URL: "https://country.test/"}); err != nil {
+	if err := srv.store.SaveHelloWithCountry(site.ID, "country-gb", "UA", "hash-gb", "GB", &store.IngestHello{URL: "https://country.test/"}); err != nil {
 		t.Fatal(err)
 	}
 
 	resp = doReq(t, http.MethodGet, ts.URL+"/api/sessions?site_id="+strconv.FormatInt(site.ID, 10)+"&country=us", admin, "")
-	var sessions []Session
+	var sessions []store.Session
 	if err := json.NewDecoder(resp.Body).Decode(&sessions); err != nil {
 		resp.Body.Close()
 		t.Fatal(err)

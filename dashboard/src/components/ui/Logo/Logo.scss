@@ -1,0 +1,23 @@
+@use 'abstracts' as *;
+
+:root {
+  --logo-clear-space: 0.85rem;
+}
+
+.trace-logo {
+  display: block;
+  width: auto;
+  height: 100%;
+  color: $ink;
+  --logo-accent: #{$accent};
+}
+
+:root[data-theme='dark'] .trace-logo {
+  color: #fff;
+  --logo-accent: currentColor;
+}
+
+.trace-logo--on-green {
+  color: #fff;
+  --logo-accent: currentColor;
+}

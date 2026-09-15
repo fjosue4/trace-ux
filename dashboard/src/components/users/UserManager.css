@@ -1,6 +1,0 @@
-.user-manager { display: flex; flex-direction: column; gap: 0.4rem; }
-
-@media (max-width: 640px) {
-  .user-manager > .row--between { flex-direction: column; align-items: flex-start; }
-  .user-manager > .row--between .btn { align-self: flex-start; }
-}

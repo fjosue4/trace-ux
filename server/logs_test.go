@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"trace-ux/server/store"
 )
 
 func TestLogsAreFilteredAndLinkedToSessions(t *testing.T) {
@@ -17,7 +19,7 @@ func TestLogsAreFilteredAndLinkedToSessions(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create site: got %d", resp.StatusCode)
 	}
-	var site Site
+	var site store.Site
 	if err := json.NewDecoder(resp.Body).Decode(&site); err != nil {
 		resp.Body.Close()
 		t.Fatal(err)
@@ -51,47 +53,47 @@ func TestLogsAreFilteredAndLinkedToSessions(t *testing.T) {
 		t.Fatalf("duplicate logs: got %d", r.StatusCode)
 	}
 
-	rows, err := srv.store.ListLogs(LogFilter{SiteID: site.ID, Limit: 10})
+	rows, err := srv.store.ListLogs(store.LogFilter{SiteID: site.ID, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 2 || rows[0].Severity != logSeverityError || rows[1].Severity != logSeverityWarn {
+	if len(rows) != 2 || rows[0].Severity != store.LogSeverityError || rows[1].Severity != store.LogSeverityWarn {
 		t.Fatalf("stored logs = %+v, want error and warn only", rows)
 	}
 	if rows[0].SessionID != "log-session" || rows[0].SiteName != "Logs" {
 		t.Fatalf("recording relation missing: %+v", rows[0])
 	}
 
-	stats, err := srv.store.LogStats(LogFilter{SiteID: site.ID})
+	stats, err := srv.store.LogStats(store.LogFilter{SiteID: site.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if stats.Total != 2 || stats.Warn != 1 || stats.Error != 1 || stats.Info != 0 || stats.Debug != 0 {
 		t.Fatalf("stats = %+v, want 2 total with warn/error", stats)
 	}
-	rows, err = srv.store.ListLogs(LogFilter{SiteID: site.ID, FromMs: 3500, ToMs: 4500, Limit: 10})
+	rows, err = srv.store.ListLogs(store.LogFilter{SiteID: site.ID, FromMs: 3500, ToMs: 4500, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 1 || rows[0].Severity != logSeverityError {
+	if len(rows) != 1 || rows[0].Severity != store.LogSeverityError {
 		t.Fatalf("time-filtered logs = %+v, want only the error", rows)
 	}
 
 	resp = doReq(t, http.MethodGet, fmt.Sprintf("%s/api/logs?site_id=%d&severity=error&from_ms=3500&to_ms=4500", ts.URL, site.ID), admin, "")
-	var filtered []Log
+	var filtered []store.Log
 	if err := json.NewDecoder(resp.Body).Decode(&filtered); err != nil {
 		resp.Body.Close()
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK || len(filtered) != 1 || filtered[0].Severity != logSeverityError {
+	if resp.StatusCode != http.StatusOK || len(filtered) != 1 || filtered[0].Severity != store.LogSeverityError {
 		t.Fatalf("filtered API response = %+v, status %d", filtered, resp.StatusCode)
 	}
 
 	if err := srv.store.DeleteSession("log-session"); err != nil {
 		t.Fatal(err)
 	}
-	rows, err = srv.store.ListLogs(LogFilter{SiteID: site.ID, Limit: 10})
+	rows, err = srv.store.ListLogs(store.LogFilter{SiteID: site.ID, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +108,7 @@ func TestLogRetentionAppliesAgeAndRowCaps(t *testing.T) {
 
 	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin,
 		`{"name":"Retention","url":"https://retention.example"}`)
-	var site Site
+	var site store.Site
 	if err := json.NewDecoder(resp.Body).Decode(&site); err != nil {
 		resp.Body.Close()
 		t.Fatal(err)
@@ -136,7 +138,7 @@ func TestLogRetentionAppliesAgeAndRowCaps(t *testing.T) {
 	}
 
 	old := time.Now().Add(-16 * 24 * time.Hour).Unix()
-	if _, err := srv.store.db.Exec(`UPDATE logs SET created_at = ? WHERE session_id = ? AND client_seq = 1`, old, "retention-session"); err != nil {
+	if _, err := srv.store.DB.Exec(`UPDATE logs SET created_at = ? WHERE session_id = ? AND client_seq = 1`, old, "retention-session"); err != nil {
 		t.Fatal(err)
 	}
 	removed, err := srv.store.RetentionSweep(90)
@@ -146,7 +148,7 @@ func TestLogRetentionAppliesAgeAndRowCaps(t *testing.T) {
 	if removed != 2 {
 		t.Fatalf("retention removed %d rows, want old row plus one over-cap row", removed)
 	}
-	rows, err := srv.store.ListLogs(LogFilter{SiteID: site.ID, Limit: 10})
+	rows, err := srv.store.ListLogs(store.LogFilter{SiteID: site.ID, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +162,7 @@ func TestLogConfigValidationAndPublicConfig(t *testing.T) {
 	admin := login(t, ts.URL, "admin", "pw")
 	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin,
 		`{"name":"Config","url":"https://config.example"}`)
-	var site Site
+	var site store.Site
 	json.NewDecoder(resp.Body).Decode(&site)
 	resp.Body.Close()
 
@@ -184,14 +186,14 @@ func TestLogConfigValidationAndPublicConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	var config struct {
-		Logs LogSettings `json:"logs"`
+		Logs store.LogSettings `json:"logs"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&config); err != nil {
 		resp.Body.Close()
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK || !config.Logs.Enabled || config.Logs.MinimumSeverity != logSeverityInfo {
+	if resp.StatusCode != http.StatusOK || !config.Logs.Enabled || config.Logs.MinimumSeverity != store.LogSeverityInfo {
 		t.Fatalf("public log config = %+v, status %d", config.Logs, resp.StatusCode)
 	}
 

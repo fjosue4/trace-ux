@@ -15,11 +15,27 @@ const apiProxy = {
       proxyReq.removeHeader('origin');
       proxyReq.removeHeader('referer');
     });
+    proxy.on('proxyReqWs', (proxyReq) => {
+      proxyReq.removeHeader('origin');
+      proxyReq.removeHeader('referer');
+    });
   },
 };
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      abstracts: '/src/styles/abstracts/_index.scss',
+    },
+  },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        api: 'modern-compiler',
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {

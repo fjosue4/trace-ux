@@ -86,7 +86,7 @@ func procRuntime() (rssBytes uint64, cpuSeconds float64) {
 	if len(fields) < 22 {
 		return 0, 0
 	}
-	const clockTicks = 100 // USER_HZ on Linux
+	const clockTicks = 100                         // USER_HZ on Linux
 	utime, _ := strconv.ParseFloat(fields[11], 64) // stat field 14
 	stime, _ := strconv.ParseFloat(fields[12], 64) // stat field 15
 	cpuSeconds = (utime + stime) / clockTicks

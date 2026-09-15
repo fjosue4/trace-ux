@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"trace-ux/server/store"
 )
 
 func postPerformance(t *testing.T, url, key string, payload performanceIngestRequest) *http.Response {
@@ -40,7 +42,7 @@ func TestPerformanceIngestAndReport(t *testing.T) {
 
 	now := time.Now().UnixMilli()
 	resp := postPerformance(t, fmt.Sprintf("%s/api/performance/ingest/%s", ts.URL, site.SiteKey), site.PerformanceKey, performanceIngestRequest{
-		Observations: []PerformanceObservation{
+		Observations: []store.PerformanceObservation{
 			{Environment: "production", Service: "api", Version: "1.4.0", Endpoint: "GET /orders", DurationMs: 15, TimestampMs: now},
 			{Environment: "production", Service: "api", Version: "1.4.0", Endpoint: "GET /orders", DurationMs: 45, TimestampMs: now},
 			{Environment: "production", Service: "api", Version: "1.4.0", Endpoint: "GET /orders", DurationMs: 120, StatusCode: 500, TimestampMs: now},
@@ -60,7 +62,7 @@ func TestPerformanceIngestAndReport(t *testing.T) {
 		bad.Body.Close()
 	}
 
-	report, err := srv.store.GetPerformance(PerformanceFilter{SiteID: site.ID})
+	report, err := srv.store.GetPerformance(store.PerformanceFilter{SiteID: site.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +79,7 @@ func TestPerformanceIngestAndReport(t *testing.T) {
 		t.Fatalf("filter options = %+v, want two values for each dimension", report.Filters)
 	}
 
-	filtered, err := srv.store.GetPerformance(PerformanceFilter{SiteID: site.ID, Environment: "production", Service: "api", Version: "1.4.0"})
+	filtered, err := srv.store.GetPerformance(store.PerformanceFilter{SiteID: site.ID, Environment: "production", Service: "api", Version: "1.4.0"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +93,7 @@ func TestPerformanceIngestAndReport(t *testing.T) {
 		resp.Body.Close()
 		t.Fatalf("performance API: got %d", resp.StatusCode)
 	}
-	var apiReport PerformanceReport
+	var apiReport store.PerformanceReport
 	if err := json.NewDecoder(resp.Body).Decode(&apiReport); err != nil {
 		resp.Body.Close()
 		t.Fatal(err)
@@ -137,13 +139,13 @@ func TestPerformanceKeyManagement(t *testing.T) {
 		resp.Body.Close()
 		t.Fatalf("list performance keys: got %d", resp.StatusCode)
 	}
-	var keys []PerformanceKeyInfo
+	var keys []store.PerformanceKeyInfo
 	if err := json.NewDecoder(resp.Body).Decode(&keys); err != nil {
 		resp.Body.Close()
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if len(keys) != 1 || keys[0].KeyHint != performanceKeyHint(site.PerformanceKey[:4], site.PerformanceKey[len(site.PerformanceKey)-4:]) {
+	if len(keys) != 1 || keys[0].KeyHint != store.PerformanceKeyHint(site.PerformanceKey[:4], site.PerformanceKey[len(site.PerformanceKey)-4:]) {
 		t.Fatalf("initial keys = %+v, want one masked key", keys)
 	}
 
@@ -162,7 +164,7 @@ func TestPerformanceKeyManagement(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if created.ID == 0 || created.Key == "" || created.Hint != performanceKeyHint(created.Key[:4], created.Key[len(created.Key)-4:]) {
+	if created.ID == 0 || created.Key == "" || created.Hint != store.PerformanceKeyHint(created.Key[:4], created.Key[len(created.Key)-4:]) {
 		t.Fatalf("created key response = %+v, want raw key and masked hint", created)
 	}
 

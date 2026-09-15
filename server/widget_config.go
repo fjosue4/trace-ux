@@ -1,6 +1,10 @@
 package main
 
-import "strings"
+import (
+	"strings"
+
+	"trace-ux/server/store"
+)
 
 // The feedback panel and the announcements panel are one widget: a single
 // launcher opens a single panel whose sections depend on what the site has
@@ -17,6 +21,9 @@ import "strings"
 //
 // DEBUG VALUE: 15s. Production pacing is 5 minutes (300_000).
 const widgetPollIntervalMs = 15_000
+
+// The tracker uses this only while its widget socket is unavailable.
+const widgetTicketPollIntervalMs = 15_000
 
 const (
 	defaultWidgetAccent    = "#2f7d4a"
@@ -44,18 +51,21 @@ type WidgetAppearance struct {
 }
 
 // WidgetConfig is what /api/config/{siteKey} hands the tracker. The tracker
-// mounts one widget when Enabled is true and shows the tab strip only when
-// both sections are available.
+// mounts one widget when Enabled is true and shows the tab strip when more
+// than one available section is enabled.
 type WidgetConfig struct {
-	Enabled         bool             `json:"enabled"`
-	UpdatesEnabled  bool             `json:"updates_enabled"`
-	FeedbackEnabled bool             `json:"feedback_enabled"`
-	Position        string           `json:"position"` // right | left
-	Title           string           `json:"title"`
-	UpdatesLabel    string           `json:"updates_label"`
-	FeedbackLabel   string           `json:"feedback_label"`
-	PollIntervalMs  int              `json:"poll_interval_ms"`
-	Appearance      WidgetAppearance `json:"appearance"`
+	Enabled              bool             `json:"enabled"`
+	UpdatesEnabled       bool             `json:"updates_enabled"`
+	FeedbackEnabled      bool             `json:"feedback_enabled"`
+	TicketsEnabled       bool             `json:"tickets_enabled"`
+	Position             string           `json:"position"` // right | left
+	Title                string           `json:"title"`
+	UpdatesLabel         string           `json:"updates_label"`
+	FeedbackLabel        string           `json:"feedback_label"`
+	TicketsLabel         string           `json:"tickets_label"`
+	PollIntervalMs       int              `json:"poll_interval_ms"`
+	TicketPollIntervalMs int              `json:"ticket_poll_interval_ms"`
+	Appearance           WidgetAppearance `json:"appearance"`
 }
 
 func firstNonEmpty(values ...string) string {
@@ -77,18 +87,18 @@ func firstPositive(values ...int) int {
 }
 
 // resolveWidgetAppearance folds the two legacy appearance objects into one.
-// The announcements object wins because it is what the dashboard's Styles tab
-// edits; the feedback object supplies anything the Styles tab does not cover
+// The announcements object wins because it is what the dashboard's Widget tab
+// edits; the feedback object supplies anything the Widget tab does not cover
 // and keeps sites that only ever configured the old feedback widget looking
 // the way their operator left them.
-func resolveWidgetAppearance(s SiteSettings, iconURL string) WidgetAppearance {
+func resolveWidgetAppearance(s store.SiteSettings, iconURL string) WidgetAppearance {
 	updates := s.UpdatesAppearance
 	feedback := s.Appearance
 	if updates == nil {
-		updates = &AnnouncementAppearance{}
+		updates = &store.AnnouncementAppearance{}
 	}
 	if feedback == nil {
-		feedback = &SiteAppearance{}
+		feedback = &store.SiteAppearance{}
 	}
 
 	theme := updates.Theme
@@ -120,10 +130,10 @@ func resolveWidgetAppearance(s SiteSettings, iconURL string) WidgetAppearance {
 // buildWidgetConfig decides which sections the visitor can reach. A site with
 // only one of the two switched on still gets the widget — the panel simply
 // opens straight into the section that exists, with no tab strip.
-func buildWidgetConfig(site Site, iconURL string) WidgetConfig {
+func buildWidgetConfig(site store.Site, iconURL string) WidgetConfig {
 	s := site.Settings
 	// Position is a property of the launcher, so it comes from the widget's own
-	// setting (Styles tab) rather than from either section.
+	// setting (Widget tab) rather than from either section.
 	position := firstNonEmpty(s.WidgetPosition, s.UpdatesPosition, s.FeedbackPosition, "right")
 	if position != "left" {
 		position = "right"
@@ -134,22 +144,31 @@ func buildWidgetConfig(site Site, iconURL string) WidgetConfig {
 	// rather than carry a generic label the operator never chose.
 	if strings.TrimSpace(launcher.LauncherTxt) == "" || launcher.LauncherTxt == "Help & updates" {
 		switch {
-		case s.UpdatesEnabled && !s.FeedbackEnabled:
+		case s.UpdatesEnabled && !s.FeedbackEnabled && !s.TicketsEnabled:
 			launcher.LauncherTxt = "What's new"
-		case s.FeedbackEnabled && !s.UpdatesEnabled:
+		case s.FeedbackEnabled && !s.UpdatesEnabled && !s.TicketsEnabled:
 			launcher.LauncherTxt = "Feedback"
+		case s.TicketsEnabled && !s.UpdatesEnabled && !s.FeedbackEnabled:
+			launcher.LauncherTxt = "Support"
 		}
 	}
 
+	// The master switch can hide the widget outright, but a site with every
+	// section switched off has nothing to show either way.
+	hasSection := s.UpdatesEnabled || s.FeedbackEnabled || s.TicketsEnabled
+
 	return WidgetConfig{
-		Enabled:         s.UpdatesEnabled || s.FeedbackEnabled,
-		UpdatesEnabled:  s.UpdatesEnabled,
-		FeedbackEnabled: s.FeedbackEnabled,
-		Position:        position,
-		Title:           firstNonEmpty(site.Name, "Help & updates"),
-		UpdatesLabel:    "What's new",
-		FeedbackLabel:   "Feedback",
-		PollIntervalMs:  widgetPollIntervalMs,
-		Appearance:      launcher,
+		Enabled:              s.WidgetOn() && hasSection,
+		UpdatesEnabled:       s.UpdatesEnabled,
+		FeedbackEnabled:      s.FeedbackEnabled,
+		TicketsEnabled:       s.TicketsEnabled,
+		Position:             position,
+		Title:                firstNonEmpty(site.Name, "Help & updates"),
+		UpdatesLabel:         "What's new",
+		FeedbackLabel:        "Feedback",
+		TicketsLabel:         "Support",
+		PollIntervalMs:       widgetPollIntervalMs,
+		TicketPollIntervalMs: widgetTicketPollIntervalMs,
+		Appearance:           launcher,
 	}
 }

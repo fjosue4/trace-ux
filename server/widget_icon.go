@@ -1,139 +1,19 @@
 package main
 
 import (
-	"bytes"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"image"
 	"io"
 	"net/http"
 	"strconv"
-	"time"
 
-	// Raster decoders only. Registering these is what makes decodeWidgetIcon a
-	// real format check: anything that is not one of them fails to decode.
-	_ "image/gif"
-	_ "image/jpeg"
-	_ "image/png"
+	"trace-ux/server/store"
 )
 
-// The launcher icon is uploaded by an admin and then served to every visitor
-// of the customer's site, so it is treated as untrusted content:
-//
-//   - Only raster formats are accepted. SVG is deliberately unsupported — it is
-//     an XML document that can carry <script>, and it would execute in the
-//     visitor's origin the moment anyone opened the file directly.
-//   - The format is decided by decoding the bytes, never by the upload's
-//     Content-Type or file name, and the stored MIME is the decoded one.
-//   - Size and pixel dimensions are bounded so a site cannot park a huge blob
-//     in SQLite or hand every visitor a megabyte on first paint.
-const (
-	maxWidgetIconBytes  = 256 << 10 // 256 KB
-	maxWidgetIconPixels = 1024
-	minWidgetIconPixels = 16
-)
-
-var widgetIconMIME = map[string]string{
-	"png":  "image/png",
-	"jpeg": "image/jpeg",
-	"gif":  "image/gif",
-}
-
-var errUnsupportedIcon = errors.New("icon must be a PNG, JPEG or GIF image")
-
-type WidgetIcon struct {
-	MIME      string `json:"mime"`
-	ETag      string `json:"etag"`
-	Width     int    `json:"width"`
-	Height    int    `json:"height"`
-	UpdatedAt int64  `json:"updated_at"`
-	Bytes     []byte `json:"-"`
-}
-
-// decodeWidgetIcon validates raw upload bytes and reports the real format.
-func decodeWidgetIcon(raw []byte) (mime string, width, height int, err error) {
-	if len(raw) == 0 {
-		return "", 0, 0, errors.New("icon is empty")
-	}
-	if len(raw) > maxWidgetIconBytes {
-		return "", 0, 0, fmt.Errorf("icon must be at most %d KB", maxWidgetIconBytes>>10)
-	}
-	cfg, format, err := image.DecodeConfig(bytes.NewReader(raw))
-	if err != nil {
-		return "", 0, 0, errUnsupportedIcon
-	}
-	mime, ok := widgetIconMIME[format]
-	if !ok {
-		return "", 0, 0, errUnsupportedIcon
-	}
-	if cfg.Width < minWidgetIconPixels || cfg.Height < minWidgetIconPixels {
-		return "", 0, 0, fmt.Errorf("icon must be at least %dx%d pixels", minWidgetIconPixels, minWidgetIconPixels)
-	}
-	if cfg.Width > maxWidgetIconPixels || cfg.Height > maxWidgetIconPixels {
-		return "", 0, 0, fmt.Errorf("icon must be at most %dx%d pixels", maxWidgetIconPixels, maxWidgetIconPixels)
-	}
-	return mime, cfg.Width, cfg.Height, nil
-}
-
-func (s *Store) SaveWidgetIcon(siteID int64, raw []byte) (WidgetIcon, error) {
-	mime, width, height, err := decodeWidgetIcon(raw)
-	if err != nil {
-		return WidgetIcon{}, err
-	}
-	sum := sha256.Sum256(raw)
-	icon := WidgetIcon{
-		MIME:      mime,
-		ETag:      hex.EncodeToString(sum[:16]),
-		Width:     width,
-		Height:    height,
-		UpdatedAt: time.Now().Unix(),
-		Bytes:     raw,
-	}
-	var exists int
-	if err := s.db.QueryRow(`SELECT 1 FROM sites WHERE id = ?`, siteID).Scan(&exists); err != nil {
-		return WidgetIcon{}, err
-	}
-	_, err = s.db.Exec(`INSERT INTO site_widget_icons (site_id, mime, bytes, etag, width, height, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(site_id) DO UPDATE SET mime=excluded.mime, bytes=excluded.bytes,
-			etag=excluded.etag, width=excluded.width, height=excluded.height, updated_at=excluded.updated_at`,
-		siteID, icon.MIME, icon.Bytes, icon.ETag, icon.Width, icon.Height, icon.UpdatedAt)
-	if err != nil {
-		return WidgetIcon{}, err
-	}
-	return icon, nil
-}
-
-// GetWidgetIcon returns the stored icon. withBytes=false skips the blob, which
-// is what the dashboard and the config endpoint need.
-func (s *Store) GetWidgetIcon(siteID int64, withBytes bool) (*WidgetIcon, error) {
-	var icon WidgetIcon
-	var err error
-	if withBytes {
-		err = s.db.QueryRow(`SELECT mime, etag, width, height, updated_at, bytes FROM site_widget_icons WHERE site_id = ?`, siteID).
-			Scan(&icon.MIME, &icon.ETag, &icon.Width, &icon.Height, &icon.UpdatedAt, &icon.Bytes)
-	} else {
-		err = s.db.QueryRow(`SELECT mime, etag, width, height, updated_at FROM site_widget_icons WHERE site_id = ?`, siteID).
-			Scan(&icon.MIME, &icon.ETag, &icon.Width, &icon.Height, &icon.UpdatedAt)
-	}
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &icon, nil
-}
-
-func (s *Store) DeleteWidgetIcon(siteID int64) error {
-	_, err := s.db.Exec(`DELETE FROM site_widget_icons WHERE site_id = ?`, siteID)
-	return err
-}
-
-// ---- handlers ----
+// handleUploadWidgetIcon, handleDeleteWidgetIcon and handlePublicWidgetIcon are
+// the HTTP-layer counterparts of the store.WidgetIcon persistence in
+// store/widget_icon.go.
 
 func (s *Server) handleUploadWidgetIcon(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
@@ -143,13 +23,13 @@ func (s *Server) handleUploadWidgetIcon(w http.ResponseWriter, r *http.Request) 
 	}
 	// One extra byte so an oversized upload is detected rather than truncated
 	// into something that happens to still decode.
-	raw, err := io.ReadAll(io.LimitReader(http.MaxBytesReader(w, r.Body, maxWidgetIconBytes+1), maxWidgetIconBytes+1))
+	raw, err := io.ReadAll(io.LimitReader(http.MaxBytesReader(w, r.Body, store.MaxWidgetIconBytes+1), store.MaxWidgetIconBytes+1))
 	if err != nil {
 		writeErr(w, http.StatusRequestEntityTooLarge, "icon upload too large")
 		return
 	}
-	if len(raw) > maxWidgetIconBytes {
-		writeErr(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("icon must be at most %d KB", maxWidgetIconBytes>>10))
+	if len(raw) > store.MaxWidgetIconBytes {
+		writeErr(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("icon must be at most %d KB", store.MaxWidgetIconBytes>>10))
 		return
 	}
 	icon, err := s.store.SaveWidgetIcon(id, raw)

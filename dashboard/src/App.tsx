@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Outlet, useNavigate, useOutletContext } from 'react-router-dom';
+import { Navigate, Outlet, useLocation, useNavigate, useOutletContext } from 'react-router-dom';
 import { AnimatePresence, MotionConfig, motion } from 'motion/react';
 import { api, ApiError, CurrentUser } from './api';
 import { AuthContext } from './auth/auth';
@@ -14,16 +14,18 @@ export function useUser(): AppContext {
   return useOutletContext<AppContext>();
 }
 
-// App shell: checks auth once on load, renders the sidebar + routed page. The
-// login route lives under this shell, so an anonymous visitor still gets the
-// Outlet — just without the chrome. Login reports back through AuthContext so
-// the shell appears immediately after signing in, without a refresh.
+// App shell: resolve auth before rendering protected content, then keep the
+// login route outside the dashboard chrome. Login reports back through
+// AuthContext so the shell appears immediately after signing in, without a
+// refresh.
 export default function App() {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [checked, setChecked] = useState(false);
+  const location = useLocation();
   const navigate = useNavigate();
   const auth = useMemo(() => ({ onSignIn: (u: CurrentUser) => setUser(u) }), []);
-  const isPublicShare = window.location.pathname.startsWith('/share/');
+  const isLogin = location.pathname === '/login';
+  const isPublicShare = location.pathname.startsWith('/share/');
 
   useEffect(() => {
     if (isPublicShare) { setChecked(true); return; }
@@ -39,7 +41,8 @@ export default function App() {
   const content = (() => {
     if (!checked) return <Loading />;
     if (isPublicShare) return <Outlet />;
-    if (!user) return <Outlet />;
+    if (isLogin) return user ? <Navigate to="/" replace /> : <Outlet />;
+    if (!user) return <Navigate to="/login" replace />;
     return (
       <div className="app">
         <Sidebar

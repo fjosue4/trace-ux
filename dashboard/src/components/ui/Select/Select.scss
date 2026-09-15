@@ -1,0 +1,108 @@
+// Kept as plain global CSS (not a CSS module): `.select-wrap` is targeted by
+// other components' stylesheets (WidgetSettingsModals.css, FiltersBar.css,
+// SiteDetail.css) as a descendant selector. `.field-control` is duplicated
+// from Input.scss — see the note there — since the trigger button needs the
+// base field styling even when Select is used without Input.
+@use 'abstracts' as *;
+
+.field-control {
+  font: inherit;
+  color: $ink;
+  background: $surface-2;
+  border: 1px solid $line;
+  border-radius: $radius-sm;
+  height: 40px;
+  padding: 0 0.9rem;
+  width: 100%;
+  transition: border-color $duration-fast $ease-out,
+    background-color $duration-fast $ease-out, box-shadow $duration-fast $ease-out;
+
+  &::placeholder { color: $muted; }
+  &:disabled { opacity: 0.6; }
+  &:hover:not(:disabled):not(:focus) { border-color: $line-strong; }
+  &:focus {
+    outline: none;
+    background: $surface;
+    border-color: $accent;
+    box-shadow: 0 0 0 3px $accent-soft;
+  }
+}
+
+.select-wrap {
+  position: relative;
+  display: inline-flex;
+  width: 100%;
+
+  &__chevron {
+    position: absolute;
+    right: 0.85rem;
+    top: 50%;
+    translate: 0 -50%;
+    color: $muted;
+    pointer-events: none;
+  }
+}
+
+.select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding-right: 2.3rem;
+  text-align: left;
+  cursor: pointer;
+
+  &__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.select-menu {
+  position: absolute;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px;
+  background: $surface;
+  border: 1px solid $line;
+  border-radius: $radius;
+  box-shadow: $shadow-md;
+  transform-origin: top center;
+  max-height: 300px;
+  overflow-y: auto;
+
+  &__option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.7rem;
+    width: 100%;
+    padding: 0.5rem 0.7rem;
+    font: inherit;
+    font-size: 0.88rem;
+    color: $ink;
+    background: none;
+    border: none;
+    border-radius: $radius-sm;
+    cursor: pointer;
+    text-align: left;
+    transition: background-color $duration-fast $ease-out;
+
+    &:hover,
+    &[data-active='true'] { background: $surface-2; }
+
+    &.is-selected { color: $accent; font-weight: 700; background: $accent-soft; }
+  }
+
+  &__label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

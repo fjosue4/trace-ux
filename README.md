@@ -190,7 +190,7 @@ No external database, no queue, no other services — SQLite lives in `/var/lib/
 Each site opens to a tabbed hub: **Overview** keeps the latest recordings,
 logs, feedback, and summary counts together; **Site** manages the registered
 URL, installation snippet, and backend performance connection; **Recordings**,
-**Feedback**, **Announcements**, **Styles**, and **Logs** keep each part of the
+**Feedback**, **Announcements**, **Widget**, and **Logs** keep each part of the
 bundle easy to configure without one long scrolling form.
 
 ## Users & access
@@ -293,7 +293,7 @@ Publish product communication without sending visitors to a separate changelog:
 
 The announcements section is enabled per site and shares the same configurable
 launcher as Feedback. Admins can set the position, light/dark theme, accent,
-radius, width, label, and custom launcher icon from **Styles**. If a site only
+radius, width, label, and custom launcher icon from **Widget**. If a site only
 uses one section, the launcher opens directly into that section; when both are
 enabled, visitors get a two-tab **What's new / Feedback** panel.
 

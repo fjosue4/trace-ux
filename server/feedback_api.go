@@ -3,13 +3,15 @@ package main
 import (
 	"net/http"
 	"strconv"
+
+	"trace-ux/server/store"
 )
 
 // ---- Feedback endpoints (dashboard, auth-protected) ----
 
 func (s *Server) handleListFeedback(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	f := FeedbackFilter{SurveyID: q.Get("survey_id")}
+	f := store.FeedbackFilter{SurveyID: q.Get("survey_id")}
 	if v := q.Get("site_id"); v != "" {
 		siteID, err := strconv.ParseInt(v, 10, 64)
 		if err != nil || siteID <= 0 {

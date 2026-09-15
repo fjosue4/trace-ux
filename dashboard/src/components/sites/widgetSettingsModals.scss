@@ -1,0 +1,94 @@
+// Shared by AnnouncementSettingsModal and FeedbackSettingsModal. Kept as one
+// stylesheet since `.hub-config__grid` is owned by SiteDetail.css (a page not
+// yet converted) — splitting this file wouldn't change the cross-file
+// coupling, just where it's documented.
+@use 'abstracts' as *;
+
+.widget-settings-modal {
+  width: min(720px, 100%);
+  max-height: min(760px, calc(100vh - 2rem));
+  display: flex;
+  flex-direction: column;
+
+  &--compact { width: min(560px, 100%); }
+  .modal__body { min-height: 0; overflow-y: auto; }
+  .hub-config__grid { grid-template-columns: 1fr; }
+
+  &__intro {
+    margin: 0 0 1rem;
+    color: $muted;
+    font-size: 0.84rem;
+    line-height: 1.55;
+  }
+
+  &__title {
+    margin: 0 0 0.8rem;
+    font-size: 0.72rem;
+    font-weight: 750;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: $muted;
+  }
+
+  .hub-question {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 0.6rem;
+
+    > .field-control,
+    > .select-wrap { width: 100%; min-width: 0; }
+    .select-wrap .field-control { width: 100%; }
+    &__optional { justify-self: start; }
+    > .icon-btn { justify-self: start; }
+  }
+}
+
+.widget-section-modal {
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-start;
+  padding: 0.9rem;
+  border: 1px solid $line;
+  border-radius: $radius;
+  background: $surface-2;
+
+  &__icon {
+    display: grid;
+    flex: none;
+    width: 2.2rem;
+    height: 2.2rem;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, #{$accent} 35%, #{$line});
+    border-radius: 999px;
+    color: $accent;
+    background: $surface;
+  }
+
+  h4 { margin: 0.1rem 0 0.35rem; }
+  p { margin: 0 0 0.85rem; color: $muted; font-size: 0.84rem; line-height: 1.55; }
+}
+
+.widget-settings-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.85fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.widget-settings-form {
+  min-width: 0;
+
+  > .field + .field,
+  > .hub-config__grid + .field { margin-top: 1rem; }
+}
+
+.widget-settings-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 1rem;
+}
+
+@media (max-width: 520px) {
+  .widget-section-modal { gap: 0.7rem; }
+  .widget-settings-fields { grid-template-columns: 1fr; }
+}

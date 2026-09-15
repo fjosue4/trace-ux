@@ -1,0 +1,46 @@
+@use 'abstracts' as *;
+
+.snippet-card {
+  margin-bottom: 1rem;
+  border-color: color-mix(in srgb, #{$accent} 35%, #{$line});
+
+  &--embedded { margin: 0; }
+  pre { white-space: pre-wrap; word-break: break-all; }
+  &__actions { display: flex; justify-content: flex-end; align-items: center; gap: 0.5rem; margin-top: 0.75rem; }
+}
+
+.snippet-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin: 0.75rem 0 0.4rem;
+  border: 1px solid $line;
+  border-radius: $radius-pill;
+  background: $surface-2;
+}
+
+.snippet-tab {
+  border: 0;
+  background: transparent;
+  color: $muted;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.3rem 0.9rem;
+  border-radius: $radius-pill;
+  cursor: pointer;
+
+  &.is-active {
+    background: $accent;
+    color: $on-accent;
+    box-shadow: $shadow-accent;
+  }
+}
+
+@media (max-width: 480px) {
+  .snippet-card__actions {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    .btn { width: 100%; }
+  }
+}

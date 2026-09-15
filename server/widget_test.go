@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"trace-ux/server/store"
 )
 
 func testPNG(t *testing.T, w, h int) []byte {
@@ -36,13 +38,13 @@ func TestWidgetIconRejectsNonRasterUploads(t *testing.T) {
 		"png magic only":  []byte("\x89PNG\r\n\x1a\n"),
 	}
 	for name, raw := range rejects {
-		if _, _, _, err := decodeWidgetIcon(raw); err == nil {
+		if _, _, _, err := store.DecodeWidgetIcon(raw); err == nil {
 			t.Errorf("decodeWidgetIcon accepted %s", name)
 		}
 	}
 
 	// The real formats decode, and the MIME comes from the bytes.
-	mime, w, h, err := decodeWidgetIcon(testPNG(t, 64, 64))
+	mime, w, h, err := store.DecodeWidgetIcon(testPNG(t, 64, 64))
 	if err != nil || mime != "image/png" || w != 64 || h != 64 {
 		t.Fatalf("png: mime=%q %dx%d err=%v", mime, w, h, err)
 	}
@@ -51,7 +53,7 @@ func TestWidgetIconRejectsNonRasterUploads(t *testing.T) {
 	if err := jpeg.Encode(&jpg, image.NewRGBA(image.Rect(0, 0, 48, 48)), nil); err != nil {
 		t.Fatal(err)
 	}
-	if mime, _, _, err := decodeWidgetIcon(jpg.Bytes()); err != nil || mime != "image/jpeg" {
+	if mime, _, _, err := store.DecodeWidgetIcon(jpg.Bytes()); err != nil || mime != "image/jpeg" {
 		t.Fatalf("jpeg: mime=%q err=%v", mime, err)
 	}
 
@@ -59,16 +61,16 @@ func TestWidgetIconRejectsNonRasterUploads(t *testing.T) {
 	if err := gif.Encode(&g, image.NewPaletted(image.Rect(0, 0, 32, 32), color.Palette{color.Black, color.White}), nil); err != nil {
 		t.Fatal(err)
 	}
-	if mime, _, _, err := decodeWidgetIcon(g.Bytes()); err != nil || mime != "image/gif" {
+	if mime, _, _, err := store.DecodeWidgetIcon(g.Bytes()); err != nil || mime != "image/gif" {
 		t.Fatalf("gif: mime=%q err=%v", mime, err)
 	}
 }
 
 func TestWidgetIconBoundsDimensions(t *testing.T) {
-	if _, _, _, err := decodeWidgetIcon(testPNG(t, 8, 8)); err == nil {
+	if _, _, _, err := store.DecodeWidgetIcon(testPNG(t, 8, 8)); err == nil {
 		t.Error("accepted an 8x8 icon, want a minimum-size rejection")
 	}
-	if _, _, _, err := decodeWidgetIcon(testPNG(t, 2048, 2048)); err == nil {
+	if _, _, _, err := store.DecodeWidgetIcon(testPNG(t, 2048, 2048)); err == nil {
 		t.Error("accepted a 2048x2048 icon, want a maximum-size rejection")
 	}
 }
@@ -141,10 +143,10 @@ func TestWidgetConfigWithSingleSection(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			settings := DefaultSiteSettings()
+			settings := store.DefaultSiteSettings()
 			settings.UpdatesEnabled = tc.updates
 			settings.FeedbackEnabled = tc.feeback
-			cfg := buildWidgetConfig(Site{Name: "Acme", Settings: settings}, "")
+			cfg := buildWidgetConfig(store.Site{Name: "Acme", Settings: settings}, "")
 			if cfg.Enabled != tc.wantEnabled {
 				t.Fatalf("Enabled = %v, want %v", cfg.Enabled, tc.wantEnabled)
 			}
@@ -158,12 +160,37 @@ func TestWidgetConfigWithSingleSection(t *testing.T) {
 	}
 }
 
-// The two legacy appearance objects fold into one: the Styles tab's
+func TestWidgetConfigHonorsMasterSwitchAndLegacySites(t *testing.T) {
+	legacy := store.ParseSiteSettings(`{"updates_enabled":true,"feedback_enabled":false}`)
+	if legacy.WidgetEnabled != nil {
+		t.Fatal("legacy settings unexpectedly gained a widget_enabled value")
+	}
+	if cfg := buildWidgetConfig(store.Site{Settings: legacy}, ""); !cfg.Enabled {
+		t.Fatal("legacy section settings should still enable the widget")
+	}
+
+	disabled := false
+	settings := store.DefaultSiteSettings()
+	settings.WidgetEnabled = &disabled
+	if cfg := buildWidgetConfig(store.Site{Settings: settings}, ""); cfg.Enabled {
+		t.Fatal("explicitly disabled widget still appears enabled")
+	}
+
+	encoded, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), `"widget_enabled"`) {
+		t.Fatalf("legacy settings should omit widget_enabled, got %s", encoded)
+	}
+}
+
+// The two legacy appearance objects fold into one: the Widget tab's
 // announcement object wins, the older feedback object fills the gaps.
 func TestWidgetAppearanceMergesLegacyObjects(t *testing.T) {
-	settings := DefaultSiteSettings()
-	settings.UpdatesAppearance = &AnnouncementAppearance{Theme: "dark", Accent: "#123456", Radius: 24}
-	settings.Appearance = &SiteAppearance{ButtonBg: "#abcdef", Spacing: 22, ButtonLabel: "Talk to us"}
+	settings := store.DefaultSiteSettings()
+	settings.UpdatesAppearance = &store.AnnouncementAppearance{Theme: "dark", Accent: "#123456", Radius: 24}
+	settings.Appearance = &store.SiteAppearance{ButtonBg: "#abcdef", Spacing: 22, ButtonLabel: "Talk to us"}
 
 	got := resolveWidgetAppearance(settings, "/api/widget-icon/k?v=1")
 	if got.Theme != "dark" {

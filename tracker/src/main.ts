@@ -59,7 +59,7 @@ type TraceUXConfig = {
   logs?: LogCfg;
   feedback?: FeedbackCfg;
   updates?: { enabled: boolean; position?: string; appearance?: { theme?:'light'|'dark'; button_bg?:string; button_text?:string; button_label?:string; panel_bg?:string; panel_text?:string; accent?:string; action_bg?:string; action_text?:string; radius?:number; max_width?:number } };
-  /** Unified widget block: one launcher for announcements + feedback. */
+  /** Unified widget block: one launcher for announcements, tickets, and feedback. */
   widget?: WidgetCfg;
 };
 
@@ -563,7 +563,7 @@ interface StorageLike {
 
   let unifiedWidget: WidgetHandle | null = null;
 
-  // ---- unified widget (announcements + feedback) ----
+  // ---- unified widget (announcements + tickets + feedback) ----
   //
   // One launcher, one panel. The panel shows a tab strip only when the site
   // has both sections switched on; with just one enabled it opens straight
@@ -591,7 +591,7 @@ interface StorageLike {
 
   function mountWidgetIfConfigured(triggerAction?: string) {
     const widgetCfg = cfg.widget;
-    if (!widgetCfg) return;
+    if (!widgetCfg || !widgetCfg.enabled) return;
 
     if (unifiedWidget) {
       // Already mounted: a tracked action just needs to open the right section.
@@ -601,13 +601,14 @@ interface StorageLike {
 
     const feedbackNow = feedbackAvailable(triggerAction);
     const updatesNow = !!widgetCfg.updates_enabled;
-    if (!feedbackNow && !updatesNow) return;
+    const ticketsNow = !!widgetCfg.tickets_enabled;
+    if (!feedbackNow && !updatesNow && !ticketsNow) return;
 
     try {
       unifiedWidget = mountUnifiedWidget({
         origin,
         siteKey: siteKey as string,
-        config: { ...widgetCfg, feedback_enabled: feedbackNow, enabled: true },
+        config: { ...widgetCfg, feedback_enabled: feedbackNow, tickets_enabled: ticketsNow },
         survey: {
           title: cfg.feedback?.title,
           type: cfg.feedback?.type,
@@ -616,6 +617,8 @@ interface StorageLike {
         },
         submitFeedback: (input) => sendFeedback(input),
         newId,
+        sessionId: () => sessionId,
+        identity: () => ({ userId: identity.user_id }),
       });
     } catch {
       /* the widget must never break the host page */

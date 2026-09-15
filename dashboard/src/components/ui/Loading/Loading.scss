@@ -1,0 +1,36 @@
+// Kept as plain global CSS (not a CSS module): `.loading` is targeted by
+// other components' stylesheets (Tickets.css) as a descendant selector.
+@use 'abstracts' as *;
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 12rem;
+  gap: 0.6rem;
+  color: $muted;
+  padding: 2.2rem;
+  font-size: 0.9rem;
+
+  &--overlay {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    min-height: 0;
+    z-index: 2;
+    background: color-mix(in srgb, #{$bg} 70%, transparent);
+    backdrop-filter: blur(2px);
+  }
+
+  &__spinner {
+    width: 18px;
+    height: 18px;
+    flex: none;
+    border-radius: 50%;
+    border: 2px solid $line-strong;
+    border-top-color: $accent;
+
+    &--inline { width: 13px; height: 13px; display: inline-block; vertical-align: -2px; }
+  }
+}

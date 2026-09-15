@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"trace-ux/server/store"
 )
 
 // ---- Dashboard session endpoints (auth-protected, same-origin) ----
@@ -13,13 +15,13 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	// site_id is optional: without it the list spans every site and rows carry
 	// their site name (the global Sessions page).
-	f := SessionFilter{
+	f := store.SessionFilter{
 		Browser:  q.Get("browser"),
 		OS:       q.Get("os"),
 		Device:   q.Get("device"),
 		Country:  strings.ToUpper(strings.TrimSpace(q.Get("country"))),
 		URL:      q.Get("url"),
-		Action:   q.Get("action"),
+		Action:   strings.TrimSpace(q.Get("action")),
 		Identity: q.Get("visitor"),
 	}
 	if v := q.Get("site_id"); v != "" {
@@ -67,7 +69,7 @@ func (s *Server) handleListSessionCountries(w http.ResponseWriter, r *http.Reque
 	}
 	query += ` ORDER BY country`
 
-	rows, err := s.store.db.Query(query, args...)
+	rows, err := s.store.DB.Query(query, args...)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return

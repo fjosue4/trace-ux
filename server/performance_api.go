@@ -10,13 +10,15 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"trace-ux/server/store"
 )
 
 // ---- Dashboard performance endpoints (auth-protected) ----
 
-func parsePerformanceFilter(r *http.Request) (PerformanceFilter, error) {
+func parsePerformanceFilter(r *http.Request) (store.PerformanceFilter, error) {
 	q := r.URL.Query()
-	f := PerformanceFilter{Limit: maxPerformanceQueryLimit}
+	f := store.PerformanceFilter{Limit: store.MaxPerformanceQueryLimit}
 	if value := q.Get("site_id"); value != "" {
 		id, err := strconv.ParseInt(value, 10, 64)
 		if err != nil || id <= 0 {
@@ -30,7 +32,7 @@ func parsePerformanceFilter(r *http.Request) (PerformanceFilter, error) {
 		"version":     &f.Version,
 	} {
 		value := strings.TrimSpace(q.Get(key))
-		if len(value) > maxPerformanceDimensionLength {
+		if len(value) > store.MaxPerformanceDimensionLength {
 			return f, fmt.Errorf("%s is too long", key)
 		}
 		*target = value
@@ -49,8 +51,8 @@ func parsePerformanceFilter(r *http.Request) (PerformanceFilter, error) {
 	}
 	if value := q.Get("limit"); value != "" {
 		limit, err := strconv.Atoi(value)
-		if err != nil || limit <= 0 || limit > maxPerformanceQueryLimit {
-			return f, fmt.Errorf("limit must be 1-%d", maxPerformanceQueryLimit)
+		if err != nil || limit <= 0 || limit > store.MaxPerformanceQueryLimit {
+			return f, fmt.Errorf("limit must be 1-%d", store.MaxPerformanceQueryLimit)
 		}
 		f.Limit = limit
 	}
@@ -129,7 +131,7 @@ func (s *Server) handleDeletePerformanceKey(w http.ResponseWriter, r *http.Reque
 }
 
 type performanceIngestRequest struct {
-	Observations []PerformanceObservation `json:"observations"`
+	Observations []store.PerformanceObservation `json:"observations"`
 }
 
 // handlePerformanceIngest is intentionally server-to-server. The backend key
@@ -193,8 +195,8 @@ func (s *Server) handlePerformanceIngest(w http.ResponseWriter, r *http.Request)
 		writeJSON(w, http.StatusOK, map[string]int{"accepted": 0})
 		return
 	}
-	if len(payload.Observations) > maxPerformanceObservationCount {
-		writeErr(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("observations must be 1-%d", maxPerformanceObservationCount))
+	if len(payload.Observations) > store.MaxPerformanceObservationCount {
+		writeErr(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("observations must be 1-%d", store.MaxPerformanceObservationCount))
 		return
 	}
 	if err := s.store.SavePerformanceObservations(site.ID, payload.Observations); err != nil {
@@ -231,6 +233,6 @@ func (s *Server) handleRotatePerformanceKey(w http.ResponseWriter, r *http.Reque
 	}
 	writeJSON(w, http.StatusOK, map[string]string{
 		"performance_key": key,
-		"key_hint":        performanceKeyHint(key[:4], key[len(key)-4:]),
+		"key_hint":        store.PerformanceKeyHint(key[:4], key[len(key)-4:]),
 	})
 }
