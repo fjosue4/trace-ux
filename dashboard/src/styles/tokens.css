@@ -35,6 +35,10 @@
   --danger-soft: rgba(179, 38, 30, 0.1);
   --success: #237a45;
   --success-soft: rgba(35, 122, 69, 0.12);
+  --info: #1f6f8b;
+  --info-soft: rgba(31, 111, 139, 0.13);
+  --warn: #9a6410;
+  --warn-soft: rgba(154, 100, 16, 0.14);
 
   /* portfolio-native aliases */
   --paper: #f0eee6;
@@ -72,6 +76,10 @@
   --danger-soft: rgba(255, 99, 105, 0.12);
   --success: #72d58e;
   --success-soft: rgba(114, 213, 142, 0.13);
+  --info: #5eb0d6;
+  --info-soft: rgba(94, 176, 214, 0.15);
+  --warn: #d9a441;
+  --warn-soft: rgba(217, 164, 65, 0.15);
 
   --paper: #f0eee6;
   --charcoal: #141915;
