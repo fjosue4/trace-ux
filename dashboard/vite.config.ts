@@ -24,6 +24,18 @@ const apiProxy = {
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      abstracts: '/src/styles/abstracts/_index.scss',
+    },
+  },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        api: 'modern-compiler',
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {

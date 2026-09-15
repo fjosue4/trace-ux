@@ -1,0 +1,25 @@
+// Façade over styles/tokens.css custom properties. tokens.css remains the
+// single source of truth for the palette; these names just let component
+// SCSS read it without spelling out var(--x) everywhere. Values still
+// resolve at runtime, so theme switching via [data-theme] keeps working.
+
+$page-bg: var(--page-bg);
+$bg: var(--bg);
+$surface: var(--surface);
+$surface-2: var(--surface-2);
+$surface-3: var(--surface-3);
+$ink: var(--ink);
+$ink-2: var(--ink-2);
+$muted: var(--muted);
+$line: var(--line);
+$line-strong: var(--line-strong);
+
+$accent: var(--accent);
+$accent-strong: var(--accent-strong);
+$accent-soft: var(--accent-soft);
+$accent-glow: var(--accent-glow);
+$on-accent: var(--on-accent);
+$danger: var(--danger);
+$danger-soft: var(--danger-soft);
+$success: var(--success);
+$success-soft: var(--success-soft);

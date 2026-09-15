@@ -1,0 +1,16 @@
+// Global utility class: `.card` is also targeted by other components'
+// stylesheets (base.css, replay.css, Sites.css), so kept as plain global CSS
+// (not a CSS module) rather than scoped/hashed.
+@use 'abstracts' as *;
+
+.card {
+  background: $surface;
+  border: 1px solid $line;
+  border-radius: $radius-lg;
+  box-shadow: $shadow-sm;
+  padding: 1.35rem 1.45rem;
+  transition: border-color $duration-fast $ease-out;
+
+  &:hover { border-color: $line-strong; }
+  &.card--static:hover { border-color: $line; }
+}

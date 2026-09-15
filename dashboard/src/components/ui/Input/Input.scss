@@ -1,0 +1,29 @@
+// Kept as plain global CSS (not a CSS module): `.field-control` is targeted
+// by other components' stylesheets (WidgetSettingsModals.css, FiltersBar.css,
+// UserRow.css, SiteDetail.css) as a descendant selector, and is also applied
+// directly by Select's trigger button — duplicated there rather than shared
+// via an import, since either component can be used without the other.
+@use 'abstracts' as *;
+
+.field-control {
+  font: inherit;
+  color: $ink;
+  background: $surface-2;
+  border: 1px solid $line;
+  border-radius: $radius-sm;
+  height: 40px;
+  padding: 0 0.9rem;
+  width: 100%;
+  transition: border-color $duration-fast $ease-out,
+    background-color $duration-fast $ease-out, box-shadow $duration-fast $ease-out;
+
+  &::placeholder { color: $muted; }
+  &:disabled { opacity: 0.6; }
+  &:hover:not(:disabled):not(:focus) { border-color: $line-strong; }
+  &:focus {
+    outline: none;
+    background: $surface;
+    border-color: $accent;
+    box-shadow: 0 0 0 3px $accent-soft;
+  }
+}

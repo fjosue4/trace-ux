@@ -1,0 +1,14 @@
+// Façade over styles/tokens.css geometry, elevation and motion tokens.
+
+$radius-sm: var(--radius-sm);
+$radius: var(--radius);
+$radius-lg: var(--radius-lg);
+$radius-pill: var(--radius-pill);
+
+$shadow-sm: var(--shadow-sm);
+$shadow-md: var(--shadow-md);
+$shadow-accent: var(--shadow-accent);
+
+$duration-fast: var(--duration-fast);
+$duration-medium: var(--duration-medium);
+$ease-out: var(--ease-out);

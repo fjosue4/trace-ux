@@ -1,0 +1,60 @@
+// Global utility classes: `.btn`/`.btn--*` are also applied directly to
+// plain <Link> elements across the app, not only through <Button>. Kept as
+// plain global CSS (not a CSS module) so those class names keep resolving.
+@use 'abstracts' as *;
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  font: inherit;
+  font-weight: 600;
+  border-radius: $radius-pill;
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color $duration-fast $ease-out,
+    border-color $duration-fast $ease-out, color $duration-fast $ease-out,
+    box-shadow $duration-fast $ease-out;
+
+  &:disabled { opacity: 0.55; cursor: default; }
+
+  &--md { height: 40px; padding: 0 1.1rem; font-size: 0.9rem; }
+  &--sm { height: 32px; padding: 0 0.85rem; font-size: 0.82rem; }
+  &--block { width: 100%; }
+
+  &--primary {
+    background: $accent;
+    color: $on-accent;
+    box-shadow: $shadow-sm;
+    &:hover:not(:disabled) { background: $accent-strong; box-shadow: $shadow-accent; }
+  }
+
+  &--secondary {
+    background: $surface;
+    border-color: $line;
+    color: $ink;
+    box-shadow: $shadow-sm;
+    &:hover:not(:disabled) { background: $surface-2; border-color: $line-strong; }
+  }
+
+  &--ghost {
+    background: transparent;
+    color: $muted;
+    &:hover:not(:disabled) { background: $surface-2; color: $ink; }
+  }
+
+  &--danger {
+    background: $danger;
+    color: #fff;
+    box-shadow: $shadow-sm;
+    &:hover:not(:disabled) { filter: brightness(0.94); }
+  }
+
+  &--dangerGhost {
+    background: transparent;
+    color: $danger;
+    &:hover:not(:disabled) { background: $danger-soft; }
+  }
+}

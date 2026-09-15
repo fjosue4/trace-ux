@@ -1,0 +1,33 @@
+// Global utility classes: `.badge`/`.badge--*` are also targeted by other
+// components' stylesheets (e.g. Sessions.css), so kept as plain global CSS
+// (not a CSS module) rather than scoped/hashed.
+@use 'abstracts' as *;
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.14rem 0.6rem;
+  border-radius: $radius-pill;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.035em;
+  border: 1px solid transparent;
+
+  &--accent {
+    background: $accent-soft;
+    color: $accent;
+    border-color: color-mix(in srgb, #{$accent} 15%, transparent);
+  }
+
+  &--neutral {
+    background: $surface-2;
+    color: $muted;
+    border-color: $line;
+  }
+
+  &--danger {
+    background: $danger-soft;
+    color: $danger;
+    border-color: color-mix(in srgb, #{$danger} 15%, transparent);
+  }
+}

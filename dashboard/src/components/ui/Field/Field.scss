@@ -1,0 +1,7 @@
+// Kept as plain global CSS (not a CSS module): `.field` is targeted by other
+// components' stylesheets (SiteDetail.css) as a descendant selector.
+@use 'abstracts' as *;
+
+.field { display: flex; flex-direction: column; gap: 0.35rem; }
+.field-label { font-size: 0.8rem; font-weight: 600; color: $ink-2; }
+.field-hint { font-size: 0.78rem; color: $muted; }
