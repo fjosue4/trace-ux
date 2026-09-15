@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"trace-ux/server/store"
 )
 
 // Demo replay is isolated from dashboard authentication. It is disabled by
@@ -74,11 +76,6 @@ func (s *Server) handleDemoClaim(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"url": "/share/" + token, "expires_at": expires})
 }
 
-type demoReplayToken struct {
-	SiteID    int64
-	SessionID string
-}
-
 func (s *Server) allowDemoReplay(w http.ResponseWriter, r *http.Request) bool {
 	s.initSecurity()
 	if !s.demoReplayLimiter.allow("ip:" + s.clientIP(r)) {
@@ -88,7 +85,7 @@ func (s *Server) allowDemoReplay(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-func (s *Server) demoSession(token string) (*Session, bool) {
+func (s *Server) demoSession(token string) (*store.Session, bool) {
 	if !s.demoEnabled() || len(token) != 43 {
 		return nil, false
 	}
@@ -145,7 +142,7 @@ func (s *Server) handleDemoReplayEvents(w http.ResponseWriter, r *http.Request) 
 // publicDemoSession contains only values needed by the public player and its
 // visit summary. Bearer links must not expose IP hashes, identity fields,
 // referrers, user agents, or arbitrary attribution data.
-func publicDemoSession(sess *Session) map[string]any {
+func publicDemoSession(sess *store.Session) map[string]any {
 	return map[string]any{
 		"id": sess.ID, "started_at": sess.StartedAt, "last_seen": sess.LastSeen,
 		"duration_ms": sess.DurationMs, "page_count": sess.PageCount,
@@ -155,7 +152,7 @@ func publicDemoSession(sess *Session) map[string]any {
 
 // publicDemoLogs keeps the shared replay action feed useful without exposing
 // dashboard-only joins such as site/session identifiers or creation metadata.
-func publicDemoLogs(logs []Log) []map[string]any {
+func publicDemoLogs(logs []store.Log) []map[string]any {
 	out := make([]map[string]any, 0, len(logs))
 	for _, item := range logs {
 		out = append(out, map[string]any{
@@ -164,23 +161,4 @@ func publicDemoLogs(logs []Log) []map[string]any {
 		})
 	}
 	return out
-}
-
-func (s *Store) CreateDemoReplayToken(hash string, siteID int64, sessionID string, created, expires int64) error {
-	_, err := s.db.Exec(`INSERT INTO demo_replay_tokens (token_hash, site_id, session_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?)`, hash, siteID, sessionID, created, expires)
-	return err
-}
-
-func (s *Store) GetDemoReplayToken(hash string, now int64) (*demoReplayToken, error) {
-	var rec demoReplayToken
-	err := s.db.QueryRow(`SELECT site_id, session_id FROM demo_replay_tokens WHERE token_hash = ? AND expires_at > ?`, hash, now).Scan(&rec.SiteID, &rec.SessionID)
-	if err != nil {
-		return nil, err
-	}
-	return &rec, nil
-}
-
-func (s *Store) DeleteExpiredDemoReplayTokens(now int64) error {
-	_, err := s.db.Exec(`DELETE FROM demo_replay_tokens WHERE expires_at <= ?`, now)
-	return err
 }

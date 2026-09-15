@@ -17,12 +17,14 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"trace-ux/server/store"
 )
 
 const authCookie = "trace_ux_auth"
 
 type Server struct {
-	store  *Store
+	store  *store.Store
 	cfg    *Config
 	secret []byte       // HMAC salt for ip_hash (auth cookies are DB-backed now)
 	static http.Handler // SPA + assets
@@ -364,8 +366,8 @@ type ctxKey int
 const userCtxKey ctxKey = 0
 
 // currentUser returns the authenticated user attached by s.auth, or nil.
-func currentUser(r *http.Request) *User {
-	u, _ := r.Context().Value(userCtxKey).(*User)
+func currentUser(r *http.Request) *store.User {
+	u, _ := r.Context().Value(userCtxKey).(*store.User)
 	return u
 }
 
@@ -433,7 +435,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if rec == nil || !verifyPassword(body.Password, rec.PasswordHash) {
+	if rec == nil || !store.VerifyPassword(body.Password, rec.PasswordHash) {
 		time.Sleep(200 * time.Millisecond) // blunt brute-force attempts
 		writeErr(w, http.StatusUnauthorized, "invalid username or password")
 		return
@@ -450,7 +452,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		Secure:   s.cfg != nil && s.cfg.SecureCookies,
 		SameSite: http.SameSiteLaxMode,
-		MaxAge:   int(authSessionTTL.Seconds()),
+		MaxAge:   int(store.AuthSessionTTL.Seconds()),
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "user": rec.User})
 }
@@ -492,7 +494,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "user lookup failed")
 		return
 	}
-	if !verifyPassword(body.CurrentPassword, rec.PasswordHash) {
+	if !store.VerifyPassword(body.CurrentPassword, rec.PasswordHash) {
 		writeErr(w, http.StatusUnauthorized, "current password is wrong")
 		return
 	}
@@ -500,7 +502,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	hash, err := hashPassword(body.NewPassword)
+	hash, err := store.HashPassword(body.NewPassword)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -552,11 +554,11 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	if role == "" {
 		role = "viewer"
 	}
-	if !validateUsername(username) {
+	if !store.ValidateUsername(username) {
 		writeErr(w, http.StatusBadRequest, "username must be 1-64 characters (letters, digits, . _ -)")
 		return
 	}
-	if !validateRole(role) {
+	if !store.ValidateRole(role) {
 		writeErr(w, http.StatusBadRequest, "role must be admin or viewer")
 		return
 	}
@@ -564,13 +566,13 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	hash, err := hashPassword(body.Password)
+	hash, err := store.HashPassword(body.Password)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	user, err := s.store.CreateUser(username, hash, role)
-	if err == errUserExists {
+	if err == store.ErrUserExists {
 		writeErr(w, http.StatusConflict, "username already taken")
 		return
 	}
@@ -616,7 +618,7 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if body.Role != "" {
-		if !validateRole(body.Role) {
+		if !store.ValidateRole(body.Role) {
 			writeErr(w, http.StatusBadRequest, "role must be admin or viewer")
 			return
 		}
@@ -641,7 +643,7 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		hash, err := hashPassword(body.Password)
+		hash, err := store.HashPassword(body.Password)
 		if err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
@@ -773,7 +775,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		if radius == 0 {
 			radius = 18
 		}
-		feedbackAppearance = &SiteAppearance{ButtonBg: accent, ButtonText: "#ffffff", ButtonLabel: "Feedback", PanelBg: panelBg, PanelText: panelText, Accent: accent, Primary: accent, PrimaryText: "#ffffff", Radius: radius, Spacing: 16}
+		feedbackAppearance = &store.SiteAppearance{ButtonBg: accent, ButtonText: "#ffffff", ButtonLabel: "Feedback", PanelBg: panelBg, PanelText: panelText, Accent: accent, Primary: accent, PrimaryText: "#ffffff", Radius: radius, Spacing: 16}
 	}
 
 	// The launcher icon lives behind its own cached endpoint rather than

@@ -1,0 +1,46 @@
+import { request } from '../client';
+import { Site, SiteDetail, SiteSettings, WidgetIcon } from '../types/sites';
+
+export const sitesEndpoints = {
+  listSites: () => request<Site[]>('/api/sites'),
+  createSite: (name: string, url: string) =>
+    request<Site>('/api/sites', { method: 'POST', body: JSON.stringify({ name, url }) }),
+  deleteSite: (id: number) => request<{ ok: boolean }>(`/api/sites/${id}`, { method: 'DELETE' }),
+
+  // Site management.
+  getSiteDetail: (id: number) => request<SiteDetail>(`/api/sites/${id}`),
+
+  // The icon is posted as raw bytes: the server decides the format by decoding
+  // the image, so there is nothing useful to declare in a multipart wrapper.
+  uploadWidgetIcon: (id: number, file: File) =>
+    request<WidgetIcon>(`/api/sites/${id}/widget-icon`, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': 'application/octet-stream' },
+    }),
+  deleteWidgetIcon: (id: number) =>
+    request<{ ok: boolean }>(`/api/sites/${id}/widget-icon`, { method: 'DELETE' }),
+  updateSiteRecording: (id: number, enabled: boolean) =>
+    request<{ ok: boolean; recording_enabled: boolean }>(`/api/sites/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ recording_enabled: enabled }),
+    }),
+  updateSiteURL: (id: number, url: string) =>
+    request<{ ok: boolean; url: string }>(`/api/sites/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ url }),
+    }),
+  updateSiteSettings: (id: number, settings: SiteSettings) =>
+    request<SiteSettings>(`/api/sites/${id}/settings`, {
+      method: 'PUT',
+      body: JSON.stringify(settings),
+    }),
+  createPerformanceKey: (siteId: number) =>
+    request<{ key_id: number; key_hint: string; created_at: number; performance_key: string }>(`/api/sites/${siteId}/performance-keys`, {
+      method: 'POST',
+    }),
+  deletePerformanceKey: (siteId: number, keyId: number) =>
+    request<{ ok: boolean }>(`/api/sites/${siteId}/performance-keys/${keyId}`, {
+      method: 'DELETE',
+    }),
+};

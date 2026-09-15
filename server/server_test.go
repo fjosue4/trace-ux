@@ -11,21 +11,23 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"trace-ux/server/store"
 )
 
 func newTestServer(t *testing.T) (*Server, *httptest.Server) {
 	t.Helper()
-	store, err := OpenStore(filepath.Join(t.TempDir(), "test.db"))
+	db, err := store.OpenStore(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { store.Close() })
+	t.Cleanup(func() { db.Close() })
 	secret := make([]byte, 32)
 	if _, err := rand.Read(secret); err != nil {
 		t.Fatal(err)
 	}
 	srv := &Server{
-		store:  store,
+		store:  db,
 		cfg:    &Config{Password: "pw", RetentionDays: 90},
 		secret: secret,
 		static: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}),
@@ -83,7 +85,7 @@ func TestAuthAndSites(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp2.Body.Close()
-	var site Site
+	var site store.Site
 	json.NewDecoder(resp2.Body).Decode(&site)
 	if site.SiteKey == "" {
 		t.Fatal("site key not returned")
@@ -103,7 +105,7 @@ func TestIngestFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var site Site
+	var site store.Site
 	json.NewDecoder(siteResp.Body).Decode(&site)
 	siteResp.Body.Close()
 
@@ -141,14 +143,14 @@ func TestIngestSessionIDsAreScopedToSite(t *testing.T) {
 	srv, ts := newTestServer(t)
 	admin := login(t, ts.URL, "admin", "pw")
 
-	createSite := func(name, url string) Site {
+	createSite := func(name, url string) store.Site {
 		resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin,
 			fmt.Sprintf(`{"name":%q,"url":%q}`, name, url))
 		defer resp.Body.Close()
 		if resp.StatusCode != http.StatusCreated {
 			t.Fatalf("create site %s: got %d", name, resp.StatusCode)
 		}
-		var site Site
+		var site store.Site
 		if err := json.NewDecoder(resp.Body).Decode(&site); err != nil {
 			t.Fatal(err)
 		}
@@ -190,7 +192,7 @@ func TestMultiPageSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var site Site
+	var site store.Site
 	json.NewDecoder(siteResp.Body).Decode(&site)
 	siteResp.Body.Close()
 
@@ -233,9 +235,9 @@ func TestParseUA(t *testing.T) {
 		{"Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)", "Bot", "Unknown", "desktop"},
 	}
 	for _, c := range cases {
-		b, o, d := parseUA(c.ua)
+		b, o, d := store.ParseUA(c.ua)
 		if b != c.b || o != c.o || d != c.d {
-			t.Errorf("parseUA(%q) = %q/%q/%q, want %q/%q/%q", c.ua, b, o, d, c.b, c.o, c.d)
+			t.Errorf("store.ParseUA(%q) = %q/%q/%q, want %q/%q/%q", c.ua, b, o, d, c.b, c.o, c.d)
 		}
 	}
 }

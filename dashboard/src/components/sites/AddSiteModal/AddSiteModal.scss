@@ -1,0 +1,11 @@
+@use 'abstracts' as *;
+
+.add-site-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+
+  > p { margin: 0 0 0.2rem; }
+
+  &__hint { color: $muted; font-size: 0.78rem; line-height: 1.45; }
+}

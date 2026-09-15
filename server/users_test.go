@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"trace-ux/server/store"
 )
 
 // login posts credentials and returns the session cookie.
@@ -76,7 +78,7 @@ func TestUserManagement(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create user: %d", resp.StatusCode)
 	}
-	var created User
+	var created store.User
 	json.NewDecoder(resp.Body).Decode(&created)
 	resp.Body.Close()
 	if created.ID == 0 || created.Role != "viewer" {
@@ -167,7 +169,7 @@ func TestLastAdminGuard(t *testing.T) {
 	admin := login(t, ts.URL, "admin", "pw")
 
 	resp := doReq(t, http.MethodGet, ts.URL+"/api/users", admin, "")
-	var users []User
+	var users []store.User
 	json.NewDecoder(resp.Body).Decode(&users)
 	resp.Body.Close()
 	if len(users) != 1 {
@@ -257,7 +259,7 @@ func TestPingDurationCappedAtTwoHours(t *testing.T) {
 	admin := login(t, ts.URL, "admin", "pw")
 
 	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"T","url":"https://t.example"}`)
-	var site Site
+	var site store.Site
 	json.NewDecoder(resp.Body).Decode(&site)
 	resp.Body.Close()
 	ingestURL := fmt.Sprintf("%s/api/ingest/%s", ts.URL, site.SiteKey)
@@ -282,9 +284,9 @@ func TestListSessionsAcrossSites(t *testing.T) {
 	srv, ts := newTestServer(t)
 	admin := login(t, ts.URL, "admin", "pw")
 
-	mkSite := func(name string) Site {
+	mkSite := func(name string) store.Site {
 		resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"`+name+`","url":"https://`+name+`.example.com"}`)
-		var s Site
+		var s store.Site
 		json.NewDecoder(resp.Body).Decode(&s)
 		resp.Body.Close()
 		return s
@@ -292,12 +294,12 @@ func TestListSessionsAcrossSites(t *testing.T) {
 	a := mkSite("Alpha")
 	b := mkSite("Beta")
 
-	srv.store.SaveHello(a.ID, "sa", "UA", "h", &ingestHello{URL: "https://a.test/"})
-	srv.store.SaveHello(b.ID, "sb", "UA", "h", &ingestHello{URL: "https://b.test/"})
+	srv.store.SaveHello(a.ID, "sa", "UA", "h", &store.IngestHello{URL: "https://a.test/"})
+	srv.store.SaveHello(b.ID, "sb", "UA", "h", &store.IngestHello{URL: "https://b.test/"})
 
-	get := func(q string) []Session {
+	get := func(q string) []store.Session {
 		resp := doReq(t, http.MethodGet, ts.URL+"/api/sessions"+q, admin, "")
-		var out []Session
+		var out []store.Session
 		json.NewDecoder(resp.Body).Decode(&out)
 		resp.Body.Close()
 		return out
@@ -326,7 +328,7 @@ func TestVisitorIdentityAndCustomEvents(t *testing.T) {
 	admin := login(t, ts.URL, "admin", "pw")
 
 	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"T","url":"https://t.example"}`)
-	var site Site
+	var site store.Site
 	json.NewDecoder(resp.Body).Decode(&site)
 	resp.Body.Close()
 	u := fmt.Sprintf("%s/api/ingest/%s", ts.URL, site.SiteKey)
@@ -352,8 +354,8 @@ func TestVisitorIdentityAndCustomEvents(t *testing.T) {
 
 	detail := doReq(t, http.MethodGet, ts.URL+"/api/sessions/vis1", admin, "")
 	var body struct {
-		Session      Session       `json:"session"`
-		CustomEvents []CustomEvent `json:"custom_events"`
+		Session      store.Session       `json:"session"`
+		CustomEvents []store.CustomEvent `json:"custom_events"`
 	}
 	json.NewDecoder(detail.Body).Decode(&body)
 	detail.Body.Close()
@@ -367,7 +369,7 @@ func TestVisitorIdentityAndCustomEvents(t *testing.T) {
 	// visitor filter matches any of the three ids
 	for _, q := range []string{"u-42", "acme", "remote-7"} {
 		resp := doReq(t, http.MethodGet, ts.URL+"/api/sessions?site_id="+fmt.Sprint(site.ID)+"&visitor="+q, admin, "")
-		var out []Session
+		var out []store.Session
 		json.NewDecoder(resp.Body).Decode(&out)
 		resp.Body.Close()
 		if len(out) != 1 {
@@ -375,7 +377,7 @@ func TestVisitorIdentityAndCustomEvents(t *testing.T) {
 		}
 	}
 	if got := doReq(t, http.MethodGet, ts.URL+"/api/sessions?visitor=nope", admin, ""); true {
-		var out []Session
+		var out []store.Session
 		json.NewDecoder(got.Body).Decode(&out)
 		got.Body.Close()
 		if len(out) != 0 {
@@ -389,7 +391,7 @@ func TestFeedbackFlow(t *testing.T) {
 	admin := login(t, ts.URL, "admin", "pw")
 
 	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"T","url":"https://t.example"}`)
-	var site Site
+	var site store.Site
 	json.NewDecoder(resp.Body).Decode(&site)
 	resp.Body.Close()
 	u := fmt.Sprintf("%s/api/ingest/%s", ts.URL, site.SiteKey)
@@ -405,7 +407,7 @@ func TestFeedbackFlow(t *testing.T) {
 	}
 
 	list := doReq(t, http.MethodGet, ts.URL+"/api/feedback?survey_id=checkout", admin, "")
-	var items []Feedback
+	var items []store.Feedback
 	json.NewDecoder(list.Body).Decode(&items)
 	list.Body.Close()
 	if len(items) != 2 {
@@ -420,7 +422,7 @@ func TestFeedbackFlow(t *testing.T) {
 	}
 
 	summary := doReq(t, http.MethodGet, ts.URL+"/api/feedback/summary?survey_id=checkout", admin, "")
-	var sum []FeedbackSurveySummary
+	var sum []store.FeedbackSurveySummary
 	json.NewDecoder(summary.Body).Decode(&sum)
 	summary.Body.Close()
 	if len(sum) != 1 || sum[0].Count != 2 || sum[0].Average != 3.5 {
@@ -441,7 +443,7 @@ func TestFeedbackFlow(t *testing.T) {
 		t.Fatalf("admin delete: %d", resp.StatusCode)
 	}
 	resp.Body.Close()
-	srvFeedback, _ := srv.store.ListFeedback(FeedbackFilter{})
+	srvFeedback, _ := srv.store.ListFeedback(store.FeedbackFilter{})
 	if len(srvFeedback) != 1 {
 		t.Fatalf("delete did not remove feedback: %d left", len(srvFeedback))
 	}
@@ -452,7 +454,7 @@ func TestSiteManagementAndConfig(t *testing.T) {
 	admin := login(t, ts.URL, "admin", "pw")
 
 	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"Hub","url":"https://hub.example"}`)
-	var site Site
+	var site store.Site
 	json.NewDecoder(resp.Body).Decode(&site)
 	resp.Body.Close()
 	base := fmt.Sprintf("%s/api/sites/%d", ts.URL, site.ID)
@@ -460,10 +462,10 @@ func TestSiteManagementAndConfig(t *testing.T) {
 	// Site hub payload: settings default on, empty lists, zero stats.
 	detail := doReq(t, http.MethodGet, base, admin, "")
 	var hub struct {
-		Site     Site       `json:"site"`
-		Sessions []Session  `json:"sessions"`
-		Feedback []Feedback `json:"feedback"`
-		Stats    SiteStats  `json:"stats"`
+		Site     store.Site       `json:"site"`
+		Sessions []store.Session  `json:"sessions"`
+		Feedback []store.Feedback `json:"feedback"`
+		Stats    store.SiteStats  `json:"stats"`
 	}
 	json.NewDecoder(detail.Body).Decode(&hub)
 	detail.Body.Close()
@@ -512,12 +514,12 @@ func TestSiteManagementAndConfig(t *testing.T) {
 	var pub struct {
 		RecordingEnabled bool `json:"recording_enabled"`
 		Feedback         struct {
-			Enabled   bool             `json:"enabled"`
-			Position  string           `json:"position"`
-			SurveyID  string           `json:"survey_id"`
-			Title     string           `json:"title"`
-			Type      string           `json:"type"`
-			Questions []SurveyQuestion `json:"questions"`
+			Enabled   bool                   `json:"enabled"`
+			Position  string                 `json:"position"`
+			SurveyID  string                 `json:"survey_id"`
+			Title     string                 `json:"title"`
+			Type      string                 `json:"type"`
+			Questions []store.SurveyQuestion `json:"questions"`
 		} `json:"feedback"`
 		Updates struct {
 			Position string `json:"position"`
@@ -595,7 +597,7 @@ func TestSiteManagementAndConfig(t *testing.T) {
 
 	// Max simultaneous recordings, on a dedicated site with a clean window.
 	resp = doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"Cap","url":"https://cap.example"}`)
-	var capSite Site
+	var capSite store.Site
 	json.NewDecoder(resp.Body).Decode(&capSite)
 	resp.Body.Close()
 	capURL := fmt.Sprintf("%s/api/ingest/%s", ts.URL, capSite.SiteKey)
@@ -662,19 +664,19 @@ func TestURLFilterMatchesVisitedPages(t *testing.T) {
 	admin := login(t, ts.URL, "admin", "pw")
 
 	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"T","url":"https://t.example"}`)
-	var site Site
+	var site store.Site
 	json.NewDecoder(resp.Body).Decode(&site)
 	resp.Body.Close()
 
-	srv.store.SaveHello(site.ID, "nav", "UA", "hash", &ingestHello{URL: "https://x.test/"})
-	srv.store.SavePage(site.ID, "nav", &ingestPage{Idx: 0, URL: "https://x.test/"})
-	srv.store.SavePage(site.ID, "nav", &ingestPage{Idx: 1, URL: "https://x.test/pricing", Title: "Pricing"})
-	srv.store.SavePage(site.ID, "nav", &ingestPage{Idx: 2, URL: "https://x.test/checkout"})
+	srv.store.SaveHello(site.ID, "nav", "UA", "hash", &store.IngestHello{URL: "https://x.test/"})
+	srv.store.SavePage(site.ID, "nav", &store.IngestPage{Idx: 0, URL: "https://x.test/"})
+	srv.store.SavePage(site.ID, "nav", &store.IngestPage{Idx: 1, URL: "https://x.test/pricing", Title: "Pricing"})
+	srv.store.SavePage(site.ID, "nav", &store.IngestPage{Idx: 2, URL: "https://x.test/checkout"})
 
 	// "pricing" is only in the middle of the visit — not the entry or exit URL.
-	get := func(q string) []Session {
+	get := func(q string) []store.Session {
 		resp := doReq(t, http.MethodGet, ts.URL+"/api/sessions?site_id="+fmt.Sprint(site.ID)+q, admin, "")
-		var out []Session
+		var out []store.Session
 		json.NewDecoder(resp.Body).Decode(&out)
 		resp.Body.Close()
 		return out
@@ -703,7 +705,7 @@ func TestCORSLockedToRegisteredSiteOrigin(t *testing.T) {
 
 	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin,
 		`{"name":"CORS","url":"https://shop.example"}`)
-	var site Site
+	var site store.Site
 	json.NewDecoder(resp.Body).Decode(&site)
 	resp.Body.Close()
 
@@ -819,14 +821,14 @@ func TestSessionStatsAndActiveFlag(t *testing.T) {
 
 	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin,
 		`{"name":"Stats","url":"https://stats.example"}`)
-	var site Site
+	var site store.Site
 	json.NewDecoder(resp.Body).Decode(&site)
 	resp.Body.Close()
 
-	srv.store.SaveHello(site.ID, "sa", "UA", "h", &ingestHello{URL: "https://stats.example/"})
-	srv.store.SaveHello(site.ID, "sb", "UA", "h", &ingestHello{URL: "https://stats.example/x"})
+	srv.store.SaveHello(site.ID, "sa", "UA", "h", &store.IngestHello{URL: "https://stats.example/"})
+	srv.store.SaveHello(site.ID, "sb", "UA", "h", &store.IngestHello{URL: "https://stats.example/x"})
 	// Age one session past the 30-minute activity window.
-	if _, err := srv.store.db.Exec(`UPDATE sessions SET last_seen = last_seen - 4000 WHERE id = 'sb'`); err != nil {
+	if _, err := srv.store.DB.Exec(`UPDATE sessions SET last_seen = last_seen - 4000 WHERE id = 'sb'`); err != nil {
 		t.Fatal(err)
 	}
 
@@ -851,7 +853,7 @@ func TestSessionStatsAndActiveFlag(t *testing.T) {
 
 	// The list marks the fresh session in-progress and the aged one completed.
 	resp = doReq(t, http.MethodGet, ts.URL+"/api/sessions?site_id="+fmt.Sprint(site.ID), admin, "")
-	var sessions []Session
+	var sessions []store.Session
 	json.NewDecoder(resp.Body).Decode(&sessions)
 	resp.Body.Close()
 	activeByID := map[string]bool{}

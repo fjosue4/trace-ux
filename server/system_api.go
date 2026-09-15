@@ -34,10 +34,10 @@ type cpuHealth struct {
 }
 
 type diskHealth struct {
-	TotalBytes    uint64 `json:"total_bytes"`
-	FreeBytes     uint64 `json:"free_bytes"`
-	TraceUXBytes  uint64 `json:"trace_ux_bytes"` // size of the data dir (SQLite + keys)
-	DataDir       string `json:"data_dir"`
+	TotalBytes   uint64 `json:"total_bytes"`
+	FreeBytes    uint64 `json:"free_bytes"`
+	TraceUXBytes uint64 `json:"trace_ux_bytes"` // size of the data dir (SQLite + keys)
+	DataDir      string `json:"data_dir"`
 }
 
 type storeCounts struct {
@@ -89,14 +89,6 @@ func dirSize(path string) int64 {
 		return nil
 	})
 	return total
-}
-
-func (s *Store) Counts() (sites, sessions, feedback int64, err error) {
-	err = s.db.QueryRow(`SELECT
-		(SELECT COUNT(*) FROM sites),
-		(SELECT COUNT(*) FROM sessions),
-		(SELECT COUNT(*) FROM feedback)`).Scan(&sites, &sessions, &feedback)
-	return
 }
 
 func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {

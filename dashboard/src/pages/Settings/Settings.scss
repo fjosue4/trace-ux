@@ -1,0 +1,41 @@
+@use 'abstracts' as *;
+
+.settings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  align-items: start;
+
+  > .page-head { grid-column: 1 / -1; margin-bottom: 0.1rem; }
+  > .settings__team { grid-column: 1 / -1; }
+}
+.settings__team {
+  > .muted.small { margin: 0.35rem 0 0.2rem; }
+  .user-manager > .row--between > .muted.small { margin: 0; }
+}
+.settings__profile { display: flex; align-items: center; gap: 0.55rem; margin: 0.5rem 0 0.2rem; }
+.settings__username { font-size: 1.05rem; font-weight: 700; }
+.settings__pw { margin-top: 0.8rem; }
+
+/* segmented light/dark selector */
+.seg { display: inline-flex; background: $surface-2; border-radius: $radius-pill; padding: 4px; margin-top: 0.7rem; gap: 4px; }
+.seg__option {
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.4rem 1.2rem;
+  background: transparent;
+  color: $muted;
+  border: none;
+  border-radius: $radius-pill;
+  cursor: pointer;
+  transition: background-color $duration-fast $ease-out, color $duration-fast $ease-out;
+
+  &:hover:not(.is-active) { color: $ink; }
+  &.is-active { background: $accent; color: $on-accent; box-shadow: $shadow-accent; }
+}
+
+@media (max-width: 1100px) {
+  .settings { grid-template-columns: 1fr; }
+  .settings > .page-head { grid-column: auto; }
+}

@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"trace-ux/server/store"
 )
 
 // version is overridden at release build time via -ldflags "-X main.version=v...".
@@ -39,11 +41,11 @@ func main() {
 	if err := os.Chmod(cfg.DataDir, 0o700); err != nil {
 		log.Fatalf("cannot secure data dir %s: %v", cfg.DataDir, err)
 	}
-	store, err := OpenStore(filepath.Join(cfg.DataDir, "trace_ux.db"))
+	db, err := store.OpenStore(filepath.Join(cfg.DataDir, "trace_ux.db"))
 	if err != nil {
 		log.Fatalf("cannot open database: %v", err)
 	}
-	defer store.Close()
+	defer db.Close()
 
 	secret, err := loadSecret(cfg.DataDir)
 	if err != nil {
@@ -53,16 +55,16 @@ func main() {
 	// Bootstrap the admin account from TRACE_UX_PASSWORD. Once users exist the DB
 	// owns all passwords; TRACE_UX_RESET_ADMIN=1 re-points admin at TRACE_UX_PASSWORD.
 	if cfg.ResetAdmin {
-		if err := store.ResetAdminPassword(cfg.Password); err != nil {
+		if err := db.ResetAdminPassword(cfg.Password); err != nil {
 			log.Fatalf("cannot reset admin password: %v", err)
 		}
 		log.Println("admin password reset from TRACE_UX_PASSWORD; previous logins revoked")
-	} else if err := store.EnsureAdmin(cfg.Password); err != nil {
+	} else if err := db.EnsureAdmin(cfg.Password); err != nil {
 		log.Fatalf("cannot ensure admin user: %v", err)
 	}
 
 	srv := &Server{
-		store:  store,
+		store:  db,
 		cfg:    &cfg,
 		secret: secret,
 		static: newStaticHandler(cfg),
@@ -73,17 +75,17 @@ func main() {
 	go func() {
 		time.Sleep(time.Minute)
 		for {
-			if n, err := store.RetentionSweep(cfg.RetentionDays); err != nil {
+			if n, err := db.RetentionSweep(cfg.RetentionDays); err != nil {
 				log.Printf("retention: %v", err)
 			} else if n > 0 {
 				log.Printf("retention: removed %d expired items", n)
 			}
-			if n, err := store.DeleteExpiredAuthSessions(); err != nil {
+			if n, err := db.DeleteExpiredAuthSessions(); err != nil {
 				log.Printf("auth gc: %v", err)
 			} else if n > 0 {
 				log.Printf("auth gc: removed %d expired logins", n)
 			}
-			if err := store.DeleteExpiredDemoReplayTokens(time.Now().Unix()); err != nil {
+			if err := db.DeleteExpiredDemoReplayTokens(time.Now().Unix()); err != nil {
 				log.Printf("demo replay gc: %v", err)
 			}
 			time.Sleep(6 * time.Hour)

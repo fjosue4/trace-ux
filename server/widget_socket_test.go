@@ -91,7 +91,7 @@ func TestWidgetSocketBroadcastsAndScopesEvents(t *testing.T) {
 	}
 
 	now := time.Now().Unix()
-	result, err := srv.store.db.Exec(`INSERT INTO announcements(site_id,title,summary,body,release_label,link_url,status,published_at,created_at,updated_at)
+	result, err := srv.store.DB.Exec(`INSERT INTO announcements(site_id,title,summary,body,release_label,link_url,status,published_at,created_at,updated_at)
 		VALUES(?,?,?,?,?,?,'draft',0,?,?)`, site.ID, "Socket update", "", "Published over the socket", "", "", now, now)
 	if err != nil {
 		t.Fatal(err)

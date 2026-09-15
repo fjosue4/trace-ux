@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"trace-ux/server/store"
 )
 
 func parseTicketID(r *http.Request) (int64, bool) {
@@ -15,11 +17,11 @@ func parseTicketID(r *http.Request) (int64, bool) {
 
 func handleTicketStoreError(w http.ResponseWriter, err error) bool {
 	switch {
-	case errors.Is(err, errTicketNotFound):
+	case errors.Is(err, store.ErrTicketNotFound):
 		writeErr(w, http.StatusNotFound, "ticket not found")
-	case errors.Is(err, errTicketClosed):
+	case errors.Is(err, store.ErrTicketClosed):
 		writeErr(w, http.StatusConflict, "this ticket is closed")
-	case errors.Is(err, errTicketOpenLimit), errors.Is(err, errTicketLifetimeLimit), errors.Is(err, errTicketMessagesLimit):
+	case errors.Is(err, store.ErrTicketOpenLimit), errors.Is(err, store.ErrTicketLifetimeLimit), errors.Is(err, store.ErrTicketMessagesLimit):
 		writeRateLimited(w, err.Error())
 	default:
 		return false
@@ -30,12 +32,12 @@ func handleTicketStoreError(w http.ResponseWriter, err error) bool {
 func (s *Server) handleListTickets(w http.ResponseWriter, r *http.Request) {
 	siteID, _ := strconv.ParseInt(r.URL.Query().Get("site_id"), 10, 64)
 	status := strings.TrimSpace(r.URL.Query().Get("status"))
-	if status != "" && !validTicketStatus(status) {
+	if status != "" && !store.ValidTicketStatus(status) {
 		writeErr(w, http.StatusBadRequest, "invalid ticket status")
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	rows, err := s.store.ListTickets(TicketFilter{SiteID: siteID, Status: status, Limit: limit})
+	rows, err := s.store.ListTickets(store.TicketFilter{SiteID: siteID, Status: status, Limit: limit})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
@@ -62,7 +64,7 @@ func (s *Server) handleGetTicket(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, TicketThread{Ticket: t, Messages: messages})
+	writeJSON(w, http.StatusOK, store.TicketThread{Ticket: t, Messages: messages})
 }
 
 func (s *Server) handleStaffTicketReply(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +80,7 @@ func (s *Server) handleStaffTicketReply(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	message := strings.TrimSpace(body.Body)
-	if len(message) < 1 || len(message) > maxTicketBodyLen {
+	if len(message) < 1 || len(message) > store.MaxTicketBodyLen {
 		writeErr(w, http.StatusBadRequest, "message must be 1-4000 characters")
 		return
 	}
@@ -113,7 +115,7 @@ func (s *Server) handleStaffTicketReply(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, TicketThread{Ticket: t, Messages: messages})
+	writeJSON(w, http.StatusOK, store.TicketThread{Ticket: t, Messages: messages})
 }
 
 func (s *Server) handleUpdateTicket(w http.ResponseWriter, r *http.Request) {
@@ -129,7 +131,7 @@ func (s *Server) handleUpdateTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	status := strings.TrimSpace(body.Status)
-	if !validTicketStatus(status) {
+	if !store.ValidTicketStatus(status) {
 		writeErr(w, http.StatusBadRequest, "invalid ticket status")
 		return
 	}
@@ -226,12 +228,12 @@ func (s *Server) handlePublicCreateTicket(w http.ResponseWriter, r *http.Request
 	if !s.allowPublicTickets(w, r, site.ID, true) {
 		return
 	}
-	var input NewTicket
+	var input store.NewTicket
 	if err := readJSON(w, r, &input); err != nil {
 		return
 	}
 	input.SiteID = site.ID
-	if err := normalizeTicketInput(&input); err != nil {
+	if err := store.NormalizeTicketInput(&input); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -240,11 +242,11 @@ func (s *Server) handlePublicCreateTicket(w http.ResponseWriter, r *http.Request
 		writeErr(w, http.StatusInternalServerError, "could not check ticket limits")
 		return
 	}
-	if open >= maxOpenTicketsPerVisitor {
+	if open >= store.MaxOpenTicketsPerVisitor {
 		writeRateLimited(w, "too many open tickets")
 		return
 	}
-	if total >= maxTicketsPerVisitor {
+	if total >= store.MaxTicketsPerVisitor {
 		writeRateLimited(w, "too many tickets")
 		return
 	}
@@ -286,7 +288,7 @@ func (s *Server) handlePublicGetTicket(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Keep the authorization result flat so callers cannot distinguish an
 		// existing ticket belonging to another visitor or site.
-		if errors.Is(err, errTicketNotFound) {
+		if errors.Is(err, store.ErrTicketNotFound) {
 			writeErr(w, http.StatusNotFound, "ticket not found")
 			return
 		}
@@ -298,7 +300,7 @@ func (s *Server) handlePublicGetTicket(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, "could not load ticket messages")
 		return
 	}
-	writeJSON(w, http.StatusOK, TicketThread{Ticket: ticket, Messages: messages})
+	writeJSON(w, http.StatusOK, store.TicketThread{Ticket: ticket, Messages: messages})
 }
 
 func (s *Server) handlePublicTicketReply(w http.ResponseWriter, r *http.Request) {
@@ -328,13 +330,13 @@ func (s *Server) handlePublicTicketReply(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	message := strings.TrimSpace(body.Body)
-	if len(message) < 1 || len(message) > maxTicketBodyLen {
+	if len(message) < 1 || len(message) > store.MaxTicketBodyLen {
 		writeErr(w, http.StatusBadRequest, "message must be 1-4000 characters")
 		return
 	}
 	ticket, err := s.store.GetTicketForVisitor(site.ID, id, body.VisitorKey)
 	if err != nil {
-		if errors.Is(err, errTicketNotFound) {
+		if errors.Is(err, store.ErrTicketNotFound) {
 			writeErr(w, http.StatusNotFound, "ticket not found")
 			return
 		}
@@ -364,5 +366,5 @@ func (s *Server) handlePublicTicketReply(w http.ResponseWriter, r *http.Request)
 		writeErr(w, http.StatusInternalServerError, "could not load ticket messages")
 		return
 	}
-	writeJSON(w, http.StatusOK, TicketThread{Ticket: ticket, Messages: messages})
+	writeJSON(w, http.StatusOK, store.TicketThread{Ticket: ticket, Messages: messages})
 }

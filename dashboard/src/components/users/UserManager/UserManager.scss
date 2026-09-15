@@ -1,0 +1,11 @@
+// Kept as plain global CSS (not a CSS module): `.user-manager` is targeted by
+// Settings.css as a descendant selector.
+.user-manager { display: flex; flex-direction: column; gap: 0.4rem; }
+
+@media (max-width: 640px) {
+  .user-manager > .row--between {
+    flex-direction: column;
+    align-items: flex-start;
+    .btn { align-self: flex-start; }
+  }
+}

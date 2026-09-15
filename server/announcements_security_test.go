@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"trace-ux/server/store"
 )
 
 // A link_url that net/url parses happily can still contain a double quote,
@@ -22,10 +24,10 @@ func TestAnnouncementLinkRejectsAttributeInjection(t *testing.T) {
 		"//example.com/protocol-relative",
 	}
 	for _, raw := range bad {
-		if validAnnouncementLink(raw) {
-			t.Errorf("validAnnouncementLink(%q) = true, want false", raw)
+		if store.ValidAnnouncementLink(raw) {
+			t.Errorf("store.ValidAnnouncementLink(%q) = true, want false", raw)
 		}
-		if validateAnnouncement(Announcement{Title: "t", LinkURL: raw}) == nil {
+		if store.ValidateAnnouncement(store.Announcement{Title: "t", LinkURL: raw}) == nil {
 			t.Errorf("validateAnnouncement accepted link_url %q", raw)
 		}
 	}
@@ -34,8 +36,8 @@ func TestAnnouncementLinkRejectsAttributeInjection(t *testing.T) {
 		"https://example.com/changelog?v=2#top",
 		"http://localhost:8080/notes",
 	} {
-		if !validAnnouncementLink(raw) {
-			t.Errorf("validAnnouncementLink(%q) = false, want true", raw)
+		if !store.ValidAnnouncementLink(raw) {
+			t.Errorf("store.ValidAnnouncementLink(%q) = false, want true", raw)
 		}
 	}
 }
@@ -44,15 +46,15 @@ func TestAnnouncementLinkRejectsAttributeInjection(t *testing.T) {
 // pages, so only real hex triplets may be stored or served.
 func TestAnnouncementAppearanceRequiresHexColors(t *testing.T) {
 	for _, c := range []string{"#}a{b:", "#red;}", "red", "#12345", "#gggggg", "rgb(0,0,0)"} {
-		s := DefaultSiteSettings()
-		s.UpdatesAppearance = &AnnouncementAppearance{Accent: c}
-		if err := ValidateSiteSettings(s); err == nil {
+		s := store.DefaultSiteSettings()
+		s.UpdatesAppearance = &store.AnnouncementAppearance{Accent: c}
+		if err := store.ValidateSiteSettings(s); err == nil {
 			t.Errorf("ValidateSiteSettings accepted announcement color %q", c)
 		}
 	}
-	s := DefaultSiteSettings()
-	s.UpdatesAppearance = &AnnouncementAppearance{Accent: "#2f7d4a", PanelBg: "#fff"}
-	if err := ValidateSiteSettings(s); err != nil {
+	s := store.DefaultSiteSettings()
+	s.UpdatesAppearance = &store.AnnouncementAppearance{Accent: "#2f7d4a", PanelBg: "#fff"}
+	if err := store.ValidateSiteSettings(s); err != nil {
 		t.Fatalf("ValidateSiteSettings rejected valid colors: %v", err)
 	}
 }
@@ -61,7 +63,7 @@ func TestAnnouncementAppearanceRequiresHexColors(t *testing.T) {
 // must scrub them rather than hand them to the tracker.
 func TestParseSiteSettingsDropsUnsafeStoredColors(t *testing.T) {
 	stored := `{"updates_appearance":{"accent":"#}a{b:"},"appearance":{"button_bg":"#</sty","panel_bg":"#ffffff"}}`
-	s := ParseSiteSettings(stored)
+	s := store.ParseSiteSettings(stored)
 	if s.UpdatesAppearance.Accent != "" {
 		t.Errorf("updates accent = %q, want empty", s.UpdatesAppearance.Accent)
 	}
@@ -82,7 +84,7 @@ func TestPublicUpdatesAreRateLimited(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().Unix()
-	if _, err := srv.store.db.Exec(
+	if _, err := srv.store.DB.Exec(
 		`INSERT INTO announcements(site_id,title,summary,body,release_label,link_url,status,published_at,created_at,updated_at)
 		 VALUES(?,'t','','','','','published',?,?,?)`, site.ID, now, now, now); err != nil {
 		t.Fatal(err)
@@ -120,7 +122,7 @@ func TestCommentsCappedPerVisitor(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().Unix()
-	if _, err := srv.store.db.Exec(
+	if _, err := srv.store.DB.Exec(
 		`INSERT INTO announcements(site_id,title,summary,body,release_label,link_url,status,published_at,created_at,updated_at)
 		 VALUES(?,'t','','','','','published',?,?,?)`, site.ID, now, now, now); err != nil {
 		t.Fatal(err)
@@ -152,7 +154,7 @@ func TestReactionIgnoresClientSuppliedHeader(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().Unix()
-	if _, err := srv.store.db.Exec(
+	if _, err := srv.store.DB.Exec(
 		`INSERT INTO announcements(site_id,title,summary,body,release_label,link_url,status,published_at,created_at,updated_at)
 		 VALUES(?,'t','','','','','published',?,?,?)`, site.ID, now, now, now); err != nil {
 		t.Fatal(err)
@@ -170,7 +172,7 @@ func TestReactionIgnoresClientSuppliedHeader(t *testing.T) {
 	resp.Body.Close()
 
 	var n int
-	if err := srv.store.db.QueryRow(`SELECT COUNT(*) FROM announcement_reactions`).Scan(&n); err != nil {
+	if err := srv.store.DB.QueryRow(`SELECT COUNT(*) FROM announcement_reactions`).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
 	if n != 1 {
@@ -190,7 +192,7 @@ func TestPublicUpdatesDoNotLeakInternalErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	var rows []Announcement
+	var rows []store.Announcement
 	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
 		t.Fatalf("decode: %v", err)
 	}

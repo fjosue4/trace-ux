@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"trace-ux/server/store"
 )
 
 func ticketJSONRequest(t *testing.T, method, url, body string) (*http.Response, []byte) {
@@ -50,7 +52,7 @@ func TestPublicTicketsAuthorizeOnlyBySiteAndVisitorKey(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("create ticket: got %d (%s)", resp.StatusCode, data)
 	}
-	var created Ticket
+	var created store.Ticket
 	if err := json.Unmarshal(data, &created); err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +84,7 @@ func TestPublicTicketsAuthorizeOnlyBySiteAndVisitorKey(t *testing.T) {
 
 	// A session that belongs to another site is discarded rather than allowing
 	// the ticket to attach to the wrong recording.
-	if err := srv.store.ensureSessionForSite(secondSite.ID, "owned-by-second", time.Now().Unix()); err != nil {
+	if err := srv.store.EnsureSessionForSite(secondSite.ID, "owned-by-second", time.Now().Unix()); err != nil {
 		t.Fatal(err)
 	}
 	resp, data = ticketJSONRequest(t, http.MethodPost, createURL,
@@ -90,7 +92,7 @@ func TestPublicTicketsAuthorizeOnlyBySiteAndVisitorKey(t *testing.T) {
 	if resp.StatusCode != http.StatusCreated {
 		t.Fatalf("mismatched session create: got %d (%s)", resp.StatusCode, data)
 	}
-	var mismatched Ticket
+	var mismatched store.Ticket
 	if err := json.Unmarshal(data, &mismatched); err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +117,7 @@ func TestPublicTicketValidationClosedReplyAndCors(t *testing.T) {
 		t.Fatalf("missing email: got %d, want 400", resp.StatusCode)
 	}
 
-	input := NewTicket{SiteID: site.ID, VisitorKey: "closed-key", Email: "person@example.com", Subject: "Closed", Body: "Initial message"}
+	input := store.NewTicket{SiteID: site.ID, VisitorKey: "closed-key", Email: "person@example.com", Subject: "Closed", Body: "Initial message"}
 	closed, err := srv.store.CreateTicket(input)
 	if err != nil {
 		t.Fatal(err)
@@ -170,8 +172,8 @@ func TestPublicTicketCaps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < maxOpenTicketsPerVisitor; i++ {
-		_, err := srv.store.CreateTicket(NewTicket{
+	for i := 0; i < store.MaxOpenTicketsPerVisitor; i++ {
+		_, err := srv.store.CreateTicket(store.NewTicket{
 			SiteID: site.ID, VisitorKey: "cap-key-open", Email: "person@example.com",
 			Subject: fmt.Sprintf("Open %d", i), Body: "Initial message",
 		})
@@ -185,14 +187,14 @@ func TestPublicTicketCaps(t *testing.T) {
 		t.Fatalf("open ticket cap: got %d (%s), want 429", resp.StatusCode, data)
 	}
 
-	messageTicket, err := srv.store.CreateTicket(NewTicket{
+	messageTicket, err := srv.store.CreateTicket(store.NewTicket{
 		SiteID: site.ID, VisitorKey: "cap-key-messages", Email: "person@example.com",
 		Subject: "Many messages", Body: "Initial message",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for i := 1; i < maxMessagesPerTicket; i++ {
+	for i := 1; i < store.MaxMessagesPerTicket; i++ {
 		if _, err := srv.store.AddTicketMessage(messageTicket.ID, "staff", 1, "agent", "reply"); err != nil {
 			t.Fatal(err)
 		}
@@ -211,7 +213,7 @@ func TestDashboardTicketRoutesRequireAuthAndReply(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ticket, err := srv.store.CreateTicket(NewTicket{SiteID: site.ID, VisitorKey: "dashboard-key", Email: "person@example.com", Subject: "Dashboard", Body: "Hello"})
+	ticket, err := srv.store.CreateTicket(store.NewTicket{SiteID: site.ID, VisitorKey: "dashboard-key", Email: "person@example.com", Subject: "Dashboard", Body: "Hello"})
 	if err != nil {
 		t.Fatal(err)
 	}

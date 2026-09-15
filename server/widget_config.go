@@ -1,6 +1,10 @@
 package main
 
-import "strings"
+import (
+	"strings"
+
+	"trace-ux/server/store"
+)
 
 // The feedback panel and the announcements panel are one widget: a single
 // launcher opens a single panel whose sections depend on what the site has
@@ -87,14 +91,14 @@ func firstPositive(values ...int) int {
 // edits; the feedback object supplies anything the Widget tab does not cover
 // and keeps sites that only ever configured the old feedback widget looking
 // the way their operator left them.
-func resolveWidgetAppearance(s SiteSettings, iconURL string) WidgetAppearance {
+func resolveWidgetAppearance(s store.SiteSettings, iconURL string) WidgetAppearance {
 	updates := s.UpdatesAppearance
 	feedback := s.Appearance
 	if updates == nil {
-		updates = &AnnouncementAppearance{}
+		updates = &store.AnnouncementAppearance{}
 	}
 	if feedback == nil {
-		feedback = &SiteAppearance{}
+		feedback = &store.SiteAppearance{}
 	}
 
 	theme := updates.Theme
@@ -126,7 +130,7 @@ func resolveWidgetAppearance(s SiteSettings, iconURL string) WidgetAppearance {
 // buildWidgetConfig decides which sections the visitor can reach. A site with
 // only one of the two switched on still gets the widget — the panel simply
 // opens straight into the section that exists, with no tab strip.
-func buildWidgetConfig(site Site, iconURL string) WidgetConfig {
+func buildWidgetConfig(site store.Site, iconURL string) WidgetConfig {
 	s := site.Settings
 	// Position is a property of the launcher, so it comes from the widget's own
 	// setting (Widget tab) rather than from either section.

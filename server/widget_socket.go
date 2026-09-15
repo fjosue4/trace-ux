@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"trace-ux/server/store"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -19,11 +21,11 @@ const (
 )
 
 type widgetSocketEvent struct {
-	Type         string         `json:"type"`
-	ID           int64          `json:"id,omitempty"`
-	Announcement *Announcement  `json:"announcement,omitempty"`
-	Ticket       *Ticket        `json:"ticket,omitempty"`
-	Message      *TicketMessage `json:"message,omitempty"`
+	Type         string               `json:"type"`
+	ID           int64                `json:"id,omitempty"`
+	Announcement *store.Announcement  `json:"announcement,omitempty"`
+	Ticket       *store.Ticket        `json:"ticket,omitempty"`
+	Message      *store.TicketMessage `json:"message,omitempty"`
 }
 
 type widgetSocketClient struct {
@@ -34,7 +36,7 @@ type widgetSocketClient struct {
 	tickets    bool
 	// dashboardTickets receives authenticated ticket events for every site.
 	dashboardTickets bool
-	send       chan []byte
+	send             chan []byte
 }
 
 type widgetSocketHub struct {

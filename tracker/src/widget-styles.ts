@@ -39,7 +39,7 @@ export function widgetCSS(): string {
   min-width: 20px; height: 20px; padding: 0 6px; margin-inline-start: 2px;
   border-radius: 999px;
   background: var(--w-button-text); color: var(--w-button-bg);
-  font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+  font-size: 11px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums;
 }
 
 /* A site that uploaded its own mark gets an icon-only launcher: the image is
@@ -52,7 +52,7 @@ export function widgetCSS(): string {
 .launcher--icon .launcher__icon img { width: 48px; height: 48px; object-fit: cover; display: block; }
 .launcher--icon .launcher__icon svg { width: 22px; height: 22px; }
 .launcher--icon .launcher__badge {
-  position: absolute; top: -3px; right: -3px; margin: 0;
+  position: absolute; top: -3px; right: -2px; margin: 0;
   min-width: 19px; height: 19px; padding: 0 5px;
   border: 2px solid var(--w-panel-bg);
   background: var(--w-accent); color: #fff;
@@ -147,6 +147,10 @@ export function widgetCSS(): string {
 }
 .item:last-child { border-bottom: 0; }
 .item:hover { background: var(--w-hover); }
+/* The toast's open button reuses .item with its padding zeroed (the toast
+   wrapper already supplies it), so the inherited hover fill would hug the
+   text with no breathing room. */
+.detail > .item:hover { background: transparent; }
 .item:focus-visible { outline: 2px solid var(--w-accent); outline-offset: -2px; }
 .item__top { display: flex; align-items: center; gap: 8px; }
 .eyebrow {
@@ -251,12 +255,10 @@ export function widgetCSS(): string {
 .ticket-thread__meta .detail__link { margin-top: 0; font-size: 11px; }
 .ticket-messages {
   display: flex; flex: 1; min-height: 0; flex-direction: column; gap: 9px; margin-top: 20px;
-  overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable;
-  scrollbar-width: thin; scrollbar-color: var(--w-line) transparent;
+  overflow-y: auto; overscroll-behavior: contain;
+  scrollbar-width: none;
 }
-.ticket-messages::-webkit-scrollbar { width: 10px; }
-.ticket-messages::-webkit-scrollbar-track { background: transparent; }
-.ticket-messages::-webkit-scrollbar-thumb { background: var(--w-line); border: 3px solid var(--w-panel-bg); border-radius: 999px; }
+.ticket-messages::-webkit-scrollbar { display: none; width: 0; height: 0; }
 .ticket-message { max-width: 88%; padding: 10px 12px; border: 1px solid var(--w-line); border-radius: 13px; background: var(--w-field); }
 .ticket-message--visitor { align-self: flex-end; border-bottom-right-radius: 4px; }
 .ticket-message--staff { align-self: flex-start; border-bottom-left-radius: 4px; background: var(--w-hover); }

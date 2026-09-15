@@ -1,0 +1,68 @@
+@use 'abstracts' as *;
+
+.site-row {
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+  min-height: 72px;
+  padding: 0.95rem 1.35rem;
+  transition: background-color $duration-fast $ease-out;
+
+  &:hover { background: $surface-2; }
+  & + & { border-top: 1px solid $line; }
+
+  &__icon {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border: 1px solid $line;
+    border-radius: $radius-sm;
+    background: $surface-2;
+    color: $accent;
+  }
+
+  &__main { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; flex: 1; }
+  &__name { font-weight: 700; font-size: 0.95rem; color: $ink; }
+  &__key {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    min-width: 0;
+
+    .mono { font-size: 0.78rem; color: $muted; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .icon-btn { width: 24px; height: 24px; }
+  }
+
+  &__stats { display: flex; flex-direction: column; gap: 0.22rem; flex: none; min-width: 154px; }
+  &__actions { display: flex; align-items: center; gap: 0.4rem; flex: none; margin-left: auto; }
+}
+
+.site-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: $ink-2;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .site-row {
+    flex-wrap: wrap;
+    &__stats { min-width: 0; flex-direction: row; gap: 0.9rem; }
+    &__actions { margin-left: 52px; }
+  }
+}
+
+@media (max-width: 520px) {
+  .site-row {
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+    &__main { width: calc(100% - 52px); }
+    &__stats { width: 100%; margin-left: 0; justify-content: space-between; }
+    &__actions { width: 100%; margin-left: 0; justify-content: flex-end; }
+  }
+}

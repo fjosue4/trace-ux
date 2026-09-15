@@ -5,18 +5,20 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+
+	"trace-ux/server/store"
 )
 
 // ---- Dashboard log endpoints (auth-protected, same-origin) ----
 
-func parseLogFilter(r *http.Request) (LogFilter, error) {
+func parseLogFilter(r *http.Request) (store.LogFilter, error) {
 	q := r.URL.Query()
-	f := LogFilter{
+	f := store.LogFilter{
 		Severity:  strings.TrimSpace(q.Get("severity")),
 		SessionID: strings.TrimSpace(q.Get("session_id")),
-		Limit:     maxLogListLimit,
+		Limit:     store.MaxLogListLimit,
 	}
-	if f.Severity != "" && !validLogSeverity(f.Severity) {
+	if f.Severity != "" && !store.ValidLogSeverity(f.Severity) {
 		return f, fmt.Errorf("invalid severity")
 	}
 	if f.SessionID != "" && (len(f.SessionID) > maxSessionIDLength || !validSessionID(f.SessionID)) {
@@ -50,8 +52,8 @@ func parseLogFilter(r *http.Request) (LogFilter, error) {
 	}
 	if value := q.Get("limit"); value != "" {
 		n, err := strconv.Atoi(value)
-		if err != nil || n <= 0 || n > maxLogListLimit {
-			return f, fmt.Errorf("limit must be 1-%d", maxLogListLimit)
+		if err != nil || n <= 0 || n > store.MaxLogListLimit {
+			return f, fmt.Errorf("limit must be 1-%d", store.MaxLogListLimit)
 		}
 		f.Limit = n
 	}

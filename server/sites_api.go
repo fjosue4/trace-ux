@@ -7,6 +7,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"trace-ux/server/store"
 )
 
 // ---- Site management endpoints ----
@@ -123,7 +125,7 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &raw); err != nil {
 		return
 	}
-	settings := DefaultSiteSettings()
+	settings := store.DefaultSiteSettings()
 	if _, ok := raw["widget_enabled"]; !ok {
 		// Keep legacy rows legacy when an older dashboard (or a GET/PUT
 		// round-trip from one) does not include the new master switch.
@@ -161,7 +163,7 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if v, ok := raw["updates_appearance"]; ok {
-		var a AnnouncementAppearance
+		var a store.AnnouncementAppearance
 		if err := json.Unmarshal(v, &a); err != nil {
 			writeErr(w, http.StatusBadRequest, "invalid updates_appearance")
 			return
@@ -169,7 +171,7 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 		settings.UpdatesAppearance = &a
 	}
 	if v, ok := raw["appearance"]; ok {
-		var a SiteAppearance
+		var a store.SiteAppearance
 		if err := json.Unmarshal(v, &a); err != nil {
 			writeErr(w, http.StatusBadRequest, "invalid appearance")
 			return
@@ -177,7 +179,7 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 		settings.Appearance = &a
 	}
 	if v, ok := raw["feedback_trigger"]; ok {
-		var t FeedbackTrigger
+		var t store.FeedbackTrigger
 		if err := json.Unmarshal(v, &t); err != nil {
 			writeErr(w, http.StatusBadRequest, "invalid feedback_trigger")
 			return
@@ -187,7 +189,7 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 	// Validate what the caller actually sent, before any position promotion —
 	// normalizing first would quietly coerce a bad value into a valid corner
 	// instead of reporting it.
-	if err := ValidateSiteSettings(settings); err != nil {
+	if err := store.ValidateSiteSettings(settings); err != nil {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -203,7 +205,7 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 			settings.WidgetPosition = settings.FeedbackPosition
 		}
 	}
-	normalizeWidgetPosition(&settings)
+	store.NormalizeWidgetPosition(&settings)
 	site, _, _, _, err := s.store.GetSiteDetail(id)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())

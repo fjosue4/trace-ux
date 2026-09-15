@@ -1,0 +1,42 @@
+// Shared by Replay and ShareReplay (the public share page reuses this same
+// shell). Kept as one stylesheet since both pages import it today.
+@use 'abstracts' as *;
+
+.replay-main { min-width: 0; }
+
+/* Public token replay keeps the current player, without the authenticated
+   dashboard shell. Keep the intro explicit so it remains readable in either
+   theme and preserve the Trace UX casing. */
+.share-replay-page { color: $ink; }
+.share-replay-intro,
+.share-replay-layout { max-width: 1380px; margin-inline: auto; }
+.share-replay-player { min-width: 0; }
+.share-replay-intro { margin-bottom: 1.25rem; }
+.share-replay-eyebrow {
+  margin: 0 0 0.45rem;
+  color: $accent;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  line-height: 1.35;
+}
+.share-replay-intro h1 { color: $ink; }
+.share-replay-intro .muted { color: $muted; }
+
+.share-replay-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 1.2rem;
+  align-items: start;
+
+  .replay-side { min-width: 0; }
+}
+
+@media (max-width: 960px) {
+  .share-replay-layout { grid-template-columns: 1fr; }
+}
+
+/* The replay page uses a slightly tighter bottom edge around the player. */
+.page.page--wide {
+  padding-bottom: 2rem;
+}

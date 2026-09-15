@@ -1290,7 +1290,13 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     tabButtons.forEach((tab, id) => tab.setAttribute('aria-selected', String(id === next)));
     swapView(selected.build, dir);
     if (sections.length > 1) moveTabMarker();
-    if (next === 'tickets' && Date.now() - lastTicketFetch > 30_000) void loadTickets();
+    if (next === 'tickets') {
+      // A cached thread renders its messages immediately from swapView above,
+      // with no fetch to hang a scroll off afterward — reopening the panel or
+      // switching back into this tab must still land on the latest message.
+      if (ticketView.kind === 'thread') scrollTicketMessagesToLatest();
+      if (Date.now() - lastTicketFetch > 30_000) void loadTickets();
+    }
   }
 
   // ---- open / close ----
