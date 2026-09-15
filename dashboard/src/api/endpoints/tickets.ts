@@ -10,6 +10,16 @@ export const ticketsEndpoints = {
     return request<Ticket[]>(`/api/tickets${q.toString() ? `?${q}` : ''}`);
   },
   getTicket: (id: number) => request<TicketThread>(`/api/tickets/${id}`),
+  createTicket: (input: {
+    site_id: number;
+    visitor_key: string;
+    email: string;
+    subject: string;
+    body: string;
+    user_id?: string;
+    name?: string;
+    session_id?: string;
+  }) => request<Ticket>('/api/tickets', { method: 'POST', body: JSON.stringify(input) }),
   replyToTicket: (id: number, body: string) =>
     request<TicketThread>(`/api/tickets/${id}/messages`, {
       method: 'POST',

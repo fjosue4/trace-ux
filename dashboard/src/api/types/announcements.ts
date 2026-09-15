@@ -11,3 +11,16 @@ export type Announcement = {
   release_label: string; link_url: string; status: AnnouncementStatus; published_at: number;
   created_at: number; updated_at: number; reactions: number; comments: number; reads: number;
 };
+
+export type AnnouncementEngagementEntry = {
+  id: number;
+  visitor_key: string;
+  user_id?: string;
+  body?: string;
+  created_at: number;
+};
+
+export type AnnouncementEngagement = {
+  reactions: AnnouncementEngagementEntry[];
+  comments: AnnouncementEngagementEntry[];
+};

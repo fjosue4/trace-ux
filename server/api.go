@@ -230,9 +230,11 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/announcements/{id}/publish", s.auth(s.requireAdmin(s.handlePublishAnnouncement)))
 	mux.HandleFunc("POST /api/announcements/{id}/archive", s.auth(s.requireAdmin(s.handleArchiveAnnouncement)))
 	mux.HandleFunc("DELETE /api/announcements/comments/{id}", s.auth(s.requireAdmin(s.handleDeleteAnnouncementComment)))
+	mux.HandleFunc("GET /api/announcements/{id}/engagement", s.auth(s.handleAnnouncementEngagement))
 
 	// Support tickets. Staff can read and reply; only admins can delete.
 	mux.HandleFunc("GET /api/tickets", s.auth(s.handleListTickets))
+	mux.HandleFunc("POST /api/tickets", s.auth(s.handleCreateStaffTicket))
 	mux.HandleFunc("GET /api/tickets/socket", s.auth(s.handleDashboardTicketSocket))
 	mux.HandleFunc("GET /api/tickets/{id}", s.auth(s.handleGetTicket))
 	mux.HandleFunc("POST /api/tickets/{id}/messages", s.auth(s.handleStaffTicketReply))
@@ -258,6 +260,13 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/demo/replay/{token}/events", s.handleDemoReplayEvents)
 
 	mux.HandleFunc("GET /t.js", s.handleTracker)
+
+	// An unknown /api path must not fall through to the SPA. Serving index.html
+	// with 200 turns "this server is older than the dashboard" into a JSON parse
+	// error at the call site, which is a miserable thing to debug.
+	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+		writeErr(w, http.StatusNotFound, "unknown API endpoint")
+	})
 
 	mux.Handle("/", s.static)
 

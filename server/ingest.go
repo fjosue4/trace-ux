@@ -67,12 +67,14 @@ type ingestLogs struct {
 }
 
 type ingestFeedback struct {
-	Type      string                 `json:"type"`
-	SessionID string                 `json:"session_id"`
-	SurveyID  string                 `json:"survey_id"`
-	Rating    int                    `json:"rating"`
-	Comment   string                 `json:"comment"`
-	Answers   []store.FeedbackAnswer `json:"answers"`
+	Type       string                 `json:"type"`
+	SessionID  string                 `json:"session_id"`
+	VisitorKey string                 `json:"visitor_key"`
+	UserID     string                 `json:"user_id"`
+	SurveyID   string                 `json:"survey_id"`
+	Rating     int                    `json:"rating"`
+	Comment    string                 `json:"comment"`
+	Answers    []store.FeedbackAnswer `json:"answers"`
 }
 
 type ingestEvents struct {
@@ -326,7 +328,22 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 				answersJSON = string(b)
 			}
 		}
-		_, err = s.store.SaveFeedback(site.ID, env.SessionID, m.SurveyID, m.Rating, m.Comment, answersJSON)
+		if len(m.VisitorKey) > 100 {
+			m.VisitorKey = ""
+		}
+		if len(m.UserID) > maxIdentityLength {
+			m.UserID = ""
+		}
+		_, err = s.store.SaveFeedback(store.NewFeedback{
+			SiteID:      site.ID,
+			SessionID:   env.SessionID,
+			VisitorKey:  m.VisitorKey,
+			UserID:      m.UserID,
+			SurveyID:    m.SurveyID,
+			Rating:      m.Rating,
+			Comment:     m.Comment,
+			AnswersJSON: answersJSON,
+		})
 	default:
 		writeErr(w, http.StatusBadRequest, "unknown batch type")
 		return

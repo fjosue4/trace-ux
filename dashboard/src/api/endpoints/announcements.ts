@@ -1,5 +1,5 @@
 import { request } from '../client';
-import { Announcement } from '../types/announcements';
+import { Announcement, AnnouncementEngagement } from '../types/announcements';
 
 export const announcementsEndpoints = {
   listAnnouncements: (siteId: number | null) => request<Announcement[]>(`/api/announcements${siteId ? `?site_id=${siteId}` : ''}`),
@@ -8,4 +8,6 @@ export const announcementsEndpoints = {
   publishAnnouncement: (id: number) => request<{ ok: boolean }>(`/api/announcements/${id}/publish`, { method: 'POST' }),
   archiveAnnouncement: (id: number) => request<{ ok: boolean }>(`/api/announcements/${id}/archive`, { method: 'POST' }),
   deleteAnnouncement: (id: number) => request<{ ok: boolean }>(`/api/announcements/${id}`, { method: 'DELETE' }),
+  getAnnouncementEngagement: (id: number) => request<AnnouncementEngagement>(`/api/announcements/${id}/engagement`),
+  deleteAnnouncementComment: (id: number) => request<{ ok: boolean }>(`/api/announcements/comments/${id}`, { method: 'DELETE' }),
 };
