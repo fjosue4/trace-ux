@@ -71,6 +71,7 @@ export type Announcement = {
   status?: string;
   updated_at?: number;
   liked?: boolean;
+  commented?: boolean;
   read?: boolean;
 };
 
@@ -635,6 +636,13 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     actions.appendChild(like);
     detail.appendChild(actions);
 
+    if (a.commented) {
+      const already = el('div', 'inline-note', 'You already commented on this update.');
+      detail.appendChild(already);
+      view.appendChild(detail);
+      return view;
+    }
+
     const composer = el('form', 'composer');
     const input = el('input', 'field');
     input.type = 'text';
@@ -654,16 +662,21 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       if (!res || !res.ok) {
         input.disabled = false;
         send.disabled = false;
-        // 429 here is the per-visitor comment cap, not a transient failure.
-        const note = el('div', 'inline-note', res && res.status === 429
-          ? "You've already sent the maximum number of comments on this update."
-          : 'That comment could not be sent. Please try again.');
+        // 409 is the one-comment-per-visitor rule; 429 is the per-announcement
+        // ceiling. Neither is transient, so neither should read as "try again".
+        const note = el('div', 'inline-note',
+          res && res.status === 409
+            ? 'You already commented on this update.'
+            : res && res.status === 429
+              ? 'This update has reached its comment limit.'
+              : 'That comment could not be sent. Please try again.');
         composer.after(note);
         animateIn(note);
         setTimeout(() => note.remove(), 6000);
         return;
       }
       a.comments += 1;
+      a.commented = true;
       const done = el('div', 'inline-note', 'Thanks — your comment was sent.');
       composer.replaceWith(done);
       animateIn(done);

@@ -78,9 +78,13 @@ export default function UserRow({ user, currentUsername, onEvent, onChanged }: U
             <Button variant="ghost" size="sm" onClick={startEditing}>
               Set password
             </Button>
-            <Button variant="dangerGhost" size="sm" onClick={() => setConfirming(true)}>
-              Delete
-            </Button>
+            {isCurrentUser ? (
+              <span className="muted small user-row__current">Current account</span>
+            ) : (
+              <Button variant="dangerGhost" size="sm" onClick={() => setConfirming(true)}>
+                Delete
+              </Button>
+            )}
           </>
         )}
       </td>

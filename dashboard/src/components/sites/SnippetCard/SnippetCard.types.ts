@@ -9,4 +9,4 @@ export type SnippetCardProps = {
   onConfigureSite?: () => void;
 };
 
-export type InstallMethod = 'manual' | 'gtm';
+export type InstallMethod = 'npm' | 'gtm' | 'manual';

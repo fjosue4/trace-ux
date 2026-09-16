@@ -6,6 +6,11 @@
   .btn--sm { margin-left: 0.25rem; }
 }
 
+.user-row__current {
+  display: inline-block;
+  margin-left: 0.25rem;
+}
+
 .inline-edit {
   display: inline-flex;
   gap: 0.4rem;
