@@ -8,7 +8,8 @@
 
 .user-row__current {
   display: inline-block;
-  margin-left: 0.25rem;
+  /* Sits before the actions now, so the gap belongs on the right. */
+  margin-right: 0.5rem;
 }
 
 .inline-edit {

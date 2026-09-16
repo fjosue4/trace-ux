@@ -75,16 +75,24 @@ export default function UserRow({ user, currentUsername, onEvent, onChanged }: U
           </span>
         ) : (
           <>
+            {/* The marker sits to the LEFT of the actions it explains, and the
+                Delete button stays visible but disabled rather than being
+                swapped out. Removing the control moves everything beside it and
+                makes this row a different shape from every other one; keeping
+                it in place says "not for you" instead of "not here". */}
+            {isCurrentUser && <span className="muted small user-row__current">Current user</span>}
             <Button variant="ghost" size="sm" onClick={startEditing}>
               Set password
             </Button>
-            {isCurrentUser ? (
-              <span className="muted small user-row__current">Current account</span>
-            ) : (
-              <Button variant="dangerGhost" size="sm" onClick={() => setConfirming(true)}>
-                Delete
-              </Button>
-            )}
+            <Button
+              variant="dangerGhost"
+              size="sm"
+              disabled={isCurrentUser}
+              title={isCurrentUser ? 'You cannot delete the account you are signed in with' : undefined}
+              onClick={() => setConfirming(true)}
+            >
+              Delete
+            </Button>
           </>
         )}
       </td>

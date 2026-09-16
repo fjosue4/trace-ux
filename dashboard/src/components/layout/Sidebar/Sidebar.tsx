@@ -33,6 +33,14 @@ export default function Sidebar({ user, onLogout }: SidebarProps) {
       </motion.nav>
 
       <div className="sidebar__footer">
+        {/* Above the theme toggle, so "which build is this?" is answerable
+            without opening System health -- which is admin-only, and the
+            person hitting a bad replay is often not an admin. */}
+        {user.version && (
+          <div className="sidebar__version mono" title={`TraceUX ${user.version}`}>
+            {user.version}
+          </div>
+        )}
         <ThemeToggle />
         <div className="sidebar__user">
           <span className="mono">{user.username}</span>

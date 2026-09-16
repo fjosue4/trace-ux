@@ -583,7 +583,15 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	u := currentUser(r)
-	writeJSON(w, http.StatusOK, map[string]string{"username": u.Username, "role": u.Role})
+	// The build version rides along here rather than on /api/system/health,
+	// which is admin-only: "which version am I looking at" is the first thing
+	// anyone asks when a replay misbehaves, and a viewer reporting the problem
+	// needs to be able to answer it too.
+	writeJSON(w, http.StatusOK, map[string]string{
+		"username": u.Username,
+		"role":     u.Role,
+		"version":  version,
+	})
 }
 
 // handleChangePassword lets any logged-in user rotate their own password after

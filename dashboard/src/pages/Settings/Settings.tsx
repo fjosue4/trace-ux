@@ -57,7 +57,7 @@ export default function Settings() {
         <Card className="settings__team">
           <h3>Team</h3>
           <p className="muted small">
-            As an admin you can create users, reset passwords, switch roles and remove accounts.
+            As an admin you can create users, reset passwords, switch roles and remove users.
           </p>
           <UserManager currentUsername={user.username} />
         </Card>

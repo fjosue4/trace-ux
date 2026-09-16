@@ -20,7 +20,7 @@ export default function UserManager({ currentUsername }: UserManagerProps) {
       <div className="row row--between">
         <p className="muted small">
           Admins manage users and sites; viewers browse sites, sessions and replays. Changing a
-          password or role signs that user out everywhere. Your current account cannot be removed.
+          password or role signs that user out everywhere. You cannot remove the user you are signed in as.
         </p>
         <Button size="sm" onClick={() => setAdding(true)}>
           <Icon name="plus" size={13} />

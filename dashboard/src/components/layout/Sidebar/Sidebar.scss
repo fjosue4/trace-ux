@@ -151,3 +151,13 @@
     &__footer .btn { display: none; }
   }
 }
+
+// Build version, above the theme toggle. Quiet by default: it is reference
+// information you go looking for, not something to compete with navigation.
+.sidebar__version {
+  font-size: 0.72rem;
+  color: var(--muted, #8b95a5);
+  opacity: 0.75;
+  padding: 0 0.25rem 0.5rem;
+  user-select: text; // it gets pasted into bug reports
+}
