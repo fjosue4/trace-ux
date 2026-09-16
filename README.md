@@ -124,7 +124,11 @@ const traceux = init({
   siteKey: 'YOUR_SITE_KEY',
   origin: 'https://your-server.example.com',
   userId: currentUser?.id,
-  widget: true, // optional; the server still controls enabled sections
+  // Loads the Help & updates widget (announcements, feedback, support).
+  // Which sections actually appear is controlled per site from
+  // Site -> Widget in the dashboard, so you can switch it off there
+  // without redeploying this code.
+  widget: true,
 });
 
 traceux.identify({ userId: user.id }); // after login
@@ -284,6 +288,8 @@ No external database, no queue, no other services — SQLite lives in `/var/lib/
 | `TRACE_UX_MAX_GB_DISK`   | — *(no limit)* | Disk budget in GB; over it, oldest recordings are deleted |
 | `TRACE_UX_MAX_EVENT_MB`  | `4`       | Ceiling on one rrweb event; raise it if replays are blank |
 | `TRACE_UX_CHECKOUT_INTERVAL_MS` | `30000` | How often rrweb re-snapshots the DOM — the main storage lever |
+| `TRACE_UX_INLINE_STYLESHEET` | `1` | Copy page CSS into every snapshot. `0` shrinks snapshots but replays load CSS cross-origin |
+| `TRACE_UX_SLIM_DOM`      | `1`       | Drop comments, `<script>`, favicons and social meta from snapshots |
 | `TRACE_UX_SPACE_FLOOR_DAYS`| `3`     | The budget never deletes recordings newer than this   |
 | `TRACE_UX_DEMO_REPLAY`  | `0`       | Enable short-lived public demo replay links            |
 | `TRACE_UX_DEMO_REPLAY_TTL` | `900`  | Demo replay lifetime in seconds (60–3600)             |
@@ -319,6 +325,18 @@ start is unaffected. Accepted range is 5,000–3,600,000 ms.
 
 If your CSS bundle is large, note that it is inlined into *every* snapshot —
 shrinking the bundle and raising the interval multiply together.
+
+`TRACE_UX_INLINE_STYLESHEET` controls that inlining. It defaults to on, matching
+rrweb. Turning it off makes snapshots dramatically smaller, but the replay must
+then load your stylesheets from the recorded origin, which the replay page's own
+`style-src 'self'` CSP blocks — so replays come back unstyled. The server stores
+each distinct stylesheet once regardless, so leaving this on is usually the
+right trade.
+
+`TRACE_UX_SLIM_DOM` drops content a replay never needs: comments, `<script>`
+tags (they do not execute during playback), favicons, and social, robots and
+verification meta tags. On by default, worth a fraction of a percent, and
+harmless.
 
 ### Disk budget
 
