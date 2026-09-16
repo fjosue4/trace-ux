@@ -183,7 +183,11 @@ func (s *Server) handlePublicAnnouncements(w http.ResponseWriter, r *http.Reques
 	}
 	if v := publicVisitor(r); v != "" {
 		for i := range rows {
-			_ = s.store.DB.QueryRow(`SELECT EXISTS(SELECT 1 FROM announcement_reactions WHERE announcement_id=? AND visitor_key=?),EXISTS(SELECT 1 FROM announcement_reads WHERE announcement_id=? AND visitor_key=?)`, rows[i].ID, v, rows[i].ID, v).Scan(&rows[i].Liked, &rows[i].Read)
+			_ = s.store.DB.QueryRow(`SELECT
+				EXISTS(SELECT 1 FROM announcement_reactions WHERE announcement_id=? AND visitor_key=?),
+				EXISTS(SELECT 1 FROM announcement_reads     WHERE announcement_id=? AND visitor_key=?),
+				EXISTS(SELECT 1 FROM announcement_comments  WHERE announcement_id=? AND visitor_key=?)`,
+				rows[i].ID, v, rows[i].ID, v, rows[i].ID, v).Scan(&rows[i].Liked, &rows[i].Read, &rows[i].Commented)
 		}
 	}
 	writeJSON(w, 200, rows)
@@ -261,7 +265,11 @@ func (s *Server) handleAnnouncementRead(w http.ResponseWriter, r *http.Request) 
 // visitor key cannot flood one announcement, and one announcement cannot grow
 // without bound no matter how many keys an attacker rotates through.
 const (
-	maxCommentsPerVisitor      = 10
+	// One comment per visitor per announcement. An announcement is a notice,
+	// not a thread: a visitor with more to say has the support widget, and
+	// allowing several leaves the dashboard reading the same person twice
+	// with no way to tell a follow-up from a duplicate.
+	maxCommentsPerVisitor      = 1
 	maxCommentsPerAnnouncement = 5_000
 )
 
@@ -284,7 +292,11 @@ func (s *Server) handleAnnouncementComment(w http.ResponseWriter, r *http.Reques
 		writeErr(w, 500, "could not save comment")
 		return
 	}
-	if byVisitor >= maxCommentsPerVisitor || total >= maxCommentsPerAnnouncement {
+	if byVisitor >= maxCommentsPerVisitor {
+		writeErr(w, 409, "you have already commented on this announcement")
+		return
+	}
+	if total >= maxCommentsPerAnnouncement {
 		writeErr(w, 429, "comment limit reached for this announcement")
 		return
 	}

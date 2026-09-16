@@ -23,6 +23,7 @@ type Announcement struct {
 	Reads        int64  `json:"reads"`
 	Liked        bool   `json:"liked,omitempty"`
 	Read         bool   `json:"read,omitempty"`
+	Commented    bool   `json:"commented,omitempty"`
 }
 
 type AnnouncementComment struct {
