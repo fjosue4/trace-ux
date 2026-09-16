@@ -5,7 +5,11 @@ export function useWidgetPreview({ draft, launcherPlaceholder }: Pick<WidgetPrev
   const configured = draft.updates_appearance ?? {};
   const legacy = draft.appearance ?? {};
   const theme = configured.theme ?? 'light';
-  const left = (draft.widget_position ?? 'right') === 'left';
+  // endsWith, not equality: 'middle-left' is a left-side position too, and an
+  // equality check silently previewed it on the right.
+  const pos = draft.widget_position ?? 'right';
+  const left = pos.endsWith('left');
+  const middle = pos.startsWith('middle-');
   const accent = configured.accent || legacy.accent || legacy.primary || '#2f7d4a';
   const panelBg = configured.panel_bg || legacy.panel_bg || (theme === 'dark' ? '#121b16' : '#ffffff');
   const panelText = configured.panel_text || legacy.panel_text || (theme === 'dark' ? '#eef5f0' : '#142018');
@@ -34,5 +38,5 @@ export function useWidgetPreview({ draft, launcherPlaceholder }: Pick<WidgetPrev
     '--preview-button-text': buttonText,
   } as CSSProperties;
 
-  return { theme, left, sections, shown, visible, hidden, label, style };
+  return { theme, left, middle, sections, shown, visible, hidden, label, style };
 }

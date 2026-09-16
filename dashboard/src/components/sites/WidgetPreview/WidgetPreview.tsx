@@ -8,11 +8,11 @@ import './WidgetPreview.scss';
 // Every control in the Widget tab is represented here so changing a setting
 // updates the preview on the same render — no save or page refresh is needed.
 export default function WidgetPreview({ draft, iconUrl, launcherPlaceholder }: WidgetPreviewProps) {
-  const { theme, left, sections, shown, visible, hidden, label, style } = useWidgetPreview({ draft, launcherPlaceholder });
+  const { theme, left, middle, sections, shown, visible, hidden, label, style } = useWidgetPreview({ draft, launcherPlaceholder });
 
   return (
     <div
-      className={classNames('widget-preview', `is-${theme}`, left ? 'is-left' : 'is-right', { 'is-hidden': hidden })}
+      className={classNames('widget-preview', `is-${theme}`, left ? 'is-left' : 'is-right', { 'is-hidden': hidden, 'is-middle': middle })}
       style={style}
     >
       <div className="widget-preview__label">Live preview</div>

@@ -33,6 +33,7 @@ export type WidgetCfg = {
   feedback_enabled: boolean;
   tickets_enabled: boolean;
   position?: string;
+  anchor?: string; // bottom | middle
   title?: string;
   updates_label?: string;
   feedback_label?: string;
@@ -225,6 +226,9 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   const accent = ap.accent || '#2f7d4a';
   const dark = ap.theme === 'dark';
   const position = cfg.position === 'left' ? 'left' : 'right';
+  // Sent as its own field, not as extra values in `position`, so a tracker
+  // older than side anchors reads the side it understands and ignores this.
+  const anchor = cfg.anchor === 'middle' ? 'middle' : 'bottom';
   const sections: SectionDefinition[] = [
     cfg.updates_enabled && { id: 'updates', label: cfg.updates_label || "What's new", build: buildUpdatesList },
     cfg.tickets_enabled && { id: 'tickets', label: cfg.tickets_label || 'Support', build: buildTicketsView },
@@ -276,6 +280,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   // inset resolves against the box's *own* direction, so inset-inline-end
   // always meant `right` and the widget never left the right corner.
   if (position === 'left') root.classList.add('root--left');
+  if (anchor === 'middle') root.classList.add('root--middle');
 
   // ---- state ----
   let announcements: Announcement[] = [];
@@ -416,7 +421,12 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   panel.setAttribute('aria-modal', 'false');
   panel.setAttribute('aria-label', cfg.title || 'Help and updates');
   panel.hidden = true;
-  panel.style.transformOrigin = position === 'left' ? 'bottom left' : 'bottom right';
+  // The panel grows out of the launcher, so the origin follows where the
+  // launcher actually is. Mid-edge that is the side, not the bottom corner.
+  panel.style.transformOrigin =
+    anchor === 'middle'
+      ? position === 'left' ? 'left center' : 'right center'
+      : position === 'left' ? 'bottom left' : 'bottom right';
 
   const head = el('div', 'panel__head');
   const title = el('h2', 'panel__title', cfg.title || 'Help & updates');
@@ -459,22 +469,36 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   // ---- toast: a newly published post announcing itself ----
   const toast = el('div', 'panel');
   toast.hidden = true;
+  // Toasts stay in the bottom corner whatever the launcher does. One animating
+  // out of a mid-edge tab would cover the tab itself, and a toast is transient
+  // where the tab is permanent.
   toast.style.transformOrigin = position === 'left' ? 'bottom left' : 'bottom right';
   toast.setAttribute('role', 'status');
   root.appendChild(toast);
 
   // ---- animation helpers ----
+  // A bottom-corner panel rises; a mid-edge one comes out of the side. Moving
+  // the wrong axis reads as the panel detaching from its launcher rather than
+  // unfolding from it. `dur()` already collapses both to an instant state
+  // change under prefers-reduced-motion.
+  const OPEN_FROM = anchor === 'middle'
+    ? position === 'left' ? 'translateX(-10px) scale(.96)' : 'translateX(10px) scale(.96)'
+    : 'translateY(10px) scale(.96)';
+  const CLOSE_TO = anchor === 'middle'
+    ? position === 'left' ? 'translateX(-8px) scale(.96)' : 'translateX(8px) scale(.96)'
+    : 'translateY(8px) scale(.96)';
+
   function animateIn(node: HTMLElement) {
     return animate(
       node,
-      { opacity: [0, 1], transform: ['translateY(10px) scale(.96)', 'none'] },
+      { opacity: [0, 1], transform: [OPEN_FROM, 'none'] },
       { duration: dur(0.26), ease: EASE_OUT },
     );
   }
   function animateOut(node: HTMLElement) {
     return animate(
       node,
-      { opacity: [1, 0], transform: ['none', 'translateY(8px) scale(.96)'] },
+      { opacity: [1, 0], transform: ['none', CLOSE_TO] },
       { duration: dur(0.15), ease: EASE_IN },
     );
   }

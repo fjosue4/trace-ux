@@ -29,6 +29,8 @@ export function WidgetTab({
     button_label: draft.updates_appearance?.button_label ?? draft.appearance?.button_label ?? '',
   };
 
+
+  const isVerticalLauncher = (draft.widget_position || 'right').startsWith('middle-');
   return (
     <>
       <div className="hub-config__title">Widget</div>
@@ -155,15 +157,26 @@ export function WidgetTab({
                 onChange={(e) => onPatchAnnouncementAppearance({ radius: Number(e.target.value) })}
               />
             </Field>
-            <Field label="Launcher label" hint="Text on the button">
+            <Field
+              label="Launcher label"
+              hint={
+                isVerticalLauncher
+                  ? 'Stacked one letter per line — 8 characters max'
+                  : 'Text on the button'
+              }
+            >
               <Input
                 value={widgetAppearance.button_label}
                 placeholder={launcherPlaceholder}
-                maxLength={40}
+                // A mid-edge tab stacks its label vertically, so length is a
+                // height. Capping the input makes the limit discoverable by
+                // typing; otherwise the server silently substitutes a shorter
+                // word and the operator sees a label they did not choose.
+                maxLength={isVerticalLauncher ? 8 : 40}
                 onChange={(e) => onPatchAnnouncementAppearance({ button_label: e.target.value })}
               />
             </Field>
-            <Field label="Position" hint="Corner the launcher sits in">
+            <Field label="Position" hint="Where the launcher sits">
               <Select
                 value={draft.widget_position || 'right'}
                 ariaLabel="Widget position"
@@ -171,6 +184,8 @@ export function WidgetTab({
                 options={[
                   { value: 'right', label: 'Bottom right' },
                   { value: 'left', label: 'Bottom left' },
+                  { value: 'middle-right', label: 'Middle right (vertical tab)' },
+                  { value: 'middle-left', label: 'Middle left (vertical tab)' },
                 ]}
               />
             </Field>

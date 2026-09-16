@@ -102,7 +102,12 @@ export function useSiteDetail(id: number) {
   }
 
   function patchWidgetPosition(position: string) {
-    patchDraft({ widget_position: position, updates_position: position, feedback_position: position });
+    // updates_position and feedback_position are the pre-unification fields and
+    // only ever understood 'left' | 'right'. Writing 'middle-left' into them
+    // would corrupt config that older trackers still read as their side, so
+    // they get the plain side and only widget_position carries the anchor.
+    const side = position.endsWith('left') ? 'left' : 'right';
+    patchDraft({ widget_position: position, updates_position: side, feedback_position: side });
   }
 
   function patchTrigger(patch: Partial<FeedbackTrigger>) {

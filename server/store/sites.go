@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -295,15 +296,30 @@ func ParseSiteSettings(configText string) SiteSettings {
 // two corners, and the backwards-compatible config blocks must not disagree
 // with the widget block.
 func NormalizeWidgetPosition(s *SiteSettings) {
-	if s.WidgetPosition != "right" && s.WidgetPosition != "left" {
+	switch s.WidgetPosition {
+	case "right", "left", "middle-right", "middle-left":
+		// Recognised. middle-* anchors the launcher to the side edge; the
+		// server splits it into position + anchor for the tracker.
+	default:
+		// Unset, or a value this build does not know. Promote whatever an
+		// older dashboard sent per section, else fall back to bottom-right.
 		if s.UpdatesPosition == "left" || s.FeedbackPosition == "left" {
 			s.WidgetPosition = "left"
 		} else {
 			s.WidgetPosition = "right"
 		}
 	}
-	s.UpdatesPosition = s.WidgetPosition
-	s.FeedbackPosition = s.WidgetPosition
+	// The per-section fields predate the unified setting and only ever meant
+	// left|right. Older trackers still read them, so they get the SIDE and
+	// never the anchor -- mirroring "middle-left" into them would hand those
+	// trackers a value they resolve to "right", putting the widget on the
+	// wrong edge for anyone who has not upgraded.
+	side := "right"
+	if strings.HasSuffix(s.WidgetPosition, "left") {
+		side = "left"
+	}
+	s.UpdatesPosition = side
+	s.FeedbackPosition = side
 }
 
 // sanitizeAppearance drops any stored color that is not a hex triplet. The PUT
@@ -349,8 +365,14 @@ func validHexColor(c string) bool {
 
 // ValidateSiteSettings guards the values the dashboard PUTs.
 func ValidateSiteSettings(s SiteSettings) error {
-	if s.WidgetPosition != "" && s.WidgetPosition != "right" && s.WidgetPosition != "left" {
-		return fmt.Errorf("widget_position must be right or left")
+	// The unified setting also carries the anchor. The per-section fields below
+	// keep the old left|right rule: NormalizeWidgetPosition only ever writes a
+	// side into them, so an older tracker reading them cannot see an anchor it
+	// would resolve to the wrong edge.
+	switch s.WidgetPosition {
+	case "", "right", "left", "middle-right", "middle-left":
+	default:
+		return fmt.Errorf("widget_position must be right, left, middle-right or middle-left")
 	}
 	if s.UpdatesPosition != "right" && s.UpdatesPosition != "left" {
 		return fmt.Errorf("updates_position must be right or left")

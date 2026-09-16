@@ -74,6 +74,55 @@ export function widgetCSS(): string {
 .root--left .launcher,
 .root--left .panel { right: auto; left: var(--w-space); }
 
+/* ---- middle anchor: a vertical tab floating off the side edge ----
+
+   Wrapped in a min-width query rather than written and then reverted below a
+   breakpoint. A vertical tab plus a 440px panel does not fit a phone: at 375px
+   the tab and its two gaps leave about 300px. Scoping the rules this way means
+   a narrow viewport simply never picks them up and gets the bottom-corner pill
+   it already had, instead of inheriting half a layout and being patched back.
+
+   Vertical centring is done with auto block margins, not translateY(-50%):
+   transform belongs to the open/close animation, and a static centring
+   transform would be overwritten the moment the panel animated. */
+@media (min-width: 600px) {
+  .root--middle .launcher {
+    bottom: auto; top: 0;
+    margin-block: auto;
+    height: fit-content;
+    /* One letter per line, each upright. A single text node keeps the
+       accessible name the whole word -- per-letter spans would have a screen
+       reader announce "S, U, P, P, O, R, T". */
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+    -webkit-text-orientation: upright;
+    min-height: 0; min-width: 44px;
+    padding: 18px 0 15px;
+    letter-spacing: 0.08em;
+  }
+  /* The icon is inside a vertical writing mode, so put it back upright. */
+  .root--middle .launcher__icon,
+  .root--middle .launcher__badge { writing-mode: horizontal-tb; }
+
+  /* The panel clears the tab rather than sitting under it: one gap to the
+     viewport edge, the tab, then another gap. */
+  .root--middle .panel {
+    bottom: auto; top: 0;
+    margin-block: auto;
+    right: calc(var(--w-space) * 2 + 44px);
+    max-height: min(660px, calc(100vh - var(--w-space) * 2));
+  }
+  .root--middle.root--left .panel {
+    right: auto; left: calc(var(--w-space) * 2 + 44px);
+  }
+  /* A custom icon makes the launcher a 48px round mark with no text, so the
+     vertical writing mode has nothing to lay out -- but the panel still has to
+     clear it, and it is wider than the text tab. */
+  .root--middle .launcher--icon { padding: 0; min-width: 48px; }
+  .root--middle:has(.launcher--icon) .panel { right: calc(var(--w-space) * 2 + 48px); }
+  .root--middle.root--left:has(.launcher--icon) .panel { right: auto; left: calc(var(--w-space) * 2 + 48px); }
+}
+
 /* ---- panel ---- */
 .panel {
   position: fixed; z-index: 2147483001;

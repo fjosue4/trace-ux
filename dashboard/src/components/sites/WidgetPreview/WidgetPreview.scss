@@ -228,3 +228,21 @@
 @media (max-width: 900px) {
   .widget-preview { min-height: 420px; }
 }
+
+/* Mid-edge anchor: the launcher becomes a vertical tab floating off the side,
+   mirroring what the tracker draws. Centred with auto margins rather than a
+   translate so it cannot fight any transform the preview animates. */
+.widget-preview.is-middle {
+  .widget-preview__launcher {
+    bottom: auto;
+    top: 0;
+    margin-block: auto;
+    height: fit-content;
+    min-width: 34px;
+    padding: 12px 0 10px;
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+    -webkit-text-orientation: upright;
+    letter-spacing: 0.08em;
+  }
+}
