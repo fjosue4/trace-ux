@@ -1,6 +1,6 @@
 {
   "name": "@trace-ux/tracker",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "TraceUX session replay, logs, events, and optional in-product widget for HTML, GTM, npm, and React",
   "keywords": [
     "session-replay",
