@@ -54,11 +54,19 @@ type WidgetAppearance struct {
 // mounts one widget when Enabled is true and shows the tab strip when more
 // than one available section is enabled.
 type WidgetConfig struct {
-	Enabled              bool             `json:"enabled"`
-	UpdatesEnabled       bool             `json:"updates_enabled"`
-	FeedbackEnabled      bool             `json:"feedback_enabled"`
-	TicketsEnabled       bool             `json:"tickets_enabled"`
-	Position             string           `json:"position"` // right | left
+	Enabled         bool   `json:"enabled"`
+	UpdatesEnabled  bool   `json:"updates_enabled"`
+	FeedbackEnabled bool   `json:"feedback_enabled"`
+	TicketsEnabled  bool   `json:"tickets_enabled"`
+	Position        string `json:"position"` // right | left
+	// Anchor is deliberately a SECOND field rather than extra values in
+	// Position. A tracker built before side anchors existed does
+	// `cfg.position === 'left' ? 'left' : 'right'`, so a value of
+	// "middle-left" would collapse to "right" and the widget would appear on
+	// the wrong edge for every visitor still running that bundle. Split this
+	// way, an old tracker reads the side correctly and ignores what it does not
+	// know, degrading to the bottom-corner launcher it already draws.
+	Anchor               string           `json:"anchor"` // bottom | middle
 	Title                string           `json:"title"`
 	UpdatesLabel         string           `json:"updates_label"`
 	FeedbackLabel        string           `json:"feedback_label"`
@@ -130,14 +138,57 @@ func resolveWidgetAppearance(s store.SiteSettings, iconURL string) WidgetAppeara
 // buildWidgetConfig decides which sections the visitor can reach. A site with
 // only one of the two switched on still gets the widget — the panel simply
 // opens straight into the section that exists, with no tab strip.
+// splitWidgetPosition turns the stored setting into the side the launcher sits
+// on and the point it is anchored to. The whitelist is exhaustive on purpose: a
+// typo or a value from a newer dashboard must land on the old behaviour rather
+// than on an edge the tracker cannot draw.
+func splitWidgetPosition(stored string) (position, anchor string) {
+	switch strings.TrimSpace(strings.ToLower(stored)) {
+	case "left":
+		return "left", "bottom"
+	case "middle-left":
+		return "left", "middle"
+	case "middle-right":
+		return "right", "middle"
+	default:
+		return "right", "bottom"
+	}
+}
+
+// maxVerticalLabel is how many characters fit in a mid-edge tab before the
+// stacked text runs past a short viewport. "SUPPORT" is exactly at the limit;
+// "Feedback" is the one auto-derived label that needs the eighth character.
+const maxVerticalLabel = 8
+
+// verticalFallbackLabel picks the shortest honest word for a tab whose
+// configured label will not fit stacked. It names the section the panel opens
+// into where there is only one, and otherwise says Help -- which is true of
+// every combination and is four characters.
+func verticalFallbackLabel(s store.SiteSettings) string {
+	switch {
+	case s.TicketsEnabled && !s.UpdatesEnabled && !s.FeedbackEnabled:
+		return "Support"
+	case s.FeedbackEnabled && !s.UpdatesEnabled && !s.TicketsEnabled:
+		return "Feedback"
+	case s.UpdatesEnabled && !s.FeedbackEnabled && !s.TicketsEnabled:
+		// Not "What's new", which is the bottom-corner wording: ten letters
+		// stacked is taller than the tab, and an apostrophe reads badly rotated.
+		return "Updates"
+	default:
+		return "Help"
+	}
+}
+
 func buildWidgetConfig(site store.Site, iconURL string) WidgetConfig {
 	s := site.Settings
 	// Position is a property of the launcher, so it comes from the widget's own
 	// setting (Widget tab) rather than from either section.
-	position := firstNonEmpty(s.WidgetPosition, s.UpdatesPosition, s.FeedbackPosition, "right")
-	if position != "left" {
-		position = "right"
-	}
+	// Stored as one string so the dashboard has a single control; split here
+	// into the two fields the tracker consumes. Anything unrecognised falls
+	// back to the bottom-right launcher, which is what every site had before
+	// anchors existed.
+	position, anchor := splitWidgetPosition(
+		firstNonEmpty(s.WidgetPosition, s.UpdatesPosition, s.FeedbackPosition, "right"))
 	launcher := resolveWidgetAppearance(s, iconURL)
 
 	// With only one section enabled the launcher should say what it opens
@@ -153,6 +204,14 @@ func buildWidgetConfig(site store.Site, iconURL string) WidgetConfig {
 		}
 	}
 
+	// A mid-edge tab stacks its label one letter per line, so length is a
+	// vertical measurement: "Help & updates" is fourteen rows and runs off a
+	// short viewport. Substitute rather than truncate -- a clipped word reads
+	// as a rendering fault, where a shorter correct word reads as a choice.
+	if anchor == "middle" && len([]rune(launcher.LauncherTxt)) > maxVerticalLabel {
+		launcher.LauncherTxt = verticalFallbackLabel(s)
+	}
+
 	// The master switch can hide the widget outright, but a site with every
 	// section switched off has nothing to show either way.
 	hasSection := s.UpdatesEnabled || s.FeedbackEnabled || s.TicketsEnabled
@@ -163,6 +222,7 @@ func buildWidgetConfig(site store.Site, iconURL string) WidgetConfig {
 		FeedbackEnabled:      s.FeedbackEnabled,
 		TicketsEnabled:       s.TicketsEnabled,
 		Position:             position,
+		Anchor:               anchor,
 		Title:                firstNonEmpty(site.Name, "Help & updates"),
 		UpdatesLabel:         "What's new",
 		FeedbackLabel:        "Feedback",
