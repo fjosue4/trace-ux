@@ -153,6 +153,9 @@ const SESSION_TTL_MS = 30 * 60 * 1000; // hidden-tab grace before a visit ends
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // no interaction for this long ends the visit
 const MAX_SESSION_MS = 2 * 60 * 60 * 1000; // even continuous interaction splits at 2h
 const PING_INTERVAL_MS = 15_000;
+const MAX_SEND_RETRIES = 4;        // ~1s, 2s, 4s, 8s with jitter
+const RETRY_BASE_MS = 1_000;
+const MAX_RETRIES_IN_FLIGHT = 20;  // ceiling on queued retries, not on memory alone
 const GZIP_THRESHOLD = 2048; // compress batches larger than 2 KB
 const MAX_BUFFER_EVENTS = 5_000; // match the server-side batch safety cap
 const MAX_BUFFER_LOGS = 100; // match the server-side log batch safety cap
@@ -372,6 +375,11 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
   let wakeArmed = false;
   let restoreConsole: (() => void) | undefined;
   let disposed = false;
+  // Batches that fail are retried rather than dropped. Ordering does not matter:
+  // each batch carries its own seq and the server stores it under that key, so a
+  // late arrival lands in the right place and the player reads chunks in seq
+  // order regardless of when they turned up.
+  let retriesInFlight = 0;
   let flushTimer: ReturnType<typeof setInterval> | undefined;
   let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
@@ -387,15 +395,50 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
       transmit(new Blob([json], { type: 'text/plain' }), false, useBeacon);
     }
   }
-  function transmit(body: Blob, gz: boolean, useBeacon: boolean) {
+  function transmit(body: Blob, gz: boolean, useBeacon: boolean, attempt = 0) {
     const url = gz ? ingestURL + '?gz=1' : ingestURL;
     if (useBeacon && typeof navigator.sendBeacon === 'function') {
+      // sendBeacon reports only whether the request was queued, never how it
+      // was answered, so lifecycle sends cannot be retried. They are the last
+      // batch of a page anyway; the cost of losing one is bounded.
       navigator.sendBeacon(url, body);
       return;
     }
     // keepalive is reserved for lifecycle sends. Using it for every recording
     // batch can fill the browser's small keepalive queue on mutation-heavy pages.
-    fetch(url, { method: 'POST', body, keepalive: useBeacon, credentials: 'omit' }).catch(() => {});
+    fetch(url, { method: 'POST', body, keepalive: useBeacon, credentials: 'omit' })
+      .then((res) => {
+        if (res.ok) return;
+        // fetch only REJECTS on a network failure -- a 400, 413 or 503 all
+        // resolve. Without this branch the tracker treated every server
+        // rejection as a success, and the batch was gone: the recording kept
+        // going, the replay was missing a slice of the DOM from that point on,
+        // and nothing anywhere said so.
+        if (retryable(res.status)) scheduleRetry(body, gz, attempt);
+      })
+      .catch(() => scheduleRetry(body, gz, attempt));
+  }
+
+  // 4xx means this batch is unacceptable and will be just as unacceptable in
+  // four seconds; resending wastes the visitor's bandwidth. 408 and 429 are the
+  // exceptions -- both explicitly invite a retry -- as is anything 5xx.
+  function retryable(status: number) {
+    return status === 408 || status === 429 || status >= 500;
+  }
+
+  function scheduleRetry(body: Blob, gz: boolean, attempt: number) {
+    if (disposed || stopped || attempt >= MAX_SEND_RETRIES) return;
+    // Bounded: a browser that cannot reach the server at all must not grow an
+    // unbounded backlog of timers holding megabytes of snapshot each.
+    if (retriesInFlight >= MAX_RETRIES_IN_FLIGHT) return;
+    retriesInFlight++;
+    // Exponential with jitter, so twenty agents losing connectivity together do
+    // not all come back in the same instant.
+    const delay = RETRY_BASE_MS * 2 ** attempt * (0.75 + Math.random() * 0.5);
+    setTimeout(() => {
+      retriesInFlight--;
+      transmit(body, gz, false, attempt + 1);
+    }, delay);
   }
 
   function compress(text: string): Promise<ArrayBuffer> {
