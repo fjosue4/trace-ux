@@ -70,6 +70,36 @@ func main() {
 		static: newStaticHandler(cfg),
 	}
 
+	// Disk budget backstop. Separate from the 6-hour retention loop and much
+	// faster, because a store fills on its own schedule: sizing the data dir is a
+	// handful of stats, so checking often costs nothing and the sweep only does
+	// work once the budget is actually exceeded. Off unless TRACE_UX_MAX_GB_DISK
+	// is set.
+	if cfg.MaxDiskBytes > 0 {
+		if mode, err := db.AutoVacuumMode(); err == nil && mode != 2 {
+			log.Printf("disk budget: TRACE_UX_MAX_GB_DISK is set but this database is "+
+				"auto_vacuum=%d, so pruning cannot return space to the filesystem; the "+
+				"budget sweep will refuse to delete. Recreate the database or run a full "+
+				"VACUUM to enable it.", mode)
+		}
+		go func() {
+			for {
+				res, err := db.SweepToBudget(cfg.DataDir, cfg.MaxDiskBytes, cfg.SpaceFloorDays)
+				switch {
+				case err != nil:
+					log.Printf("disk budget: %v", err)
+				case res.Ran:
+					log.Printf("disk budget: pruned %d session(s), %d -> %d MiB of %d MiB (%s)",
+						res.SessionsGone, res.SizeBefore>>20, res.SizeAfter>>20,
+						res.Budget>>20, res.Reason)
+				case res.Reason != "" && res.Reason != "under budget" && res.Reason != "disabled":
+					log.Printf("disk budget: %s", res.Reason)
+				}
+				time.Sleep(10 * time.Minute)
+			}
+		}()
+	}
+
 	// Retention sweep at boot, then every 6 hours. Also prunes expired
 	// dashboard login sessions on the same cadence.
 	go func() {

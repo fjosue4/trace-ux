@@ -21,7 +21,15 @@ type Store struct {
 var errBadJSON = errors.New("invalid JSON body")
 
 func OpenStore(path string) (*Store, error) {
-	dsn := path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(10000)&_pragma=foreign_keys(1)&_pragma=synchronous(NORMAL)"
+	// auto_vacuum(incremental) is load-bearing for disk-pressure pruning: without
+	// it, deleting recordings moves their pages to the freelist and the FILE never
+	// shrinks, so the filesystem gets nothing back (see spacesweep.go).
+	//
+	// SQLite only honours this on a database with no tables yet -- on an existing
+	// file the pragma is silently ignored and the only way to change it is a full
+	// VACUUM. New installs therefore get it for free; migrate() warns about the
+	// older ones rather than pretending.
+	dsn := path + "?_pragma=journal_mode(WAL)&_pragma=busy_timeout(10000)&_pragma=foreign_keys(1)&_pragma=synchronous(NORMAL)&_pragma=auto_vacuum(incremental)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err

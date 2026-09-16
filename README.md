@@ -248,9 +248,38 @@ No external database, no queue, no other services — SQLite lives in `/var/lib/
 | `TRACE_UX_SECURE_COOKIES`| `1`       | Set `0` only for local HTTP development               |
 | `TRACE_UX_TRUSTED_PROXIES`| —        | Comma-separated proxy CIDRs allowed to supply XFF      |
 | `TRACE_UX_RETENTION_DAYS`| `90`      | Auto-delete sessions older than this                  |
+| `TRACE_UX_MAX_GB_DISK`   | — *(no limit)* | Disk budget in GB; over it, oldest recordings are deleted |
+| `TRACE_UX_SPACE_FLOOR_DAYS`| `3`     | The budget never deletes recordings newer than this   |
 | `TRACE_UX_DEMO_REPLAY`  | `0`       | Enable short-lived public demo replay links            |
 | `TRACE_UX_DEMO_REPLAY_TTL` | `900`  | Demo replay lifetime in seconds (60–3600)             |
 | `TRACE_UX_DEV_STATIC`    | —         | Dev only: serve frontend builds from disk             |
+
+### Disk budget
+
+`TRACE_UX_RETENTION_DAYS` bounds recordings by age. `TRACE_UX_MAX_GB_DISK`
+bounds them by size, as a backstop for when traffic outruns the retention
+window: once the data directory exceeds the budget, the oldest sessions are
+deleted until it is back under, checked every 10 minutes.
+
+**It is unset by default, and unset means no limit** — so upgrading changes
+nothing until you opt in. `0` means no limit too, so the variable can sit in an
+env file switched off rather than being commented out. A value that is not a
+plain number (`25GB`, say) is refused with a warning at startup rather than
+being read as "no limit", because an operator who wrote it believes the disk is
+capped.
+
+`TRACE_UX_SPACE_FLOOR_DAYS` is a floor the budget cannot cross. If the store is
+still over budget with nothing older than the floor, it stops and logs that the
+budget is too small for the traffic, rather than deleting recordings the day
+they arrive.
+
+**The budget needs `auto_vacuum=incremental`, which SQLite only accepts on a
+database with no tables yet.** Recordings are BLOBs inside `trace_ux.db`, so
+deleting them returns pages to SQLite's freelist but does not shrink the file --
+without incremental auto-vacuum a sweep would destroy recordings and hand the
+filesystem nothing back. Databases created by current versions get it
+automatically. On one created earlier, the sweep refuses to delete anything and
+logs why; run a full `VACUUM` to convert it.
 
 Each site opens to a tabbed hub: **Overview** keeps the latest recordings,
 logs, feedback, and summary counts together; **Site** manages the registered

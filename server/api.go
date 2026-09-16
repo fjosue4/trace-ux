@@ -62,6 +62,8 @@ type Config struct {
 	TrustedProxyCIDRs []*net.IPNet
 	DemoReplayEnabled bool
 	DemoReplayTTL     time.Duration
+	MaxDiskBytes      uint64 // TRACE_UX_MAX_GB_DISK; 0 disables the disk budget
+	SpaceFloorDays    int    // TRACE_UX_SPACE_FLOOR_DAYS; never prune newer than this
 }
 
 func loadConfig() Config {
@@ -74,6 +76,7 @@ func loadConfig() Config {
 		SecureCookies:     envBool("TRACE_UX_SECURE_COOKIES", true),
 		DemoReplayEnabled: envBool("TRACE_UX_DEMO_REPLAY", false),
 		DemoReplayTTL:     15 * time.Minute,
+		SpaceFloorDays:    3,
 	}
 	if v := os.Getenv("TRACE_UX_DEMO_REPLAY_TTL"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 60 && n <= 3600 {
@@ -83,6 +86,35 @@ func loadConfig() Config {
 	if v := os.Getenv("TRACE_UX_RETENTION_DAYS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.RetentionDays = n
+		}
+	}
+	// Unset -- or empty, or 0 -- means NO LIMIT: the store grows until the
+	// time-based retention window bounds it, which is the behaviour every
+	// existing install already has. Time-based retention stays the primary
+	// control; this budget is a backstop for when traffic outruns the window.
+	//
+	// Parsed as a float so fractions of a gigabyte work ("0.5") without a second
+	// unit-flavoured variable. A value that does not parse is NOT quietly
+	// treated as "no limit": someone who wrote "25GB" or "25 " believes they
+	// capped the disk, and silently leaving it uncapped is how they find out
+	// months later, from a full filesystem.
+	if v := strings.TrimSpace(os.Getenv("TRACE_UX_MAX_GB_DISK")); v != "" {
+		f, err := strconv.ParseFloat(v, 64)
+		switch {
+		case err != nil:
+			log.Printf("WARNING: TRACE_UX_MAX_GB_DISK=%q is not a number; there is NO disk limit. Expected a plain GB value such as 25 or 0.5", v)
+		case f < 0:
+			log.Printf("WARNING: TRACE_UX_MAX_GB_DISK=%q is negative; there is NO disk limit", v)
+		case f == 0:
+			// Explicit "no limit". Spelling it out is allowed so the variable can
+			// stay in an env file, set to 0, rather than being commented out.
+		default:
+			cfg.MaxDiskBytes = uint64(f * (1 << 30))
+		}
+	}
+	if v := os.Getenv("TRACE_UX_SPACE_FLOOR_DAYS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			cfg.SpaceFloorDays = n
 		}
 	}
 	cfg.DevStaticDir = os.Getenv("TRACE_UX_DEV_STATIC")

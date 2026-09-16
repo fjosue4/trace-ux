@@ -162,6 +162,10 @@ write_env_file() {
   grep -q '^TRACE_UX_DATA='      "$env_file" || printf 'TRACE_UX_DATA=%s\n'      "$DATA_DIR"   >> "$env_file"
   grep -q '^TRACE_UX_RETENTION_DAYS=' "$env_file" || printf 'TRACE_UX_RETENTION_DAYS=90\n' >> "$env_file"
   grep -q '^TRACE_UX_SECURE_COOKIES=' "$env_file" || printf 'TRACE_UX_SECURE_COOKIES=1\n' >> "$env_file"
+  # Left COMMENTED on purpose: no disk budget by default, so an upgrade never
+  # starts deleting recordings on a server that did not ask for it. The grep is
+  # unanchored so this is not re-added once an operator uncomments it.
+  grep -q 'TRACE_UX_MAX_GB_DISK' "$env_file" || printf '# TRACE_UX_MAX_GB_DISK=25   # optional: delete oldest recordings past this many GB (unset = no limit)\n' >> "$env_file"
   chmod 600 "$env_file"; chown root:root "$env_file"
   ENV_FILE="$env_file"
 }
