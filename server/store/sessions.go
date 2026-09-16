@@ -268,7 +268,7 @@ func (s *Store) GetSessionChunk(sessionID string, seq int) ([]json.RawMessage, e
 	if err := json.Unmarshal(raw, &events); err != nil {
 		return nil, err
 	}
-	return events, nil
+	return s.RehydrateCSS(events)
 }
 
 // GetSessionChunkSeqs lists the available chunk sequence numbers in order.

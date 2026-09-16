@@ -58,6 +58,8 @@ type LogCfg = {
 type TraceUXConfig = {
   sample_rate: number;
   checkout_interval_ms: number;
+  inline_stylesheet?: boolean;
+  slim_dom?: boolean;
   mask_inputs: boolean;
   flush_interval_ms: number;
   flush_batch_size: number;
@@ -131,6 +133,8 @@ declare global {
 const DEFAULTS: TraceUXConfig = {
   sample_rate: 1,
   checkout_interval_ms: 30_000,
+  inline_stylesheet: true,
+  slim_dom: true,
   mask_inputs: true,
   flush_interval_ms: 5_000,
   flush_batch_size: 20,
@@ -639,6 +643,22 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
           },
           checkoutEveryNms: cfg.checkout_interval_ms,
           maskAllInputs: cfg.mask_inputs,
+          // Do not copy the page's stylesheets into every FullSnapshot. rrweb
+          // inlines them by default, which means a large CSS bundle is stored
+          // again on every checkout -- measured at 2.95 MB per snapshot on a
+          // real app, dwarfing the DOM itself.
+          //
+          // The trade is that the replay must load the stylesheet from the
+          // recorded origin instead. That is subject to the replay page's CSP
+          // (style-src) and to the site serving it cross-origin, so a replay
+          // can come back unstyled where either says no.
+          inlineStylesheet: cfg.inline_stylesheet !== false,
+          // Drop what a replay never needs: comments, <script> tags (they do
+          // not execute during playback anyway), favicons, and the block of
+          // social/robots/verification meta tags.
+          // rrweb's type is `true | 'all' | object | undefined` -- there is no
+          // `false`, so opting out means passing undefined.
+          slimDOMOptions: cfg.slim_dom === false ? undefined : true,
           // Elements carrying trace-ux-mask as a class OR a bare attribute have their
           // text masked, wherever they appear in the page.
           maskTextClass: 'trace-ux-mask',

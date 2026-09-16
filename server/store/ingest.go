@@ -173,6 +173,13 @@ func (s *Store) SaveEvents(siteID int64, sessionID string, seq int, events []jso
 	if err := s.EnsureSessionForSite(siteID, sessionID, now); err != nil {
 		return err
 	}
+	// Pull inlined stylesheets out before the chunk is compressed and stored.
+	// Kept on the SERVER permanently, not just until the tracker learns to do
+	// it: a GTM snippet or an older npm build will keep inlining, and those
+	// recordings should still cost one copy.
+	if deduped, err := s.DedupeCSS(sessionID, events); err == nil {
+		events = deduped
+	}
 	raw, err := json.Marshal(events)
 	if err != nil {
 		return err

@@ -66,6 +66,8 @@ type Config struct {
 	SpaceFloorDays     int    // TRACE_UX_SPACE_FLOOR_DAYS; never prune newer than this
 	MaxEventBytes      int    // TRACE_UX_MAX_EVENT_MB; ceiling on one rrweb event
 	CheckoutIntervalMS int    // TRACE_UX_CHECKOUT_INTERVAL_MS; rrweb re-snapshot cadence
+	InlineStylesheet   bool   // TRACE_UX_INLINE_STYLESHEET; copy CSS into every snapshot
+	SlimDOM            bool   // TRACE_UX_SLIM_DOM; drop comments/scripts/meta from snapshots
 }
 
 const (
@@ -96,6 +98,13 @@ func loadConfig() Config {
 		SpaceFloorDays:     3,
 		MaxEventBytes:      defaultMaxEventMB << 20,
 		CheckoutIntervalMS: defaultCheckoutIntervalMS,
+		// Default true, matching rrweb. Turning it off makes snapshots far
+		// smaller, but the replay must then load the CSS from the recorded
+		// origin -- which the replay page's CSP (style-src 'self') blocks, so
+		// replays come back unstyled. Only worth switching off once the server
+		// stores stylesheets itself.
+		InlineStylesheet: true,
+		SlimDOM:          true,
 	}
 	if v := os.Getenv("TRACE_UX_DEMO_REPLAY_TTL"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 60 && n <= 3600 {
@@ -155,6 +164,13 @@ func loadConfig() Config {
 			cfg.MaxEventBytes = n << 20
 		}
 	}
+	// Whether rrweb copies the page's stylesheets into every FullSnapshot.
+	// Off keeps snapshots small, at the cost of the replay having to load the
+	// CSS from the recorded origin -- which the replay page's CSP must permit,
+	// or the replay comes back unstyled. Turn it on to trade disk for fidelity.
+	cfg.InlineStylesheet = envBool("TRACE_UX_INLINE_STYLESHEET", cfg.InlineStylesheet)
+	cfg.SlimDOM = envBool("TRACE_UX_SLIM_DOM", cfg.SlimDOM)
+
 	// rrweb re-snapshots the entire DOM on this cadence. It is the dominant
 	// term in storage: at 30s a nine-hour session stores ~1080 copies of the
 	// page, stylesheets and all. Raising it trades seek latency in the player
@@ -893,6 +909,8 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		"widget":               widget,
 		"sample_rate":          1.0,
 		"checkout_interval_ms": s.checkoutIntervalMS(),
+		"inline_stylesheet":    s.cfg != nil && s.cfg.InlineStylesheet,
+		"slim_dom":             s.cfg == nil || s.cfg.SlimDOM,
 		"mask_inputs":          true,
 		"flush_interval_ms":    5000,
 		"flush_batch_size":     20,
