@@ -20,7 +20,19 @@ import (
 const (
 	maxSessionIDLength = 64
 	maxEventCount      = 5_000
-	maxEventBytes      = 512 << 10
+	// One rrweb event. This has to clear a FullSnapshot, which is the whole
+	// serialized DOM of the page and is by far the largest event any session
+	// produces -- a real single-page app runs to megabytes.
+	//
+	// It was 512 KB, which silently broke replay for exactly those apps: the
+	// FullSnapshot was rejected, the incremental mutations that followed were
+	// accepted, and the player was left with a stream of diffs and no document
+	// to apply them to. The session looked recorded -- correct duration, a
+	// scrubbable timeline -- and played back as a blank screen.
+	//
+	// IngestBodyLimit (10 MB, decompressed) still bounds the request as a
+	// whole, so this ceiling cannot be used to push an unbounded body through.
+	maxEventBytes      = 4 << 20
 	maxURLLength       = 2_048
 	maxReferrerLength  = 2_048
 	maxTitleLength     = 512
@@ -191,8 +203,17 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, event := range m.Events {
-			if len(event) == 0 || len(event) > maxEventBytes {
-				writeErr(w, http.StatusBadRequest, "event is too large")
+			if len(event) == 0 {
+				writeErr(w, http.StatusBadRequest, "empty event")
+				return
+			}
+			// The size is in the message on purpose. Without it this 400 is a
+			// bare string in the network tab, and the visible symptom -- a
+			// replay that scrubs but renders nothing -- points at the player
+			// rather than at ingest.
+			if len(event) > maxEventBytes {
+				writeErr(w, http.StatusBadRequest, fmt.Sprintf(
+					"event is too large: %d bytes, limit %d", len(event), maxEventBytes))
 				return
 			}
 		}

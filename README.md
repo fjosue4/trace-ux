@@ -143,6 +143,12 @@ configuration enables at least one section. `warn`, `error`, `info`, and
 severity threshold permits them. `setUserStatus` records a seekable
 `user_status` activity; it does not create a separate server-side user table.
 
+**The script and GTM snippets pass `widget: true` for you; npm and React do
+not.** That is the whole reason the Help & updates widget can appear via GTM and
+not via npm with the same site key — a bundle that never uses the widget should
+not pay to download it. The check is `options.widget !== true`, so it must be
+exactly `true`; other truthy values are ignored.
+
 React applications can use the optional provider and hook:
 
 ```tsx
@@ -340,6 +346,45 @@ The snippet takes identity at init, and the page can attach or change it later �
 ```
 
 Sessions are filterable by any of the three ids with the **Visitor** filter in the dashboard, and ids show on the replay page.
+
+### Identifying a visitor who logs in mid-session
+
+Recording starts the moment the tracker initializes, before anyone has logged
+in. Calling `identify()` later attaches the visitor to **the whole session,
+including everything recorded before the call** — you do not lose the anonymous
+part of the journey that led up to the login.
+
+That is not a backfill pass; identity is stored on the session row rather than
+on individual events, so there is only ever one value to set:
+
+```ts
+const traceux = init({ siteKey: 'KEY', origin: 'https://your-server' });
+// ...visitor browses anonymously; this is all being recorded...
+traceux.identify({ userId: user.id, clientId: user.accountId }); // after login
+```
+
+`init()` returns immediately and queues calls made before the tracker has
+finished starting, so there is nothing to await — calling `identify()` on the
+next line is safe. If the visitor is already known at page load, pass `userId` /
+`clientId` / `remoteId` straight to `init()` instead.
+
+In React, `TraceUXProvider` does this for you: identity props that change after
+login are forwarded through `identify()` without starting a second recorder.
+
+```tsx
+import { TraceUXProvider, useTraceUX } from '@trace-ux/tracker/react';
+```
+
+**Logging out does not un-identify the session.** Only non-empty values are
+applied, so `identify({ userId: '' })` is a no-op rather than a reset. On a
+shared device this matters: if a second person logs in on the same tab, their id
+overwrites the session's, and the first person's activity is re-attributed to
+them. End the session explicitly instead:
+
+```ts
+traceux.stop();
+sessionStorage.removeItem('trace_ux_sid'); // next init() starts a fresh session
+```
 
 Mark any element to appear as seekable activity in the replay sidebar:
 

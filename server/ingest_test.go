@@ -93,3 +93,26 @@ func TestListSessionsFiltersCountry(t *testing.T) {
 		t.Fatalf("country options = %v, want [GB US]", countries)
 	}
 }
+
+// A FullSnapshot is the entire serialized DOM and is the largest event any
+// session produces. When the per-event cap was 512 KB it sat below what a real
+// single-page app emits, so the snapshot was rejected while the small
+// incremental mutations that followed were accepted -- leaving the player a
+// stream of diffs with no document to apply them to. The session looked
+// recorded and replayed as a blank screen.
+func TestEventCapClearsARealisticFullSnapshot(t *testing.T) {
+	// A conservative stand-in for a complex app's DOM snapshot. The point is
+	// the order of magnitude: megabytes, not kilobytes.
+	const realisticSnapshot = 2 << 20 // 2 MB
+
+	if maxEventBytes < realisticSnapshot {
+		t.Fatalf("maxEventBytes = %d, too small for a %d-byte FullSnapshot; "+
+			"replay will render blank for real apps", maxEventBytes, realisticSnapshot)
+	}
+	// ...and still bounded by the whole-request limit, so raising it cannot be
+	// used to push an unbounded body through.
+	if maxEventBytes >= store.IngestBodyLimit {
+		t.Fatalf("maxEventBytes = %d must stay below IngestBodyLimit = %d",
+			maxEventBytes, store.IngestBodyLimit)
+	}
+}
