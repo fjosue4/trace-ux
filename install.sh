@@ -338,8 +338,13 @@ install_cli
 
 echo
 info "${BOLD}TraceUX is installed${OFF}"
-PORT="$(grep '^TRACE_UX_ADDR=' "$ENV_FILE" | cut -d= -f2 | awk -F: '{print $NF}')"
-IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+# Both of these run AFTER the service is up, so a failure here would abort an
+# otherwise successful install with a confusing error. grep exits 1 when it
+# matches nothing, and `set -o pipefail` turns that into an aborted script, so
+# the fallback is explicit. (The old `IP=$(hostname -I ...)` line was dropped:
+# it was never used, and could only ever fail the install.)
+PORT="$(grep '^TRACE_UX_ADDR=' "$ENV_FILE" | cut -d= -f2 | awk -F: '{print $NF}' || true)"
+PORT="${PORT:-$TRACE_UX_PORT}"
 echo "  dashboard : http://localhost:${PORT}/ (put HTTPS in front)"
 echo "  login     : admin (password is stored in ${ENV_FILE}; rotate with: trace-ux --password <new>)"
 echo "  data      : ${DATA_DIR}  (SQLite — back up this folder)"
