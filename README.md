@@ -124,11 +124,7 @@ const traceux = init({
   siteKey: 'YOUR_SITE_KEY',
   origin: 'https://your-server.example.com',
   userId: currentUser?.id,
-  // Loads the Help & updates widget (announcements, feedback, support).
-  // Which sections actually appear is controlled per site from
-  // Site -> Widget in the dashboard, so you can switch it off there
-  // without redeploying this code.
-  widget: true,
+  widget: true, // toggle in dashboard
 });
 
 traceux.identify({ userId: user.id }); // after login
