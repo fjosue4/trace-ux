@@ -94,7 +94,10 @@ install_release() {
   local url="${release}/trace_ux_linux_${ARCH}.tar.gz"
   local archive_name="trace_ux_linux_${ARCH}.tar.gz"
   local tmp; tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT
+  # ${tmp:-} because this EXIT trap outlives the function: `tmp` is local, so by
+  # the time the trap runs it is unset, and under `set -u` the trap itself dies
+  # with "tmp: unbound variable" -- printed INSTEAD of whatever actually failed.
+  trap 'rm -rf "${tmp:-}"' EXIT
 
   info "downloading TraceUX (${ARCH})${TRACE_UX_VERSION:+ v$TRACE_UX_VERSION}"
   # Keep the release filename because checksums.txt refers to it directly.
@@ -155,7 +158,11 @@ write_env_file() {
   else
     info "generating admin password (change it later: trace-ux --password <new>)"
     local pw
-    pw="$(tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 20)"
+    # `tr < /dev/urandom | head -c 20` exits 141: head closes the pipe after 20
+    # bytes and tr dies of SIGPIPE, which `set -o pipefail` promotes to the
+    # pipeline's status and `set -e` turns into an aborted install. Bounding the
+    # INPUT and trimming with cut means nothing closes a pipe early.
+    pw="$(head -c 512 /dev/urandom | LC_ALL=C tr -dc 'A-Za-z0-9' | cut -c1-20)"
     printf 'TRACE_UX_PASSWORD=%s\n' "$pw" > "$env_file"
   fi
   grep -q '^TRACE_UX_ADDR='      "$env_file" || printf 'TRACE_UX_ADDR=%s\n'      "127.0.0.1:${TRACE_UX_PORT}" >> "$env_file"
