@@ -260,7 +260,7 @@ func (s *Store) GetSessionChunk(sessionID string, seq int) ([]json.RawMessage, e
 		return nil, err
 	}
 	defer zr.Close()
-	raw, err := io.ReadAll(io.LimitReader(zr, IngestBodyLimit))
+	raw, err := io.ReadAll(io.LimitReader(zr, int64(IngestBodyLimit)))
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +268,7 @@ func (s *Store) GetSessionChunk(sessionID string, seq int) ([]json.RawMessage, e
 	if err := json.Unmarshal(raw, &events); err != nil {
 		return nil, err
 	}
-	return events, nil
+	return s.RehydrateCSS(events)
 }
 
 // GetSessionChunkSeqs lists the available chunk sequence numbers in order.

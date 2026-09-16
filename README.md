@@ -124,7 +124,7 @@ const traceux = init({
   siteKey: 'YOUR_SITE_KEY',
   origin: 'https://your-server.example.com',
   userId: currentUser?.id,
-  widget: true, // optional; the server still controls enabled sections
+  widget: true, // toggle in dashboard
 });
 
 traceux.identify({ userId: user.id }); // after login
@@ -282,10 +282,57 @@ No external database, no queue, no other services — SQLite lives in `/var/lib/
 | `TRACE_UX_TRUSTED_PROXIES`| —        | Comma-separated proxy CIDRs allowed to supply XFF      |
 | `TRACE_UX_RETENTION_DAYS`| `90`      | Auto-delete sessions older than this                  |
 | `TRACE_UX_MAX_GB_DISK`   | — *(no limit)* | Disk budget in GB; over it, oldest recordings are deleted |
+| `TRACE_UX_MAX_EVENT_MB`  | `4`       | Ceiling on one rrweb event; raise it if replays are blank |
+| `TRACE_UX_CHECKOUT_INTERVAL_MS` | `30000` | How often rrweb re-snapshots the DOM — the main storage lever |
+| `TRACE_UX_INLINE_STYLESHEET` | `1` | Copy page CSS into every snapshot. `0` shrinks snapshots but replays load CSS cross-origin |
+| `TRACE_UX_SLIM_DOM`      | `1`       | Drop comments, `<script>`, favicons and social meta from snapshots |
 | `TRACE_UX_SPACE_FLOOR_DAYS`| `3`     | The budget never deletes recordings newer than this   |
 | `TRACE_UX_DEMO_REPLAY`  | `0`       | Enable short-lived public demo replay links            |
 | `TRACE_UX_DEMO_REPLAY_TTL` | `900`  | Demo replay lifetime in seconds (60–3600)             |
 | `TRACE_UX_DEV_STATIC`    | —         | Dev only: serve frontend builds from disk             |
+
+### Snapshot size and cadence
+
+Two variables govern how much a recording costs. Both default to the values that
+were previously hardcoded, so an existing install behaves identically until you
+change one.
+
+`TRACE_UX_MAX_EVENT_MB` caps a single rrweb event. The FullSnapshot — the whole
+serialized DOM with stylesheets inlined — is by far the largest, and a heavy app
+can exceed the 4 MB default. When it does, that snapshot is refused while the
+incremental events around it are accepted, and the replay scrubs normally while
+rendering nothing at all. The 400 names the actual size, so the number to set
+comes straight out of the error:
+
+```
+{"error":"event is too large: 5011782 bytes, limit 4194304 (raise TRACE_UX_MAX_EVENT_MB)"}
+```
+
+The request ceiling is derived from this, not configured separately: a batch
+carries a snapshot plus the incrementals buffered with it, so raising the event
+cap raises the body limit with it.
+
+`TRACE_UX_CHECKOUT_INTERVAL_MS` is how often rrweb re-snapshots the page, and it
+is the dominant term in storage — at the 30s default a nine-hour session stores
+roughly 1,080 complete copies of the DOM, stylesheets and all. Raising it to
+120s or 300s cuts disk close to linearly. The cost is seek latency: jumping to
+an arbitrary point in a replay may have to apply more diffs. Playback from the
+start is unaffected. Accepted range is 5,000–3,600,000 ms.
+
+If your CSS bundle is large, note that it is inlined into *every* snapshot —
+shrinking the bundle and raising the interval multiply together.
+
+`TRACE_UX_INLINE_STYLESHEET` controls that inlining. It defaults to on, matching
+rrweb. Turning it off makes snapshots dramatically smaller, but the replay must
+then load your stylesheets from the recorded origin, which the replay page's own
+`style-src 'self'` CSP blocks — so replays come back unstyled. The server stores
+each distinct stylesheet once regardless, so leaving this on is usually the
+right trade.
+
+`TRACE_UX_SLIM_DOM` drops content a replay never needs: comments, `<script>`
+tags (they do not execute during playback), favicons, and social, robots and
+verification meta tags. On by default, worth a fraction of a percent, and
+harmless.
 
 ### Disk budget
 

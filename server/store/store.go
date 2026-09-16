@@ -359,6 +359,22 @@ var migrations = []string{
 	ALTER TABLE feedback ADD COLUMN user_id     TEXT NOT NULL DEFAULT '';
 	CREATE INDEX IF NOT EXISTS idx_feedback_visitor ON feedback(site_id, visitor_key);
 	`,
+	// v16: store each stylesheet once instead of once per snapshot. See
+	// cssdedupe.go for why this is a link table and not a reference count.
+	`
+	CREATE TABLE IF NOT EXISTS css_assets (
+		hash       TEXT PRIMARY KEY,
+		data       BLOB    NOT NULL,
+		bytes      INTEGER NOT NULL,
+		created_at INTEGER NOT NULL
+	);
+	CREATE TABLE IF NOT EXISTS session_css (
+		session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		hash       TEXT NOT NULL,
+		PRIMARY KEY (session_id, hash)
+	);
+	CREATE INDEX IF NOT EXISTS idx_session_css_hash ON session_css(hash);
+	`,
 }
 
 func (s *Store) migrate() error {

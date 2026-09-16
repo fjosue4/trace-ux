@@ -166,6 +166,12 @@ func (s *Store) SweepToBudget(dataDir string, maxBytes uint64, floorDays int) (S
 		}
 		res.SessionsGone += n
 
+		// Stylesheets those sessions were the last to reference go too, or the
+		// reclaim below frees less than the delete appeared to and the loop
+		// keeps cutting, hunting bytes that are in fact still linked.
+		if _, err := s.GCCSSAssets(); err != nil {
+			return res, err
+		}
 		// Hand the pages back before re-measuring, or the loop reads a stale
 		// "still over" and keeps deleting.
 		if err := s.ReclaimFreePages(); err != nil {

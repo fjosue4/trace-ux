@@ -15,7 +15,29 @@ import (
 // retryable without server round-trips.
 
 // IngestBodyLimit is the maximum accepted (decompressed) tracker request body.
-const IngestBodyLimit = 10 << 20 // 10 MB
+//
+// It has to exceed the per-event cap with room to spare: a batch carries a
+// FullSnapshot plus whatever incremental events were buffered alongside it, so
+// a body limit at or below the single-event limit would reject batches whose
+// events were each individually legal. SetIngestBodyLimit keeps the two in step
+// when TRACE_UX_MAX_EVENT_MB raises the event cap.
+//
+// This bounds the DECOMPRESSED size -- rrweb JSON gzips to roughly a tenth, so
+// the wire body stays far smaller and nginx's client_max_body_size does not
+// need to track this number.
+var IngestBodyLimit = defaultIngestBodyLimit
+
+const defaultIngestBodyLimit = 12 << 20 // 12 MB, the headroom for a 4 MB event
+
+// SetIngestBodyLimit raises the request ceiling to sit above a configured
+// per-event cap. Called once at startup before any request is served; it never
+// lowers the limit below the default, so a small event cap cannot shrink the
+// room a batch of ordinary events needs.
+func SetIngestBodyLimit(n int) {
+	if n > IngestBodyLimit {
+		IngestBodyLimit = n
+	}
+}
 
 // ErrSessionSiteMismatch is returned when a session id is reused across sites.
 var ErrSessionSiteMismatch = errors.New("session belongs to another site")
@@ -150,6 +172,13 @@ func (s *Store) SaveEvents(siteID int64, sessionID string, seq int, events []jso
 	now := time.Now().Unix()
 	if err := s.EnsureSessionForSite(siteID, sessionID, now); err != nil {
 		return err
+	}
+	// Pull inlined stylesheets out before the chunk is compressed and stored.
+	// Kept on the SERVER permanently, not just until the tracker learns to do
+	// it: a GTM snippet or an older npm build will keep inlining, and those
+	// recordings should still cost one copy.
+	if deduped, err := s.DedupeCSS(sessionID, events); err == nil {
+		events = deduped
 	}
 	raw, err := json.Marshal(events)
 	if err != nil {

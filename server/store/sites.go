@@ -517,6 +517,10 @@ func (s *Store) CanStartRecording(siteID int64, sessionID string, maxConcurrent 
 // RetentionSweep applies each site's retention windows: sessions (recordings)
 // and feedback are deleted independently. Sites without an explicit window
 // fall back to the server default.
+// RetentionSweep and SweepToBudget both end by collecting stylesheets nothing
+// references any more. Deleting sessions without this would leave the blobs
+// behind, so the disk budget would measure bytes it can never reclaim and keep
+// pruning in a loop looking for them.
 func (s *Store) RetentionSweep(defaultDays int) (int64, error) {
 	sites, err := s.ListSites()
 	if err != nil {
@@ -592,6 +596,9 @@ func (s *Store) RetentionSweep(defaultDays int) (int64, error) {
 		return total, err
 	} else {
 		total += n
+	}
+	if _, err := s.GCCSSAssets(); err != nil {
+		return total, err
 	}
 	return total, nil
 }
