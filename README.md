@@ -184,10 +184,37 @@ Then manage the server with:
 | `trace-ux --status` | is it running? |
 | `trace-ux --start` / `--stop` / `--restart` | control the service |
 | `trace-ux --logs` | last 100 log lines (`journalctl -u trace-ux -f` to follow) |
-| `trace-ux --password <new>` | set a new admin password (revokes old admin logins) |
+| `trace-ux --password '<new>'` | set a new admin password (revokes old admin logins) — **single-quote it**, see below |
 | `trace-ux --update` | upgrade to the latest release |
 | `trace-ux --uninstall` | remove it (recordings are kept) |
 | `trace-ux --run` | run in the foreground for debugging |
+
+### First login
+
+The installer generates the admin password and writes it to the env file rather
+than printing it. Read it from there:
+
+```bash
+sudo grep '^TRACE_UX_PASSWORD=' /etc/trace-ux/trace-ux.env
+```
+
+Sign in as `admin` with that value, then change it:
+
+```bash
+sudo trace-ux --password 'your-new-password'
+```
+
+**Single-quote the password.** Passwords worth using contain characters the
+shell interprets before TraceUX ever sees them. `!` triggers history expansion
+in an interactive bash session, so an unquoted `Pa!ss` either expands to
+something else or fails outright with `event not found` — and you end up locked
+out by a password you never chose. `$`, `` ` `` and `\` are substituted too.
+Double quotes do **not** stop any of this; only single quotes do.
+
+Two follow-ups worth knowing: the password is passed as a command argument, so
+it lands in your shell history and is briefly visible in `ps` — clear the
+history entry on a shared machine. And `--password` revokes every existing admin
+login, so other sessions are signed out immediately.
 
 Building from a git clone instead of a release: `sudo bash install.sh --build-from-source` (needs Go ≥ 1.27 and Node ≥ 18). Releases are built automatically by [.github/workflows/release.yml](.github/workflows/release.yml) when a `v*` tag is pushed.
 

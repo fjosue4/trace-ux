@@ -3,6 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Same mark as the landing site (trace-ux-landing/public/favicon.svg).
+         Vite copies public/ into dist/, which the release build then folds into
+         server/static/ and embeds in the binary, so this ships with the app and
+         needs no separate asset hosting. -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/favicon.svg" />
     <title>TraceUX</title>
     <script>
       // Set the theme before first paint to avoid a flash of the wrong palette.
