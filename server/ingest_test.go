@@ -94,25 +94,92 @@ func TestListSessionsFiltersCountry(t *testing.T) {
 	}
 }
 
-// A FullSnapshot is the entire serialized DOM and is the largest event any
-// session produces. When the per-event cap was 512 KB it sat below what a real
-// single-page app emits, so the snapshot was rejected while the small
-// incremental mutations that followed were accepted -- leaving the player a
-// stream of diffs with no document to apply them to. The session looked
-// recorded and replayed as a blank screen.
-func TestEventCapClearsARealisticFullSnapshot(t *testing.T) {
-	// A conservative stand-in for a complex app's DOM snapshot. The point is
-	// the order of magnitude: megabytes, not kilobytes.
-	const realisticSnapshot = 2 << 20 // 2 MB
-
-	if maxEventBytes < realisticSnapshot {
-		t.Fatalf("maxEventBytes = %d, too small for a %d-byte FullSnapshot; "+
-			"replay will render blank for real apps", maxEventBytes, realisticSnapshot)
+// Both knobs default to exactly what was hardcoded before, so an existing
+// install that sets neither behaves identically after upgrading.
+func TestTunableDefaultsAreUnchanged(t *testing.T) {
+	t.Setenv("TRACE_UX_PASSWORD", "x")
+	cfg := loadConfig()
+	if cfg.MaxEventBytes != 4<<20 {
+		t.Fatalf("MaxEventBytes = %d, want 4 MB", cfg.MaxEventBytes)
 	}
-	// ...and still bounded by the whole-request limit, so raising it cannot be
-	// used to push an unbounded body through.
-	if maxEventBytes >= store.IngestBodyLimit {
-		t.Fatalf("maxEventBytes = %d must stay below IngestBodyLimit = %d",
-			maxEventBytes, store.IngestBodyLimit)
+	if cfg.CheckoutIntervalMS != 30_000 {
+		t.Fatalf("CheckoutIntervalMS = %d, want 30000", cfg.CheckoutIntervalMS)
+	}
+}
+
+func TestMaxEventMBParsing(t *testing.T) {
+	for _, tc := range []struct {
+		val  string
+		want int
+	}{
+		{"8", 8 << 20},
+		{"16", 16 << 20},
+		{"999", maxMaxEventMB << 20}, // clamped, not accepted blindly
+		{"0", 4 << 20},               // invalid -> default
+		{"-2", 4 << 20},
+		{"4MB", 4 << 20}, // a unit suffix must not silently disable the cap
+		{"", 4 << 20},
+	} {
+		t.Run(tc.val, func(t *testing.T) {
+			t.Setenv("TRACE_UX_PASSWORD", "x")
+			t.Setenv("TRACE_UX_MAX_EVENT_MB", tc.val)
+			if got := loadConfig().MaxEventBytes; got != tc.want {
+				t.Fatalf("TRACE_UX_MAX_EVENT_MB=%q -> %d, want %d", tc.val, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCheckoutIntervalParsing(t *testing.T) {
+	for _, tc := range []struct {
+		val  string
+		want int
+	}{
+		{"300000", 300_000},
+		{"120000", 120_000},
+		{"1000", 30_000},     // below the floor -> default
+		{"99999999", 30_000}, // above the ceiling -> default
+		{"soon", 30_000},
+	} {
+		t.Run(tc.val, func(t *testing.T) {
+			t.Setenv("TRACE_UX_PASSWORD", "x")
+			t.Setenv("TRACE_UX_CHECKOUT_INTERVAL_MS", tc.val)
+			if got := loadConfig().CheckoutIntervalMS; got != tc.want {
+				t.Fatalf("TRACE_UX_CHECKOUT_INTERVAL_MS=%q -> %d, want %d", tc.val, got, tc.want)
+			}
+		})
+	}
+}
+
+// A batch is a FullSnapshot plus whatever incrementals were buffered with it,
+// so the request ceiling must clear the per-event cap. If it did not, raising
+// TRACE_UX_MAX_EVENT_MB would still reject batches whose events were each
+// individually legal -- the original blank-replay bug, one layer down.
+func TestBodyLimitStaysAboveTheEventCap(t *testing.T) {
+	for _, mb := range []int{4, 8, 16, 64} {
+		store.SetIngestBodyLimit(mb<<20 + (8 << 20))
+		if store.IngestBodyLimit <= mb<<20 {
+			t.Fatalf("event cap %d MB but body limit %d", mb, store.IngestBodyLimit)
+		}
+	}
+}
+
+// A Config built without loadConfig leaves these at zero. Unguarded, a zero
+// event cap rejects every event and a zero checkout interval is handed to rrweb
+// as "never re-snapshot" -- both of which surface as a replay that scrubs and
+// renders nothing, which is the failure this whole area already produced once.
+func TestZeroValuedConfigFallsBackToDefaults(t *testing.T) {
+	for name, srv := range map[string]*Server{
+		"empty cfg": {cfg: &Config{}},
+		"nil cfg":   {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := srv.maxEventBytes(); got != defaultMaxEventMB<<20 {
+				t.Errorf("maxEventBytes() = %d, want the %d MB default", got, defaultMaxEventMB)
+			}
+			if got := srv.checkoutIntervalMS(); got != defaultCheckoutIntervalMS {
+				t.Errorf("checkoutIntervalMS() = %d, want %d", got, defaultCheckoutIntervalMS)
+			}
+		})
 	}
 }

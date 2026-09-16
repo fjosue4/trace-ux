@@ -52,31 +52,50 @@ type Server struct {
 }
 
 type Config struct {
-	Addr              string
-	DataDir           string
-	Password          string // bootstrap admin password (TRACE_UX_PASSWORD)
-	ResetAdmin        bool   // TRACE_UX_RESET_ADMIN=1: re-point admin at TRACE_UX_PASSWORD
-	RetentionDays     int
-	DevStaticDir      string // serve dashboard/tracker from disk instead of embed (dev)
-	SecureCookies     bool
-	TrustedProxyCIDRs []*net.IPNet
-	DemoReplayEnabled bool
-	DemoReplayTTL     time.Duration
-	MaxDiskBytes      uint64 // TRACE_UX_MAX_GB_DISK; 0 disables the disk budget
-	SpaceFloorDays    int    // TRACE_UX_SPACE_FLOOR_DAYS; never prune newer than this
+	Addr               string
+	DataDir            string
+	Password           string // bootstrap admin password (TRACE_UX_PASSWORD)
+	ResetAdmin         bool   // TRACE_UX_RESET_ADMIN=1: re-point admin at TRACE_UX_PASSWORD
+	RetentionDays      int
+	DevStaticDir       string // serve dashboard/tracker from disk instead of embed (dev)
+	SecureCookies      bool
+	TrustedProxyCIDRs  []*net.IPNet
+	DemoReplayEnabled  bool
+	DemoReplayTTL      time.Duration
+	MaxDiskBytes       uint64 // TRACE_UX_MAX_GB_DISK; 0 disables the disk budget
+	SpaceFloorDays     int    // TRACE_UX_SPACE_FLOOR_DAYS; never prune newer than this
+	MaxEventBytes      int    // TRACE_UX_MAX_EVENT_MB; ceiling on one rrweb event
+	CheckoutIntervalMS int    // TRACE_UX_CHECKOUT_INTERVAL_MS; rrweb re-snapshot cadence
 }
+
+const (
+	// Unchanged defaults: setting neither variable behaves exactly as before.
+	defaultMaxEventMB         = 4
+	defaultCheckoutIntervalMS = 30_000
+
+	// A decoded request body is held in memory per in-flight request, so the
+	// event cap is bounded rather than free-form.
+	maxMaxEventMB = 64
+
+	// Below ~5s the tracker spends more time snapshotting than recording;
+	// above an hour the checkout stops being a useful seek point at all.
+	minCheckoutIntervalMS = 5_000
+	maxCheckoutIntervalMS = 3_600_000
+)
 
 func loadConfig() Config {
 	cfg := Config{
-		Addr:              envOr("TRACE_UX_ADDR", ":8080"),
-		DataDir:           envOr("TRACE_UX_DATA", "./data"),
-		Password:          os.Getenv("TRACE_UX_PASSWORD"),
-		ResetAdmin:        os.Getenv("TRACE_UX_RESET_ADMIN") == "1",
-		RetentionDays:     90,
-		SecureCookies:     envBool("TRACE_UX_SECURE_COOKIES", true),
-		DemoReplayEnabled: envBool("TRACE_UX_DEMO_REPLAY", false),
-		DemoReplayTTL:     15 * time.Minute,
-		SpaceFloorDays:    3,
+		Addr:               envOr("TRACE_UX_ADDR", ":8080"),
+		DataDir:            envOr("TRACE_UX_DATA", "./data"),
+		Password:           os.Getenv("TRACE_UX_PASSWORD"),
+		ResetAdmin:         os.Getenv("TRACE_UX_RESET_ADMIN") == "1",
+		RetentionDays:      90,
+		SecureCookies:      envBool("TRACE_UX_SECURE_COOKIES", true),
+		DemoReplayEnabled:  envBool("TRACE_UX_DEMO_REPLAY", false),
+		DemoReplayTTL:      15 * time.Minute,
+		SpaceFloorDays:     3,
+		MaxEventBytes:      defaultMaxEventMB << 20,
+		CheckoutIntervalMS: defaultCheckoutIntervalMS,
 	}
 	if v := os.Getenv("TRACE_UX_DEMO_REPLAY_TTL"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 60 && n <= 3600 {
@@ -115,6 +134,38 @@ func loadConfig() Config {
 	if v := os.Getenv("TRACE_UX_SPACE_FLOOR_DAYS"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			cfg.SpaceFloorDays = n
+		}
+	}
+	// Ceiling on ONE rrweb event. The FullSnapshot is the whole serialized DOM
+	// with stylesheets inlined, so a heavy app can exceed the default and its
+	// replays come back blank -- the snapshot is refused while the incremental
+	// events around it are accepted. The 400 reports the actual byte count, so
+	// the number to put here comes straight out of the error.
+	if v := strings.TrimSpace(os.Getenv("TRACE_UX_MAX_EVENT_MB")); v != "" {
+		n, err := strconv.Atoi(v)
+		switch {
+		case err != nil || n <= 0:
+			log.Printf("WARNING: TRACE_UX_MAX_EVENT_MB=%q is not a positive number; keeping %d MB",
+				v, defaultMaxEventMB)
+		case n > maxMaxEventMB:
+			log.Printf("WARNING: TRACE_UX_MAX_EVENT_MB=%d exceeds the %d MB ceiling; clamping. "+
+				"Each in-flight request holds a decoded body of this size in memory.", n, maxMaxEventMB)
+			cfg.MaxEventBytes = maxMaxEventMB << 20
+		default:
+			cfg.MaxEventBytes = n << 20
+		}
+	}
+	// rrweb re-snapshots the entire DOM on this cadence. It is the dominant
+	// term in storage: at 30s a nine-hour session stores ~1080 copies of the
+	// page, stylesheets and all. Raising it trades seek latency in the player
+	// (a jump may replay more diffs) for a near-linear drop in disk.
+	if v := strings.TrimSpace(os.Getenv("TRACE_UX_CHECKOUT_INTERVAL_MS")); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < minCheckoutIntervalMS || n > maxCheckoutIntervalMS {
+			log.Printf("WARNING: TRACE_UX_CHECKOUT_INTERVAL_MS=%q is not between %d and %d; keeping %d",
+				v, minCheckoutIntervalMS, maxCheckoutIntervalMS, defaultCheckoutIntervalMS)
+		} else {
+			cfg.CheckoutIntervalMS = n
 		}
 	}
 	cfg.DevStaticDir = os.Getenv("TRACE_UX_DEV_STATIC")
@@ -841,7 +892,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"widget":               widget,
 		"sample_rate":          1.0,
-		"checkout_interval_ms": 30000,
+		"checkout_interval_ms": s.checkoutIntervalMS(),
 		"mask_inputs":          true,
 		"flush_interval_ms":    5000,
 		"flush_batch_size":     20,

@@ -15,7 +15,29 @@ import (
 // retryable without server round-trips.
 
 // IngestBodyLimit is the maximum accepted (decompressed) tracker request body.
-const IngestBodyLimit = 10 << 20 // 10 MB
+//
+// It has to exceed the per-event cap with room to spare: a batch carries a
+// FullSnapshot plus whatever incremental events were buffered alongside it, so
+// a body limit at or below the single-event limit would reject batches whose
+// events were each individually legal. SetIngestBodyLimit keeps the two in step
+// when TRACE_UX_MAX_EVENT_MB raises the event cap.
+//
+// This bounds the DECOMPRESSED size -- rrweb JSON gzips to roughly a tenth, so
+// the wire body stays far smaller and nginx's client_max_body_size does not
+// need to track this number.
+var IngestBodyLimit = defaultIngestBodyLimit
+
+const defaultIngestBodyLimit = 12 << 20 // 12 MB, the headroom for a 4 MB event
+
+// SetIngestBodyLimit raises the request ceiling to sit above a configured
+// per-event cap. Called once at startup before any request is served; it never
+// lowers the limit below the default, so a small event cap cannot shrink the
+// room a batch of ordinary events needs.
+func SetIngestBodyLimit(n int) {
+	if n > IngestBodyLimit {
+		IngestBodyLimit = n
+	}
+}
 
 // ErrSessionSiteMismatch is returned when a session id is reused across sites.
 var ErrSessionSiteMismatch = errors.New("session belongs to another site")

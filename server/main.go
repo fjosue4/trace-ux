@@ -63,6 +63,12 @@ func main() {
 		log.Fatalf("cannot ensure admin user: %v", err)
 	}
 
+	// A batch carries the FullSnapshot plus the incremental events buffered
+	// alongside it, so the request ceiling has to clear the per-event cap with
+	// room to spare -- otherwise raising TRACE_UX_MAX_EVENT_MB alone would still
+	// reject batches whose events were each individually legal.
+	store.SetIngestBodyLimit(cfg.MaxEventBytes + (8 << 20))
+
 	srv := &Server{
 		store:  db,
 		cfg:    &cfg,

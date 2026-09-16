@@ -20,19 +20,6 @@ import (
 const (
 	maxSessionIDLength = 64
 	maxEventCount      = 5_000
-	// One rrweb event. This has to clear a FullSnapshot, which is the whole
-	// serialized DOM of the page and is by far the largest event any session
-	// produces -- a real single-page app runs to megabytes.
-	//
-	// It was 512 KB, which silently broke replay for exactly those apps: the
-	// FullSnapshot was rejected, the incremental mutations that followed were
-	// accepted, and the player was left with a stream of diffs and no document
-	// to apply them to. The session looked recorded -- correct duration, a
-	// scrubbable timeline -- and played back as a blank screen.
-	//
-	// IngestBodyLimit (10 MB, decompressed) still bounds the request as a
-	// whole, so this ceiling cannot be used to push an unbounded body through.
-	maxEventBytes      = 4 << 20
 	maxURLLength       = 2_048
 	maxReferrerLength  = 2_048
 	maxTitleLength     = 512
@@ -211,9 +198,10 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			// bare string in the network tab, and the visible symptom -- a
 			// replay that scrubs but renders nothing -- points at the player
 			// rather than at ingest.
-			if len(event) > maxEventBytes {
+			if limit := s.maxEventBytes(); len(event) > limit {
 				writeErr(w, http.StatusBadRequest, fmt.Sprintf(
-					"event is too large: %d bytes, limit %d", len(event), maxEventBytes))
+					"event is too large: %d bytes, limit %d (raise TRACE_UX_MAX_EVENT_MB)",
+					len(event), limit))
 				return
 			}
 		}
@@ -393,21 +381,42 @@ func validSessionID(id string) bool {
 	return true
 }
 
+// maxEventBytes is the configured per-event ceiling, falling back to the
+// default when a Config was built without loadConfig -- tests, or anything
+// embedding the server. A zero here would reject every event and produce
+// exactly the blank replay this cap already caused once.
+func (s *Server) maxEventBytes() int {
+	if s.cfg != nil && s.cfg.MaxEventBytes > 0 {
+		return s.cfg.MaxEventBytes
+	}
+	return defaultMaxEventMB << 20
+}
+
+// checkoutIntervalMS is the cadence handed to rrweb. Zero would be served to
+// the tracker verbatim and disable re-snapshotting altogether, so it falls back
+// the same way.
+func (s *Server) checkoutIntervalMS() int {
+	if s.cfg != nil && s.cfg.CheckoutIntervalMS > 0 {
+		return s.cfg.CheckoutIntervalMS
+	}
+	return defaultCheckoutIntervalMS
+}
+
 // readBody reads the request body, transparently decoding gzip. Browsers forbid
 // setting Content-Encoding on sendBeacon/fetch, so the tracker signals gzip
 // with a ?gz=1 query parameter; a real Content-Encoding header is honored too.
 func readBody(r *http.Request) ([]byte, error) {
-	if r.ContentLength > store.IngestBodyLimit {
+	if r.ContentLength > int64(store.IngestBodyLimit) {
 		return nil, errRequestBodyTooLarge
 	}
-	var reader io.Reader = io.LimitReader(r.Body, store.IngestBodyLimit+1)
+	var reader io.Reader = io.LimitReader(r.Body, int64(store.IngestBodyLimit)+1)
 	if r.URL.Query().Get("gz") == "1" || strings.EqualFold(r.Header.Get("Content-Encoding"), "gzip") {
 		zr, err := gzip.NewReader(reader)
 		if err != nil {
 			return nil, err
 		}
 		defer zr.Close()
-		reader = io.LimitReader(zr, store.IngestBodyLimit+1)
+		reader = io.LimitReader(zr, int64(store.IngestBodyLimit)+1)
 	}
 	body, err := io.ReadAll(reader)
 	if err != nil {
