@@ -4,7 +4,6 @@ export const MAX_VISIBLE_LOGS = 1000;
 export const LIVE_REFRESH_MS = 5000;
 
 export const severityOptions = [
-  { value: 'all', label: 'All severities' },
   { value: 'error', label: 'Errors' },
   { value: 'warn', label: 'Warnings' },
   { value: 'info', label: 'Info' },

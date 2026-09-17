@@ -35,9 +35,21 @@ export const sessionsEndpoints = {
   deleteSession: (id: string) =>
     request<{ ok: boolean }>(`/api/sessions/${id}`, { method: 'DELETE' }),
 
+  // The seek table: which chunk covers which moment, and which chunks are
+  // FullSnapshots and therefore valid places to start rendering. ~10 KB for a
+  // 24-minute recording, against 25 MB to learn the same thing by downloading it.
+  getSessionIndex: (id: string) =>
+    request<{
+      chunks: { seq: number; first_ts: number; last_ts: number; events: number; snapshot: boolean }[];
+      first_ts: number;
+      last_ts: number;
+    }>(`/api/sessions/${id}/index`),
+
+  // css=ref keeps stylesheets out of the event stream; they are fetched once
+  // each from /api/css-assets/{hash} and cached by the browser.
   getEvents: (id: string, afterSeq: number) =>
     request<{ next_seq: number; has_more: boolean; events: unknown[] }>(
-      `/api/sessions/${id}/events?after_seq=${afterSeq}&max_events=400`,
+      `/api/sessions/${id}/events?after_seq=${afterSeq}&max_events=400&css=ref`,
     ),
 
   getSharedSession: (token: string) =>

@@ -25,10 +25,12 @@ export const sitesEndpoints = {
       method: 'PATCH',
       body: JSON.stringify({ recording_enabled: enabled }),
     }),
-  updateSiteURL: (id: number, url: string) =>
-    request<{ ok: boolean; url: string }>(`/api/sites/${id}`, {
+  // Name and URL travel together so one Save cannot half-apply; the server
+  // validates both before writing either. Omitted fields are left alone.
+  updateSiteDetails: (id: number, details: { name?: string; url?: string }) =>
+    request<{ ok: boolean; name?: string; url?: string }>(`/api/sites/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify({ url }),
+      body: JSON.stringify(details),
     }),
   updateSiteSettings: (id: number, settings: SiteSettings) =>
     request<SiteSettings>(`/api/sites/${id}/settings`, {

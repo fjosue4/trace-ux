@@ -2,15 +2,17 @@ import { Link } from 'react-router-dom';
 import { fmtTime } from '../../../../lib/format';
 import Card from '../../../../components/ui/Card';
 import Button from '../../../../components/ui/Button';
+import Notice from '../../../../components/ui/Notice';
 import { Icon } from '../../../../components/ui/Icon';
-import { Input } from '../../../../components/ui/fields';
+import { Field, Input } from '../../../../components/ui/fields';
 import SnippetCard from '../../../../components/sites/SnippetCard';
-import { useSiteUrl } from './hooks/useSiteUrl';
+import { useSiteDetails } from './hooks/useSiteDetails';
 import { useSitePerformanceKeys } from './hooks/useSitePerformanceKeys';
 import { SiteTabProps } from './SiteTab.types';
 
 export function SiteTab({ id, site, detail, isAdmin, onDetailChanged, onError }: SiteTabProps) {
-  const { urlDraft, setUrlDraft, urlSaving, saveURL } = useSiteUrl(id, onDetailChanged, onError);
+  const { name, url, editName, editUrl, dirty, saving, save, reset, error: detailsError } =
+    useSiteDetails(id, { name: site.name, url: site.url }, onDetailChanged);
   const {
     performanceKeys,
     newPerformanceKey,
@@ -32,41 +34,67 @@ export function SiteTab({ id, site, detail, isAdmin, onDetailChanged, onError }:
 
   return (
     <>
-      <Card className="site-url">
+      <Card className="site-details">
         <form
-          className="row row--between"
+          className="site-details__form"
           onSubmit={(e) => {
             e.preventDefault();
-            saveURL();
+            save();
           }}
         >
           <div className="site-url__info">
             <strong>
-              <Icon name="globe" size={13} /> Website URL
+              <Icon name="globe" size={13} /> Site details
             </strong>
             <span className="muted small">
-              Recordings are only accepted from this origin — update it if the site moves.
+              The name is how this site is labelled across the dashboard. Recordings are only
+              accepted from the URL’s origin — update it if the site moves.
             </span>
           </div>
+
           {isAdmin ? (
-            <div className="row">
-              <Input
-                value={urlDraft ?? site.url}
-                onChange={(e) => setUrlDraft(e.target.value)}
-                placeholder="https://your-site.com"
-                inputMode="url"
-              />
-              <Button
-                type="submit"
-                variant="secondary"
-                size="sm"
-                disabled={urlSaving || (urlDraft ?? site.url).trim() === site.url}
-              >
-                {urlSaving ? 'Saving…' : 'Save URL'}
-              </Button>
-            </div>
+            <>
+              <div className="site-details__fields">
+                <Field label="Site name">
+                  <Input
+                    value={name}
+                    onChange={(e) => editName(e.target.value)}
+                    placeholder="Reply Pro"
+                    maxLength={100}
+                  />
+                </Field>
+                <Field label="Site URL">
+                  <Input
+                    value={url}
+                    onChange={(e) => editUrl(e.target.value)}
+                    placeholder="https://your-site.com"
+                    inputMode="url"
+                  />
+                </Field>
+              </div>
+              {detailsError && <Notice tone="error">{detailsError}</Notice>}
+              <div className="site-details__actions">
+                {dirty && (
+                  <Button type="button" variant="ghost" size="sm" onClick={reset} disabled={saving}>
+                    Cancel
+                  </Button>
+                )}
+                <Button type="submit" variant="secondary" size="sm" disabled={!dirty || saving}>
+                  {saving ? 'Saving\u2026' : 'Save changes'}
+                </Button>
+              </div>
+            </>
           ) : (
-            <span className="small">{site.url || '—'}</span>
+            <dl className="site-details__readonly">
+              <div>
+                <dt className="muted small">Site name</dt>
+                <dd className="small">{site.name}</dd>
+              </div>
+              <div>
+                <dt className="muted small">Site URL</dt>
+                <dd className="small">{site.url || '\u2014'}</dd>
+              </div>
+            </dl>
           )}
         </form>
       </Card>

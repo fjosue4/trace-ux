@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -199,6 +200,28 @@ func (s *Store) putCSSAsset(sessionID, css string) (string, error) {
 	}
 	return hash, nil
 }
+
+// GetCSSAssetGzip returns a stylesheet still gzipped, exactly as stored.
+//
+// The blob in css_assets is already gzip, so the replay endpoint can hand it
+// straight to the client under Content-Encoding: gzip -- no decompress on the
+// server, no recompress, and the 3.2 MB sheet travels as ~250 KB.
+func (s *Store) GetCSSAssetGzip(hash string) ([]byte, int, error) {
+	var data []byte
+	var n int
+	err := s.DB.QueryRow(`SELECT data, bytes FROM css_assets WHERE hash = ?`, hash).Scan(&data, &n)
+	if err == sql.ErrNoRows {
+		return nil, 0, ErrNoCSSAsset
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+	return data, n, nil
+}
+
+// ErrNoCSSAsset reports a stylesheet the store does not hold, so the handler
+// can answer 404 rather than 500.
+var ErrNoCSSAsset = errors.New("no such stylesheet")
 
 func (s *Store) getCSSAsset(hash string) (string, error) {
 	var data []byte

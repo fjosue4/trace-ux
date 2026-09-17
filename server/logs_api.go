@@ -14,12 +14,30 @@ import (
 func parseLogFilter(r *http.Request) (store.LogFilter, error) {
 	q := r.URL.Query()
 	f := store.LogFilter{
-		Severity:  strings.TrimSpace(q.Get("severity")),
 		SessionID: strings.TrimSpace(q.Get("session_id")),
 		Limit:     store.MaxLogListLimit,
 	}
-	if f.Severity != "" && !store.ValidLogSeverity(f.Severity) {
-		return f, fmt.Errorf("invalid severity")
+	var severities []string
+	seenSeverities := map[string]bool{}
+	for _, raw := range q["severity"] {
+		for _, value := range strings.Split(raw, ",") {
+			severity := strings.TrimSpace(value)
+			if severity == "" {
+				continue
+			}
+			if !store.ValidLogSeverity(severity) {
+				return f, fmt.Errorf("invalid severity")
+			}
+			if !seenSeverities[severity] {
+				severities = append(severities, severity)
+				seenSeverities[severity] = true
+			}
+		}
+	}
+	if len(severities) == 1 {
+		f.Severity = severities[0]
+	} else if len(severities) > 1 {
+		f.Severities = severities
 	}
 	if f.SessionID != "" && (len(f.SessionID) > maxSessionIDLength || !validSessionID(f.SessionID)) {
 		return f, fmt.Errorf("invalid session_id")

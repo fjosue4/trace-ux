@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, Site, Ticket, TicketStatus, TicketThread } from '../../../api';
+import { playNotificationSound } from '../../../lib/notificationSound';
 import { ticketPollIntervalMs } from '../Tickets.constants';
 import { sortTickets, ticketMatchesFilters } from '../Tickets.helpers';
 import { DashboardTicketEvent, SiteSelection, StatusSelection } from '../Tickets.types';
@@ -147,6 +148,18 @@ export function useTickets() {
           return;
         }
         if (!payload.type?.startsWith('ticket.')) return;
+
+        // Staff replies are sent from this dashboard, so only an incoming
+        // visitor message should announce itself here. A visitor-created
+        // ticket carries its opening message on ticket.created instead of a
+        // separate ticket.message event. The socket still updates the thread
+        // for every message below.
+        const incomingVisitorMessage =
+          (payload.type === 'ticket.message' && payload.message?.author === 'visitor') ||
+          (payload.type === 'ticket.created' && payload.ticket?.last_message_author === 'visitor');
+        if (incomingVisitorMessage) {
+          playNotificationSound();
+        }
 
         if (payload.type === 'ticket.deleted') {
           const id = Number(payload.id);

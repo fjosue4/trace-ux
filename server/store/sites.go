@@ -652,6 +652,11 @@ func (s *Store) UpdateSiteRecording(siteID int64, enabled bool) error {
 	return err
 }
 
+func (s *Store) UpdateSiteName(siteID int64, name string) error {
+	_, err := s.DB.Exec(`UPDATE sites SET name = ? WHERE id = ?`, name, siteID)
+	return err
+}
+
 func (s *Store) UpdateSiteURL(siteID int64, url string) error {
 	_, err := s.DB.Exec(`UPDATE sites SET url = ? WHERE id = ?`, url, siteID)
 	return err

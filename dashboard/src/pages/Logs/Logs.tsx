@@ -85,8 +85,10 @@ export default function Logs() {
             <Select
               className="logs-filter"
               ariaLabel="Severity"
+              multiple
               value={severitySel}
               onChange={(value) => setSeveritySel(value as SeveritySelection)}
+              emptyLabel="All severities"
               options={severityOptions}
             />
             <Select
@@ -143,7 +145,7 @@ export default function Logs() {
           description={
             live && timeRange === '15m'
               ? 'New logs from the last 15 minutes will appear here automatically.'
-              : 'Try a wider time range, another severity, or enable Logs in a site configuration.'
+              : 'Try a wider time range, another severity combination, or enable Logs in a site configuration.'
           }
           icon={<Icon name="code" size={20} />}
         />

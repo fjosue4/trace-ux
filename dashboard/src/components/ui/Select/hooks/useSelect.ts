@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { MenuPos, SelectOption, SelectProps } from '../Select.types';
+import { MenuPos, SelectHookProps, SelectOption } from '../Select.types';
 
 // A document-positioned popover anchored to the trigger. It is rendered in a
 // body portal so animated cards/tables cannot clip it, and it flips upward
@@ -26,9 +26,9 @@ function computeMenuPos(wrap: HTMLElement, optionCount: number): { pos: MenuPos;
 
 // Fully custom dropdown: a trigger button plus a styled listbox popover. No
 // native popup is involved, so it looks identical on every OS and theme.
-// Keyboard: Enter/Space/ArrowDown opens, arrows navigate, Enter selects,
-// Escape/Tab/outside-click closes. Focus stays on the trigger.
-export function useSelect({ value, options, onChange, disabled }: Pick<SelectProps, 'value' | 'options' | 'onChange' | 'disabled'>) {
+// Keyboard: Enter/Space/ArrowDown opens, arrows navigate, Enter selects or
+// toggles, Escape/Tab/outside-click closes. Focus stays on the trigger.
+export function useSelect({ value, options, onChange, multiple = false, disabled }: SelectHookProps) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [pos, setPos] = useState<MenuPos | null>(null);
@@ -76,7 +76,8 @@ export function useSelect({ value, options, onChange, disabled }: Pick<SelectPro
   }, [active, open]);
 
   function openMenu() {
-    const idx = options.findIndex((o) => o.value === value);
+    const selectedValues = Array.isArray(value) ? value : [value];
+    const idx = options.findIndex((o) => selectedValues.includes(o.value));
     setActive(idx >= 0 ? idx : 0);
     if (wrapRef.current) setPos(computeMenuPos(wrapRef.current, options.length).pos);
     setOpen(true);
@@ -84,6 +85,16 @@ export function useSelect({ value, options, onChange, disabled }: Pick<SelectPro
 
   function commit(option?: SelectOption) {
     if (!option) return;
+
+    if (multiple) {
+      const selectedValues = Array.isArray(value) ? value : [];
+      const next = selectedValues.includes(option.value)
+        ? selectedValues.filter((item) => item !== option.value)
+        : [...selectedValues, option.value];
+      onChange(next);
+      return;
+    }
+
     onChange(option.value);
     setOpen(false);
   }

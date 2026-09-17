@@ -7,15 +7,38 @@ import { useSelect } from './hooks/useSelect';
 import { SelectProps } from './Select.types';
 import './Select.scss';
 
-export function Select({ value, options, onChange, className = '', ariaLabel, disabled }: SelectProps) {
+export function Select({
+  value,
+  options,
+  onChange,
+  className = '',
+  ariaLabel,
+  disabled,
+  emptyLabel = 'Select options',
+}: SelectProps) {
+  const multiple = Array.isArray(value);
+  const selectedValues = multiple ? value : [value];
+  const selectedOptions = options.filter((option) => selectedValues.includes(option.value));
+  const selectedLabel = multiple
+    ? selectedOptions.length > 0
+      ? selectedOptions.map((option) => option.label).join(', ')
+      : emptyLabel
+    : selectedOptions[0]?.label ?? value;
+  const handleChange = (next: string | string[]) => {
+    if (multiple) {
+      (onChange as (value: string[]) => void)(Array.isArray(next) ? next : [next]);
+    } else {
+      (onChange as (value: string) => void)(Array.isArray(next) ? next[0] ?? '' : next);
+    }
+  };
+
   const { open, active, pos, wrapRef, menuRef, toggleOpen, onKeyDown, onOptionHover, onOptionSelect } = useSelect({
     value,
     options,
-    onChange,
+    onChange: handleChange,
+    multiple,
     disabled,
   });
-
-  const selected = options.find((o) => o.value === value);
 
   return (
     <span ref={wrapRef} className={classNames('select-wrap', { 'is-open': open }, className)}>
@@ -31,7 +54,7 @@ export function Select({ value, options, onChange, className = '', ariaLabel, di
         whileTap={disabled ? undefined : { scale: 0.985 }}
         transition={spring}
       >
-        <span className="select-trigger__label">{selected?.label ?? value}</span>
+        <span className="select-trigger__label">{selectedLabel}</span>
       </motion.button>
       <motion.svg
         className="select-wrap__chevron"
@@ -57,6 +80,7 @@ export function Select({ value, options, onChange, className = '', ariaLabel, di
                 className="select-menu"
                 role="listbox"
                 aria-label={ariaLabel}
+                aria-multiselectable={multiple || undefined}
                 ref={menuRef}
                 style={pos as CSSProperties}
                 initial={{ opacity: 0, y: -4, scale: 0.98 }}
@@ -64,22 +88,25 @@ export function Select({ value, options, onChange, className = '', ariaLabel, di
                 exit={{ opacity: 0, y: -3, scale: 0.985 }}
                 transition={softSpring}
               >
-                {options.map((option, index) => (
-                  <motion.button
-                    key={option.value}
-                    type="button"
-                    role="option"
-                    aria-selected={option.value === value}
-                    data-active={index === active || undefined}
-                    className={classNames('select-menu__option', { 'is-selected': option.value === value })}
-                    onMouseEnter={() => onOptionHover(index)}
-                    onClick={() => onOptionSelect(option)}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <span className="select-menu__label">{option.label}</span>
-                    {option.value === value && <CheckIcon />}
-                  </motion.button>
-                ))}
+                {options.map((option, index) => {
+                  const isSelected = selectedValues.includes(option.value);
+                  return (
+                    <motion.button
+                      key={option.value}
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      data-active={index === active || undefined}
+                      className={classNames('select-menu__option', { 'is-selected': isSelected })}
+                      onMouseEnter={() => onOptionHover(index)}
+                      onClick={() => onOptionSelect(option)}
+                      whileTap={{ scale: 0.98 }}
+                    >
+                      <span className="select-menu__label">{option.label}</span>
+                      {isSelected && <CheckIcon />}
+                    </motion.button>
+                  );
+                })}
               </motion.div>
             )}
           </AnimatePresence>,

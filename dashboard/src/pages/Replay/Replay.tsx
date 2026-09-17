@@ -31,6 +31,12 @@ export default function Replay() {
     firstTs,
     playerRef,
     removeSession,
+    onPlaybackTime,
+    onSeekOutsideBuffer,
+    buffering,
+    durationMs,
+    rebuildToken,
+    windowStartMs,
   } = useReplay();
 
   if (error) {
@@ -101,7 +107,12 @@ export default function Replay() {
             autoplay={autoplay}
             fallbackW={session.viewport_w}
             fallbackH={session.viewport_h}
-            onTimeChange={setCurrentTime}
+            onTimeChange={onPlaybackTime}
+            onSeekOutsideBuffer={onSeekOutsideBuffer}
+            durationMs={durationMs}
+            buffering={buffering}
+            rebuildToken={rebuildToken}
+            windowStartMs={windowStartMs}
           />
           <MetaCard session={session} />
         </div>

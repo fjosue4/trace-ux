@@ -18,7 +18,7 @@ export function useLogs() {
   const [siteSel, setSiteSel] = useState<SiteSelection>(
     params.get('site') ? Number(params.get('site')) : 'all',
   );
-  const [severitySel, setSeveritySel] = useState<SeveritySelection>('all');
+  const [severitySel, setSeveritySel] = useState<SeveritySelection>([]);
   const [timeRange, setTimeRange] = useState<TimeRange>('15m');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
@@ -47,7 +47,7 @@ export function useLogs() {
       fetching = true;
       const window = resolveTimeWindow(timeRange, customFrom, customTo);
       const siteId = siteSel === 'all' ? null : siteSel;
-      const severity = severitySel === 'all' ? '' : severitySel;
+      const severity = severitySel.length > 0 ? severitySel : '';
       try {
         const [rows, summary] = await Promise.all([
           api.listLogs({

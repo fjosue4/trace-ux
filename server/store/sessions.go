@@ -250,6 +250,22 @@ func (s *Store) GetSessionPages(sessionID string) ([]SessionPage, error) {
 
 // GetSessionChunk returns the decompressed rrweb events of one chunk.
 func (s *Store) GetSessionChunk(sessionID string, seq int) ([]json.RawMessage, error) {
+	events, err := s.GetSessionChunkRaw(sessionID, seq)
+	if err != nil {
+		return nil, err
+	}
+	return s.RehydrateCSS(events)
+}
+
+// GetSessionChunkRaw returns the chunk with stylesheet references left in place.
+//
+// The replay path uses this. Rehydrating server-side means every checkout
+// FullSnapshot carries a fresh copy of the page's whole stylesheet: measured on
+// a 24-minute recording, 4 distinct sheets totalling 6.5 MB expanded 54 times
+// into a 125 MB response, of which 98 MB was the same CSS over and over. The
+// client instead fetches each sheet once from /api/css-assets/{hash}, where it
+// is immutable and therefore cacheable across every recording of that site.
+func (s *Store) GetSessionChunkRaw(sessionID string, seq int) ([]json.RawMessage, error) {
 	var data []byte
 	err := s.DB.QueryRow(`SELECT data FROM chunks WHERE session_id = ? AND seq = ?`, sessionID, seq).Scan(&data)
 	if err != nil {
@@ -268,7 +284,7 @@ func (s *Store) GetSessionChunk(sessionID string, seq int) ([]json.RawMessage, e
 	if err := json.Unmarshal(raw, &events); err != nil {
 		return nil, err
 	}
-	return s.RehydrateCSS(events)
+	return events, nil
 }
 
 // GetSessionChunkSeqs lists the available chunk sequence numbers in order.

@@ -11,6 +11,7 @@
 // text arriving over the wire, and the widget renders them inside the host
 // page's document.
 import { animate } from 'motion/mini';
+import notificationSoundURL from './assets/notification.mp3';
 import { widgetCSS } from './widget-styles';
 
 export type WidgetAppearanceCfg = {
@@ -216,6 +217,27 @@ function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
+function createNotificationSound(): () => void {
+  let audio: HTMLAudioElement | null = null;
+
+  return () => {
+    if (typeof Audio === 'undefined') return;
+    try {
+      if (!audio) {
+        audio = new Audio(notificationSoundURL);
+        audio.preload = 'auto';
+      } else {
+        audio.currentTime = 0;
+      }
+      // A notification can arrive without a prior gesture on the host page.
+      // Autoplay policies may reject it; that should never affect the widget.
+      void audio.play().catch(() => {});
+    } catch {
+      // Audio is an enhancement; unsupported media must not break the widget.
+    }
+  };
+}
+
 // ---- widget ----------------------------------------------------------------
 
 export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
@@ -373,6 +395,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 	}
 
   const unreadCount = () => announcements.filter((a) => !a.read).length;
+  const playNotificationSound = createNotificationSound();
 
   // ---- launcher ----
   const launcher = el('button', 'launcher');
@@ -1439,6 +1462,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     wrap.append(header, open);
     toast.replaceChildren(wrap);
     toast.hidden = false;
+    playNotificationSound();
     clearTimeout(toastTimer);
     animateIn(toast);
   }

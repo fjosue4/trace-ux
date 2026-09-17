@@ -33,7 +33,7 @@ export type LogStats = {
 
 export type LogQuery = {
   siteId?: number | null;
-  severity?: LogSeverity | '';
+  severity?: LogSeverity | LogSeverity[] | '';
   sessionId?: string;
   beforeId?: number;
   fromMs?: number;

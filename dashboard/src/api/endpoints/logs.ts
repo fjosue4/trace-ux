@@ -5,7 +5,11 @@ export const logsEndpoints = {
   listLogs: (query: LogQuery = {}) => {
     const q = new URLSearchParams();
     if (query.siteId) q.set('site_id', String(query.siteId));
-    if (query.severity) q.set('severity', query.severity);
+    if (Array.isArray(query.severity)) {
+      if (query.severity.length > 0) q.set('severity', query.severity.join(','));
+    } else if (query.severity) {
+      q.set('severity', query.severity);
+    }
     if (query.sessionId) q.set('session_id', query.sessionId);
     if (query.beforeId) q.set('before_id', String(query.beforeId));
     if (query.fromMs) q.set('from_ms', String(query.fromMs));

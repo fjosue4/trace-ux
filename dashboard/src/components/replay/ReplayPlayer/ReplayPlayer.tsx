@@ -14,7 +14,7 @@ import '../replay.scss';
 // and the recorded-viewport handling exist once rather than in two copies that
 // drift apart.
 const ReplayPlayer = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(function ReplayPlayer(props, ref) {
-  const { progress } = props;
+  const { progress, buffering } = props;
   const {
     playerFrame,
     playerStage,
@@ -51,6 +51,7 @@ const ReplayPlayer = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(function 
             aria-label={isPlaying ? 'Pause recording' : 'Play recording'}
           />
         )}
+        {playerReady && buffering && <div className="player-stage__buffering" role="status">Buffering…</div>}
         {playerReady ? (
           !started && <PlayerCover onPlay={playFromStart} />
         ) : replayUnavailable ? (

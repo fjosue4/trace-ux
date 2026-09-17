@@ -102,6 +102,59 @@ func TestLogsAreFilteredAndLinkedToSessions(t *testing.T) {
 	}
 }
 
+func TestLogsCanFilterMultipleSeverities(t *testing.T) {
+	_, ts := newTestServer(t)
+	admin := login(t, ts.URL, "admin", "pw")
+
+	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin,
+		`{"name":"Multi severity","url":"https://multi-severity.example"}`)
+	if resp.StatusCode != http.StatusCreated {
+		resp.Body.Close()
+		t.Fatalf("create site: got %d", resp.StatusCode)
+	}
+	var site store.Site
+	if err := json.NewDecoder(resp.Body).Decode(&site); err != nil {
+		resp.Body.Close()
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	settingsURL := fmt.Sprintf("%s/api/sites/%d/settings", ts.URL, site.ID)
+	resp = doReq(t, http.MethodPut, settingsURL, admin,
+		`{"logs":{"enabled":true,"minimum_severity":"debug"}}`)
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		t.Fatalf("enable logs: got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	ingestURL := fmt.Sprintf("%s/api/ingest/%s", ts.URL, site.SiteKey)
+	if r := postJSON(t, ingestURL, `{"type":"hello","session_id":"multi-severity-session","url":"https://multi-severity.example/"}`, false); r.StatusCode != http.StatusOK {
+		t.Fatalf("hello: got %d", r.StatusCode)
+	}
+	if r := postJSON(t, ingestURL, `{"type":"logs","session_id":"multi-severity-session","logs":[
+		{"client_seq":1,"timestamp_ms":1000,"severity":"info","message":"info","url":"https://multi-severity.example/"},
+		{"client_seq":2,"timestamp_ms":2000,"severity":"warn","message":"warning","url":"https://multi-severity.example/"},
+		{"client_seq":3,"timestamp_ms":3000,"severity":"error","message":"error","url":"https://multi-severity.example/"}
+	]}`, false); r.StatusCode != http.StatusOK {
+		t.Fatalf("logs: got %d", r.StatusCode)
+	}
+
+	resp = doReq(t, http.MethodGet,
+		fmt.Sprintf("%s/api/logs?site_id=%d&severity=info,error&limit=10", ts.URL, site.ID), admin, "")
+	defer resp.Body.Close()
+	var filtered []store.Log
+	if err := json.NewDecoder(resp.Body).Decode(&filtered); err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK || len(filtered) != 2 {
+		t.Fatalf("multi-severity response = %+v, status %d", filtered, resp.StatusCode)
+	}
+	if filtered[0].Severity != store.LogSeverityError || filtered[1].Severity != store.LogSeverityInfo {
+		t.Fatalf("multi-severity response = %+v, want error and info", filtered)
+	}
+}
+
 func TestLogRetentionAppliesAgeAndRowCaps(t *testing.T) {
 	srv, ts := newTestServer(t)
 	admin := login(t, ts.URL, "admin", "pw")

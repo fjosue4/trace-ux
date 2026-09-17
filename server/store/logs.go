@@ -1,6 +1,9 @@
 package store
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 const (
 	LogSeverityDebug = "debug"
@@ -82,13 +85,14 @@ type Log struct {
 }
 
 type LogFilter struct {
-	SiteID    int64
-	Severity  string
-	SessionID string
-	FromMs    int64
-	ToMs      int64
-	BeforeID  int64
-	Limit     int
+	SiteID     int64
+	Severity   string
+	Severities []string
+	SessionID  string
+	FromMs     int64
+	ToMs       int64
+	BeforeID   int64
+	Limit      int
 }
 
 type LogStats struct {
@@ -139,9 +143,16 @@ func (s *Store) ListLogs(f LogFilter) ([]Log, error) {
 		query += ` AND se.site_id = ?`
 		args = append(args, f.SiteID)
 	}
-	if f.Severity != "" {
-		query += ` AND l.severity = ?`
-		args = append(args, f.Severity)
+	severities := f.Severities
+	if len(severities) == 0 && f.Severity != "" {
+		severities = []string{f.Severity}
+	}
+	if len(severities) > 0 {
+		placeholders := strings.TrimRight(strings.Repeat("?,", len(severities)), ",")
+		query += ` AND l.severity IN (` + placeholders + `)`
+		for _, severity := range severities {
+			args = append(args, severity)
+		}
 	}
 	if f.SessionID != "" {
 		query += ` AND l.session_id = ?`

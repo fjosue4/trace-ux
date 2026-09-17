@@ -117,6 +117,26 @@ a.hub-row:hover { background: $surface-2; text-decoration: none; }
 .site-url__info { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
 .site-url__info strong { display: inline-flex; align-items: center; gap: 0.35rem; }
 
+.site-details { margin-bottom: 1.2rem; }
+.site-details__form { display: flex; flex-direction: column; gap: 1rem; }
+.site-details__fields {
+  display: grid;
+  /* Two columns while they fit, stacked below ~760px, without a media query
+     tied to a breakpoint this card does not own. */
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.9rem;
+}
+.site-details__fields .field { min-width: 0; }
+.site-details__fields input { width: 100%; }
+.site-details__actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
+.site-details__readonly {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.9rem;
+  margin: 0;
+}
+.site-details__readonly dd { margin: 0.15rem 0 0; word-break: break-word; }
+
 .site-tabs {
   display: flex;
   gap: 0.35rem;

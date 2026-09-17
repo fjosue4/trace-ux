@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -57,8 +58,19 @@ func (s *Server) handleGetSite(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// PATCH /api/sites/{id} — toggle recording on/off and/or update the site URL
-// (the origin the tracker is allowed to record from).
+// validateSiteName is the single definition of what a site may be called, so
+// creating a site and renaming one cannot drift apart.
+func validateSiteName(raw string) (string, error) {
+	name := strings.TrimSpace(raw)
+	if name == "" || len([]rune(name)) > 100 {
+		return "", errors.New("name must be 1-100 characters")
+	}
+	return name, nil
+}
+
+// PATCH /api/sites/{id} — rename the site, change the origin the tracker is
+// allowed to record from, and/or toggle recording. Every field is optional; a
+// field that is absent is left alone.
 func (s *Server) handleUpdateSite(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || id <= 0 {
@@ -67,12 +79,13 @@ func (s *Server) handleUpdateSite(w http.ResponseWriter, r *http.Request) {
 	}
 	var body struct {
 		RecordingEnabled *bool   `json:"recording_enabled"`
+		Name             *string `json:"name"`
 		URL              *string `json:"url"`
 	}
 	if err := readJSON(w, r, &body); err != nil {
 		return
 	}
-	if body.RecordingEnabled == nil && body.URL == nil {
+	if body.RecordingEnabled == nil && body.Name == nil && body.URL == nil {
 		writeErr(w, http.StatusBadRequest, "nothing to update")
 		return
 	}
@@ -85,12 +98,29 @@ func (s *Server) handleUpdateSite(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusNotFound, "site not found")
 		return
 	}
-	if body.URL != nil {
-		siteURL, err := normalizeSiteURL(*body.URL)
-		if err != nil {
+	// Both fields are validated before either is written. They are separate
+	// UPDATEs, so validating as we go would let a good name land and a bad URL
+	// 400 -- reporting failure on a request that changed something.
+	var name, siteURL string
+	if body.Name != nil {
+		if name, err = validateSiteName(*body.Name); err != nil {
 			writeErr(w, http.StatusBadRequest, err.Error())
 			return
 		}
+	}
+	if body.URL != nil {
+		if siteURL, err = normalizeSiteURL(*body.URL); err != nil {
+			writeErr(w, http.StatusBadRequest, err.Error())
+			return
+		}
+	}
+	if body.Name != nil {
+		if err := s.store.UpdateSiteName(id, name); err != nil {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if body.URL != nil {
 		if err := s.store.UpdateSiteURL(id, siteURL); err != nil {
 			writeErr(w, http.StatusInternalServerError, err.Error())
 			return
@@ -106,8 +136,13 @@ func (s *Server) handleUpdateSite(w http.ResponseWriter, r *http.Request) {
 	if body.RecordingEnabled != nil {
 		resp["recording_enabled"] = *body.RecordingEnabled
 	}
+	if body.Name != nil {
+		resp["name"] = name
+	}
+	// The stored value, not the raw input, so the echo stays truthful if
+	// normalizeSiteURL ever does more than trim.
 	if body.URL != nil {
-		resp["url"] = strings.TrimSpace(*body.URL)
+		resp["url"] = siteURL
 	}
 	writeJSON(w, http.StatusOK, resp)
 }

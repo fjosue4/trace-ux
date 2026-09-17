@@ -151,6 +151,55 @@ const LOG_SEVERITY_RANK: Record<LogSeverity, number> = {
 
 const SESSION_TTL_MS = 30 * 60 * 1000; // hidden-tab grace before a visit ends
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // no interaction for this long ends the visit
+
+// rrweb IncrementalSource values that mean a PERSON did something. Everything
+// absent here -- Mutation(0) above all, but also StyleSheetRule, CanvasMutation,
+// Font, Log, StyleDeclaration -- is the page acting on its own.
+//
+// This distinction is what makes IDLE_TIMEOUT_MS mean anything. An application
+// that polls keeps mutating its own DOM, so treating any recorded event as
+// activity means the visit never ends: measured on a real recording, 200
+// minutes of "session" containing 106 minutes of use and 94 minutes of a
+// backgrounded tab talking to itself, its poller throttled by Chrome to one
+// tick every ~5 minutes.
+//
+// Only the END of a visit is affected. Gaps shorter than the timeout stay in
+// the recording at their true length, so a 20-minute pause replays as 20
+// minutes and the timeline still says when things happened. Compressing those
+// gaps is what the player's skip-inactive control is for, and it stays a
+// choice made at playback.
+// How long a page may talk to itself before we stop storing what it says.
+//
+// Past this, page-driven events (a poller re-rendering, a countdown ticking)
+// are discarded: nobody is watching, and the replay of that stretch is a
+// motionless screen either way. rrweb holds the last frame through a gap with
+// no events, so nothing needs to be stored to show it.
+//
+// The gap itself is preserved at true length -- only its contents are dropped.
+// A 20-minute pause still replays as 20 minutes, so the timeline still says
+// when things happened.
+const IDLE_RECORD_GRACE_MS = 60 * 1000;
+
+const INTERACTION_SOURCES = new Set([
+  1, // MouseMove
+  2, // MouseInteraction (click, focus, blur…)
+  3, // Scroll
+  4, // ViewportResize
+  5, // Input
+  6, // TouchMove
+  7, // MediaInteraction
+  12, // Drag
+  14, // Selection
+]);
+
+// Whether this event represents a person interacting, rather than the page
+// mutating itself. Matches the rule the dashboard uses to mark inactive
+// periods, so the two agree about what "idle" means.
+function isUserInteraction(event: eventWithTime): boolean {
+  if (event.type !== 3) return false; // only IncrementalSnapshot carries a source
+  const source = (event.data as { source?: number } | undefined)?.source;
+  return source !== undefined && INTERACTION_SOURCES.has(source);
+}
 const MAX_SESSION_MS = 2 * 60 * 60 * 1000; // even continuous interaction splits at 2h
 const PING_INTERVAL_MS = 15_000;
 const MAX_SEND_RETRIES = 4;        // ~1s, 2s, 4s, 8s with jitter
@@ -367,6 +416,8 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
   }
 
   let stopped = false;
+  let skippingIdle = false; // dropping page-driven events while nobody interacts
+  let resyncQueued = false; // a full snapshot is already scheduled
   let stopRecording: ReturnType<typeof record> | undefined;
   let buffer: eventWithTime[] = [];
   let logBuffer: PendingLog[] = [];
@@ -676,7 +727,36 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
       stopRecording =
         record({
           emit(event) {
-            lastEventAt = Date.now(); // any recorded event (move/click/key/scroll) is activity
+            const now = Date.now();
+            if (isUserInteraction(event)) {
+              // Only a person's actions postpone the idle timeout; the page
+              // mutating itself must not keep a dead visit alive.
+              lastEventAt = now;
+              // Coming back from a dropped stretch, the recorded DOM is stale:
+              // mutations were discarded, so anything that follows would
+              // reference nodes the replayer never created. A fresh snapshot
+              // re-establishes the truth. Scheduled rather than called here,
+              // because takeFullSnapshot emits synchronously and would re-enter
+              // this callback.
+              if (skippingIdle) {
+                skippingIdle = false;
+                if (!resyncQueued) {
+                  resyncQueued = true;
+                  setTimeout(() => {
+                    resyncQueued = false;
+                    try {
+                      record.takeFullSnapshot?.(true);
+                    } catch {
+                      // A failed resync is survivable: the next scheduled
+                      // checkout re-syncs anyway, a little later.
+                    }
+                  }, 0);
+                }
+              }
+            } else if (now - lastEventAt > IDLE_RECORD_GRACE_MS) {
+              skippingIdle = true;
+              return; // nobody is here; storing this buys a motionless frame
+            }
             buffer.push(event);
             if (buffer.length > MAX_BUFFER_EVENTS) {
               // Keep the newest events if a page produces an extreme mutation

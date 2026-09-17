@@ -29,6 +29,13 @@ type Server struct {
 	secret []byte       // HMAC salt for ip_hash (auth cookies are DB-backed now)
 	static http.Handler // SPA + assets
 
+	// Seek indexes, keyed by session id. Building one decompresses the whole
+	// recording, so it is done once and reused for every seek in that replay.
+	// A recording is append-only while live, so a cached index can be stale at
+	// the tail -- handled by re-indexing when the session's chunk count grows.
+	indexMu    sync.Mutex
+	indexCache map[string]cachedIndex
+
 	securityOnce            sync.Once
 	loginIPLimiter          *requestLimiter
 	loginUserLimiter        *requestLimiter
@@ -301,6 +308,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/sessions/stats", s.auth(s.handleSessionStats))
 	mux.HandleFunc("GET /api/sessions/{id}", s.auth(s.handleGetSession))
 	mux.HandleFunc("GET /api/sessions/{id}/events", s.auth(s.handleSessionEvents))
+	mux.HandleFunc("GET /api/sessions/{id}/index", s.auth(s.handleSessionIndex))
+	mux.HandleFunc("GET /api/css-assets/{hash}", s.auth(s.handleCSSAsset))
 	mux.HandleFunc("DELETE /api/sessions/{id}", s.auth(s.requireAdmin(s.handleDeleteSession)))
 
 	// Logs captured from tracked sites. Every row is linked to a
@@ -838,9 +847,9 @@ func (s *Server) handleCreateSite(w http.ResponseWriter, r *http.Request) {
 	if err := readJSON(w, r, &body); err != nil {
 		return
 	}
-	name := strings.TrimSpace(body.Name)
-	if name == "" || len(name) > 100 {
-		writeErr(w, http.StatusBadRequest, "name must be 1-100 characters")
+	name, err := validateSiteName(body.Name)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	siteURL, err := normalizeSiteURL(body.URL)
