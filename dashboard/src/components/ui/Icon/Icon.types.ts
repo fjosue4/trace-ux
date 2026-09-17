@@ -26,6 +26,8 @@ export type IconName =
   | 'megaphone'
   | 'gear'
   | 'filter'
-  | 'lifebuoy';
+  | 'lifebuoy'
+  | 'integrations'
+  | 'slack';
 
 export type IconProps = { name: IconName; size?: number };
