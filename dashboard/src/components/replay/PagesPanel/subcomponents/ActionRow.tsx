@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { fmtClock, stripProto, truncate } from '../../../../lib/format';
+import { fmtClock, fmtLocalDateTime, stripProto, truncate } from '../../../../lib/format';
 import { Icon } from '../../../ui/Icon';
 import { actionLabel, formatReplayOffset, logIcon } from '../actionHelpers';
 import { Action } from '../PagesPanel.types';
@@ -71,7 +71,7 @@ export function ActionRow({ action, isActive, firstTs, setRowRef, onSeek, onOpen
             {action.kind === 'log' && action.url
               ? ` · ${truncate(stripProto(action.url), 34)}`
               : action.kind === 'custom'
-                ? ' · custom event'
+                ? ` · custom event · ${fmtLocalDateTime(Math.floor(action.ts / 1000))}`
                 : action.kind === 'page' && action.title
                   ? ` · ${truncate(action.title, 34)}`
                   : ''}

@@ -21,6 +21,18 @@ export function fmtTime(unix: number): string {
   });
 }
 
+export function fmtLocalDateTime(unix: number): string {
+  if (!unix) return '—';
+  const date = new Date(unix * 1000);
+  const datePart = date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const timePart = date.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return `${datePart} ${timePart}`;
+}
+
 export function fmtClock(unix: number): string {
   if (!unix) return '';
   return new Date(unix * 1000).toLocaleTimeString(undefined, {
