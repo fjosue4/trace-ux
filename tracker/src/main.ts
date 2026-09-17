@@ -52,7 +52,8 @@ export type TraceUXIdentity = {
 
 type LogCfg = {
   enabled: boolean;
-  minimum_severity: LogSeverity;
+  severities?: LogSeverity[];
+  minimum_severity?: LogSeverity;
 };
 
 type TraceUXConfig = {
@@ -513,9 +514,18 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
     send({ type: 'logs', session_id: sessionId, logs }, useBeacon);
   }
 
-  function logMinimumSeverity(): LogSeverity {
-    const configured = cfg.logs?.minimum_severity;
-    return configured && configured in LOG_SEVERITY_RANK ? configured : 'error';
+  function isLogSeverity(value: unknown): value is LogSeverity {
+    return typeof value === 'string' && Object.prototype.hasOwnProperty.call(LOG_SEVERITY_RANK, value);
+  }
+
+  function logSeverities(): LogSeverity[] {
+    const configured = cfg.logs?.severities;
+    if (Array.isArray(configured)) return configured.filter(isLogSeverity);
+
+    const minimum = isLogSeverity(cfg.logs?.minimum_severity) ? cfg.logs.minimum_severity : 'error';
+    return (Object.keys(LOG_SEVERITY_RANK) as LogSeverity[]).filter(
+      (severity) => LOG_SEVERITY_RANK[severity] >= LOG_SEVERITY_RANK[minimum],
+    );
   }
 
   function formatConsoleValue(value: unknown): string {
@@ -536,7 +546,7 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
 
   function captureLog(severity: LogSeverity, args: unknown[]) {
     if (stopped || cfg.recording_enabled === false || cfg.logs?.enabled !== true) return;
-    if (LOG_SEVERITY_RANK[severity] < LOG_SEVERITY_RANK[logMinimumSeverity()]) return;
+    if (!logSeverities().includes(severity)) return;
     logSeq++;
     store.set('trace_ux_log_seq', String(logSeq));
     logBuffer.push({

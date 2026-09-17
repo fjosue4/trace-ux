@@ -934,6 +934,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 		"recording_enabled":    site.RecordingEnabled,
 		"logs": map[string]any{
 			"enabled":          site.RecordingEnabled && site.Settings.Logs.Enabled,
+			"severities":       site.Settings.Logs.Severities,
 			"minimum_severity": site.Settings.Logs.MinimumSeverity,
 		},
 		"feedback": map[string]any{

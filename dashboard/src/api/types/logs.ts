@@ -2,7 +2,9 @@ export type LogSeverity = 'debug' | 'info' | 'warn' | 'error';
 
 export type LogSettings = {
   enabled: boolean;
-  minimum_severity: LogSeverity;
+  severities?: LogSeverity[];
+  /** Kept for compatibility with older dashboards and trackers. */
+  minimum_severity?: LogSeverity;
   retention_days: number; // 0 = no time-based cap
   max_rows: number; // 0 = no row cap
 };

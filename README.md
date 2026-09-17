@@ -445,7 +445,7 @@ Masking: all form inputs are masked by default; any element carrying `trace-ux-m
 
 ### Logs
 
-Logs can be enabled per site from the site's **Logs** configuration. Choose the minimum severity to store: errors only, warnings and errors, info and above, or all levels. Captured rows are linked to the visitor's recording session and appear in the dashboard's **Logs** page, which opens in a live view of the last 15 minutes, refreshes every 5 seconds, and shows up to 1,000 rows. The page also supports site, severity, preset time-window, and custom time filters.
+Logs can be enabled per site from the site's **Logs** configuration. Select any combination of the four levels — debug, info, warnings, and errors — and only those exact levels are stored (for example, info and errors without warnings). Captured rows are linked to the visitor's recording session and appear in the dashboard's **Logs** page, which opens in a live view of the last 15 minutes, refreshes every 5 seconds, and shows up to 1,000 rows. The page also supports site, severity, preset time-window, and custom time filters.
 
 Log storage has two independent per-site caps: 15 days by default and 1,000,000 rows by default. The oldest rows are removed during the regular retention sweep; either cap can be changed or disabled from the same Logs configuration. Logs are also removed automatically when their related recording is removed, and are not yet shown inside the replay timeline.
 

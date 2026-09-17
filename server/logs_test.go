@@ -103,7 +103,7 @@ func TestLogsAreFilteredAndLinkedToSessions(t *testing.T) {
 }
 
 func TestLogsCanFilterMultipleSeverities(t *testing.T) {
-	_, ts := newTestServer(t)
+	srv, ts := newTestServer(t)
 	admin := login(t, ts.URL, "admin", "pw")
 
 	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin,
@@ -121,7 +121,7 @@ func TestLogsCanFilterMultipleSeverities(t *testing.T) {
 
 	settingsURL := fmt.Sprintf("%s/api/sites/%d/settings", ts.URL, site.ID)
 	resp = doReq(t, http.MethodPut, settingsURL, admin,
-		`{"logs":{"enabled":true,"minimum_severity":"debug"}}`)
+		`{"logs":{"enabled":true,"severities":["info","error"]}}`)
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
 		t.Fatalf("enable logs: got %d", resp.StatusCode)
@@ -138,6 +138,13 @@ func TestLogsCanFilterMultipleSeverities(t *testing.T) {
 		{"client_seq":3,"timestamp_ms":3000,"severity":"error","message":"error","url":"https://multi-severity.example/"}
 	]}`, false); r.StatusCode != http.StatusOK {
 		t.Fatalf("logs: got %d", r.StatusCode)
+	}
+	rows, err := srv.store.ListLogs(store.LogFilter{SiteID: site.ID, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 || rows[0].Severity != store.LogSeverityError || rows[1].Severity != store.LogSeverityInfo {
+		t.Fatalf("stored severities = %+v, want error and info only", rows)
 	}
 
 	resp = doReq(t, http.MethodGet,
@@ -228,7 +235,14 @@ func TestLogConfigValidationAndPublicConfig(t *testing.T) {
 	resp.Body.Close()
 
 	resp = doReq(t, http.MethodPut, settingsURL, admin,
-		`{"logs":{"enabled":true,"minimum_severity":"info"}}`)
+		`{"logs":{"enabled":true,"severities":["info","info"]}}`)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("duplicate severity: got %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = doReq(t, http.MethodPut, settingsURL, admin,
+		`{"logs":{"enabled":true,"severities":["info","error"]}}`)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("valid log settings: got %d", resp.StatusCode)
 	}
@@ -246,7 +260,8 @@ func TestLogConfigValidationAndPublicConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if resp.StatusCode != http.StatusOK || !config.Logs.Enabled || config.Logs.MinimumSeverity != store.LogSeverityInfo {
+	if resp.StatusCode != http.StatusOK || !config.Logs.Enabled || config.Logs.MinimumSeverity != store.LogSeverityInfo ||
+		len(config.Logs.Severities) != 2 || config.Logs.Severities[0] != store.LogSeverityInfo || config.Logs.Severities[1] != store.LogSeverityError {
 		t.Fatalf("public log config = %+v, status %d", config.Logs, resp.StatusCode)
 	}
 

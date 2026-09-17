@@ -197,6 +197,17 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if rawLogs, ok := raw["logs"]; ok {
+		// A legacy payload can still send minimum_severity without the new
+		// allow-list. Clear the default selection so normalization migrates the
+		// threshold instead of silently keeping only errors.
+		var logRaw map[string]json.RawMessage
+		if err := json.Unmarshal(rawLogs, &logRaw); err == nil {
+			if _, ok := logRaw["severities"]; !ok {
+				settings.Logs.Severities = nil
+			}
+		}
+	}
 	if v, ok := raw["updates_appearance"]; ok {
 		var a store.AnnouncementAppearance
 		if err := json.Unmarshal(v, &a); err != nil {
@@ -228,6 +239,7 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	store.NormalizeLogSettings(&settings.Logs)
 
 	// Position is one widget-level setting now. A payload that still sends it
 	// per section (an older dashboard) is honoured by promoting whichever key

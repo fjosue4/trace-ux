@@ -18,21 +18,23 @@ const (
 	MaxLogListLimit         = 1000
 )
 
-// LogSettings controls the browser logs captured for one site. The
-// minimum severity is enforced both by the tracker and by the ingest handler.
-// RetentionDays and MaxRows are independent caps; whichever is reached first
-// removes the oldest stored rows during the periodic retention sweep. A zero
-// value disables that particular cap.
+// LogSettings controls the browser logs captured for one site. Severities are
+// an explicit allow-list enforced both by the tracker and by the ingest
+// handler. MinimumSeverity remains in the JSON shape for older trackers and
+// dashboards; it is derived from Severities for new settings and used to
+// migrate older threshold-based settings.
 type LogSettings struct {
-	Enabled         bool   `json:"enabled"`
-	MinimumSeverity string `json:"minimum_severity"`
-	RetentionDays   int    `json:"retention_days"`
-	MaxRows         int    `json:"max_rows"`
+	Enabled         bool     `json:"enabled"`
+	Severities      []string `json:"severities"`
+	MinimumSeverity string   `json:"minimum_severity"`
+	RetentionDays   int      `json:"retention_days"`
+	MaxRows         int      `json:"max_rows"`
 }
 
 func DefaultLogSettings() LogSettings {
 	return LogSettings{
 		Enabled:         false,
+		Severities:      []string{LogSeverityError},
 		MinimumSeverity: LogSeverityError,
 		RetentionDays:   defaultLogRetentionDays,
 		MaxRows:         defaultLogMaxRows,
@@ -61,6 +63,86 @@ func logSeverityRank(value string) int {
 	default:
 		return -1
 	}
+}
+
+var allLogSeverities = []string{
+	LogSeverityDebug,
+	LogSeverityInfo,
+	LogSeverityWarn,
+	LogSeverityError,
+}
+
+// LogSeveritiesAtOrAbove converts a legacy minimum threshold into the
+// equivalent explicit selection.
+func LogSeveritiesAtOrAbove(minimum string) []string {
+	minimumRank := logSeverityRank(minimum)
+	if minimumRank < 0 {
+		minimumRank = logSeverityRank(LogSeverityError)
+	}
+	selected := make([]string, 0, len(allLogSeverities)-minimumRank)
+	for _, severity := range allLogSeverities {
+		if logSeverityRank(severity) >= minimumRank {
+			selected = append(selected, severity)
+		}
+	}
+	return selected
+}
+
+// ValidLogSeverities validates the explicit capture selection. An empty list
+// is valid and means that no browser log levels are captured; the separate
+// enabled switch remains available for turning capture off altogether.
+func ValidLogSeverities(values []string) bool {
+	seen := make(map[string]bool, len(values))
+	for _, value := range values {
+		if !ValidLogSeverity(value) || seen[value] {
+			return false
+		}
+		seen[value] = true
+	}
+	return true
+}
+
+// NormalizeLogSettings migrates legacy threshold settings and keeps the
+// compatibility minimum in sync with the lowest explicitly selected level.
+func NormalizeLogSettings(settings *LogSettings) {
+	if settings.Severities == nil {
+		settings.Severities = LogSeveritiesAtOrAbove(settings.MinimumSeverity)
+	}
+	if !ValidLogSeverities(settings.Severities) {
+		settings.Severities = []string{LogSeverityError}
+	}
+
+	// Store the selection in a stable severity order regardless of click order.
+	selected := make(map[string]bool, len(settings.Severities))
+	for _, severity := range settings.Severities {
+		selected[severity] = true
+	}
+	ordered := make([]string, 0, len(selected))
+	for _, severity := range allLogSeverities {
+		if selected[severity] {
+			ordered = append(ordered, severity)
+		}
+	}
+	settings.Severities = ordered
+	if len(ordered) == 0 {
+		settings.MinimumSeverity = LogSeverityError
+	} else {
+		settings.MinimumSeverity = ordered[0]
+	}
+}
+
+// LogSeveritySelected reports whether a severity is in an explicit capture
+// selection. An empty selection intentionally matches nothing.
+func LogSeveritySelected(value string, selected []string) bool {
+	if !ValidLogSeverity(value) || !ValidLogSeverities(selected) {
+		return false
+	}
+	for _, severity := range selected {
+		if value == severity {
+			return true
+		}
+	}
+	return false
 }
 
 func LogMeetsMinimumSeverity(value, minimum string) bool {

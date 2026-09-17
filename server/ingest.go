@@ -277,8 +277,8 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			// The tracker filters before sending, but the server must enforce the
-			// configured threshold for untrusted clients as well.
-			if !store.LogMeetsMinimumSeverity(item.Severity, site.Settings.Logs.MinimumSeverity) {
+			// configured allow-list for untrusted clients as well.
+			if !store.LogSeveritySelected(item.Severity, site.Settings.Logs.Severities) {
 				continue
 			}
 			logs = append(logs, store.Log{

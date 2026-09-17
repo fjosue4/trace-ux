@@ -3,7 +3,25 @@ import Switch from '../../../../components/ui/Switch';
 import { Field, Input, Select } from '../../../../components/ui/fields';
 import { LogsTabProps } from './LogsTab.types';
 
+const severityOptions: { value: LogSeverity; label: string }[] = [
+  { value: 'debug', label: 'Debug' },
+  { value: 'info', label: 'Info' },
+  { value: 'warn', label: 'Warnings' },
+  { value: 'error', label: 'Errors' },
+];
+
+function legacySeverities(minimum?: LogSeverity): LogSeverity[] {
+  const index = severityOptions.findIndex((option) => option.value === minimum);
+  return severityOptions.slice(index >= 0 ? index : severityOptions.length - 1).map((option) => option.value);
+}
+
 export function LogsTab({ draft, onPatchDraft }: LogsTabProps) {
+  const selectedSeverities = Array.isArray(draft.logs.severities)
+    ? severityOptions
+        .map((option) => option.value)
+        .filter((severity) => draft.logs.severities?.includes(severity))
+    : legacySeverities(draft.logs.minimum_severity);
+
   return (
     <>
       <div className="hub-config__title">Logs</div>
@@ -15,21 +33,24 @@ export function LogsTab({ draft, onPatchDraft }: LogsTabProps) {
         />
       </div>
       <div className="hub-config__grid">
-        <Field
-          label="Minimum severity"
-          hint="Only this level and more severe logs are stored. Errors are the most severe."
-        >
+        <Field label="Severity levels" hint="Select the individual levels you want to store.">
           <Select
-            value={draft.logs.minimum_severity}
-            onChange={(value) =>
-              onPatchDraft({ logs: { ...draft.logs, minimum_severity: value as LogSeverity } })
-            }
-            options={[
-              { value: 'error', label: 'Errors only' },
-              { value: 'warn', label: 'Warnings and errors' },
-              { value: 'info', label: 'Info and above' },
-              { value: 'debug', label: 'All levels' },
-            ]}
+            multiple
+            value={selectedSeverities}
+            onChange={(value) => {
+              const severities = severityOptions
+                .map((option) => option.value)
+                .filter((severity) => value.includes(severity));
+              onPatchDraft({
+                logs: {
+                  ...draft.logs,
+                  severities,
+                  minimum_severity: severities[0] ?? 'error',
+                },
+              });
+            }}
+            emptyLabel="No levels selected"
+            options={severityOptions}
           />
         </Field>
         <Field label="Keep logs for (days)" hint="0 = no time limit · default 15 days">

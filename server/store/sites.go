@@ -257,6 +257,17 @@ func ParseSiteSettings(configText string) SiteSettings {
 			if _, ok := raw["widget_enabled"]; !ok {
 				s.WidgetEnabled = nil
 			}
+			// A row written by an older dashboard has only the threshold field.
+			// Clear the new default so normalization below can migrate that
+			// threshold into its equivalent explicit selection.
+			if rawLogs, ok := raw["logs"]; ok {
+				var logRaw map[string]json.RawMessage
+				if err := json.Unmarshal(rawLogs, &logRaw); err == nil {
+					if _, ok := logRaw["severities"]; !ok {
+						s.Logs.Severities = nil
+					}
+				}
+			}
 		}
 		_ = json.Unmarshal([]byte(configText), &s)
 	}
@@ -285,6 +296,7 @@ func ParseSiteSettings(configText string) SiteSettings {
 	if s.Logs.MaxRows < 0 || s.Logs.MaxRows > maxLogRows {
 		s.Logs.MaxRows = defaultLogMaxRows
 	}
+	NormalizeLogSettings(&s.Logs)
 	sanitizeAppearance(&s)
 	return s
 }
@@ -410,6 +422,9 @@ func ValidateSiteSettings(s SiteSettings) error {
 	}
 	if s.RetentionFeedbackDays < 0 || s.RetentionFeedbackDays > 3650 {
 		return fmt.Errorf("retention_feedback_days must be 0-3650")
+	}
+	if !ValidLogSeverities(s.Logs.Severities) {
+		return fmt.Errorf("logs.severities must contain only unique values: debug, info, warn or error")
 	}
 	if !ValidLogSeverity(s.Logs.MinimumSeverity) {
 		return fmt.Errorf("logs.minimum_severity must be debug, info, warn or error")
