@@ -12,7 +12,7 @@ export function statusLabel(status: TicketStatus) {
 export function statusTone(status: TicketStatus): BadgeTone {
   if (status === 'in_progress') return 'info';
   if (status === 'under_review') return 'warn';
-  if (status === 'closed') return 'quiet';
+  if (status === 'closed' || status === 'archived') return 'quiet';
   return 'accent';
 }
 

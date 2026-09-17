@@ -235,3 +235,86 @@ func TestDashboardTicketRoutesRequireAuthAndReply(t *testing.T) {
 		t.Fatalf("staff reply did not update ticket: %+v", updated)
 	}
 }
+
+func TestTicketsCanBeArchivedButNotDeleted(t *testing.T) {
+	srv, ts := newTestServer(t)
+	site, err := srv.store.CreateSite("Site", "https://example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ticket, err := srv.store.CreateTicket(store.NewTicket{
+		SiteID: site.ID, VisitorKey: "archive-key", Email: "person@example.com",
+		Subject: "Keep this record", Body: "Please retain this conversation.",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin := login(t, ts.URL, "admin", "pw")
+
+	resp := doReq(t, http.MethodDelete, fmt.Sprintf("%s/api/tickets/%d", ts.URL, ticket.ID), admin, "")
+	data, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusMethodNotAllowed || resp.Header.Get("Allow") != "GET, PATCH" || !strings.Contains(string(data), "cannot be deleted") {
+		t.Fatalf("ticket delete: got %d (%s), want 405 rejection", resp.StatusCode, data)
+	}
+	if _, err := srv.store.GetTicket(ticket.ID); err != nil {
+		t.Fatalf("ticket was removed after rejected delete: %v", err)
+	}
+
+	resp = doReq(t, http.MethodPost, fmt.Sprintf("%s/api/tickets/%d/archive", ts.URL, ticket.ID), admin, "")
+	var archived store.Ticket
+	if err := json.NewDecoder(resp.Body).Decode(&archived); err != nil {
+		resp.Body.Close()
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || archived.Status != "archived" || archived.ArchivedAt == 0 {
+		t.Fatalf("archive response: status=%d ticket=%+v", resp.StatusCode, archived)
+	}
+
+	messages, err := srv.store.ListTicketMessages(ticket.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 1 || messages[0].Body != "Please retain this conversation." {
+		t.Fatalf("archived conversation was not retained: %+v", messages)
+	}
+	archivedRows, err := srv.store.ListTickets(store.TicketFilter{SiteID: site.ID, Status: "archived", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(archivedRows) != 1 || archivedRows[0].ID != ticket.ID {
+		t.Fatalf("archived ticket list = %+v", archivedRows)
+	}
+	activeRows, err := srv.store.ListTickets(store.TicketFilter{SiteID: site.ID, Status: "open", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(activeRows) != 0 {
+		t.Fatalf("archived ticket appeared in active list: %+v", activeRows)
+	}
+
+	resp = doReq(t, http.MethodPost, fmt.Sprintf("%s/api/tickets/%d/messages", ts.URL, ticket.ID), admin, `{"body":"This must be read-only."}`)
+	data, err = io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusConflict || !strings.Contains(string(data), "archived") {
+		t.Fatalf("reply to archived ticket: got %d (%s), want 409", resp.StatusCode, data)
+	}
+
+	resp = doReq(t, http.MethodPatch, fmt.Sprintf("%s/api/tickets/%d", ts.URL, ticket.ID), admin, `{"status":"open"}`)
+	var reopened store.Ticket
+	if err := json.NewDecoder(resp.Body).Decode(&reopened); err != nil {
+		resp.Body.Close()
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || reopened.Status != "open" || reopened.ArchivedAt != 0 {
+		t.Fatalf("unarchive response: status=%d ticket=%+v", resp.StatusCode, reopened)
+	}
+}

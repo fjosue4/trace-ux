@@ -13,11 +13,12 @@ type TicketThreadViewProps = {
   userRole: string;
   onStatus: (status: TicketStatus) => void;
   onReply: (body: string) => Promise<void>;
-  onDelete: () => void;
+  onArchive: () => void;
+  archiving: boolean;
   sending: boolean;
 };
 
-export function TicketThreadView({ thread, userRole, onStatus, onReply, onDelete, sending }: TicketThreadViewProps) {
+export function TicketThreadView({ thread, userRole, onStatus, onReply, onArchive, archiving, sending }: TicketThreadViewProps) {
   const [body, setBody] = useState('');
   const [replyError, setReplyError] = useState('');
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -65,6 +66,7 @@ export function TicketThreadView({ thread, userRole, onStatus, onReply, onDelete
             value={ticket.status}
             onChange={(value) => onStatus(value as TicketStatus)}
             options={statusOptions.filter((option) => option.value !== 'all')}
+            disabled={ticket.status === 'archived' && userRole !== 'admin'}
           />
         </div>
         <div className="ticket-thread__meta">
@@ -98,6 +100,8 @@ export function TicketThreadView({ thread, userRole, onStatus, onReply, onDelete
 
       {ticket.status === 'closed' ? (
         <div className="ticket-closed-note">This ticket is closed. Reopen it to continue the conversation.</div>
+      ) : ticket.status === 'archived' ? (
+        <div className="ticket-closed-note">This ticket is archived. Its conversation is retained for transparency.</div>
       ) : (
         <div className="ticket-reply">
           <textarea
@@ -121,10 +125,10 @@ export function TicketThreadView({ thread, userRole, onStatus, onReply, onDelete
         </div>
       )}
 
-      {userRole === 'admin' && (
-        <div className="ticket-thread__danger">
-          <Button size="sm" variant="dangerGhost" onClick={onDelete}>
-            <Icon name="trash" size={13} /> Delete ticket
+      {userRole === 'admin' && ticket.status !== 'archived' && (
+        <div className="ticket-thread__archive">
+          <Button size="sm" variant="secondary" onClick={onArchive} disabled={archiving}>
+            <Icon name="archive" size={13} /> {archiving ? 'Archiving…' : 'Archive ticket'}
           </Button>
         </div>
       )}

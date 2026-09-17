@@ -1,4 +1,4 @@
-export type TicketStatus = 'open' | 'in_progress' | 'under_review' | 'closed';
+export type TicketStatus = 'open' | 'in_progress' | 'under_review' | 'closed' | 'archived';
 export type Ticket = {
   id: number;
   site_id: number;
@@ -15,6 +15,7 @@ export type Ticket = {
   last_message_author: 'visitor' | 'staff';
   created_at: number;
   updated_at: number;
+  archived_at?: number;
 };
 export type TicketMessage = {
   id: number;

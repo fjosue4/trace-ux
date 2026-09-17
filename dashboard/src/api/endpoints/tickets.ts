@@ -30,5 +30,5 @@ export const ticketsEndpoints = {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
-  deleteTicket: (id: number) => request<{ ok: boolean }>(`/api/tickets/${id}`, { method: 'DELETE' }),
+  archiveTicket: (id: number) => request<Ticket>(`/api/tickets/${id}/archive`, { method: 'POST' }),
 };

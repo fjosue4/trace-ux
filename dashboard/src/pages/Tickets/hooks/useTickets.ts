@@ -16,8 +16,8 @@ export function useTickets() {
   const [loadingThread, setLoadingThread] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const [pendingDelete, setPendingDelete] = useState<Ticket | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [pendingArchive, setPendingArchive] = useState<Ticket | null>(null);
+  const [archiving, setArchiving] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const selectedId = Number(searchParams.get('ticket')) || null;
   const selectedIdRef = useRef<number | null>(selectedId);
@@ -161,17 +161,6 @@ export function useTickets() {
           playNotificationSound();
         }
 
-        if (payload.type === 'ticket.deleted') {
-          const id = Number(payload.id);
-          if (!Number.isFinite(id) || id <= 0) return;
-          setItems((current) => current?.filter((item) => item.id !== id) ?? current);
-          if (selectedIdRef.current === id) {
-            setThread(null);
-            setSearchParams({});
-          }
-          return;
-        }
-
         const ticket = payload.ticket;
         if (!ticket) return;
         setItems((current) => {
@@ -238,19 +227,23 @@ export function useTickets() {
     }
   }
 
-  async function confirmDelete() {
-    if (!pendingDelete) return;
-    setDeleting(true);
+  async function confirmArchive() {
+    if (!pendingArchive) return;
+    setArchiving(true);
     try {
-      await api.deleteTicket(pendingDelete.id);
-      setItems((current) => current?.filter((item) => item.id !== pendingDelete.id) ?? current);
-      if (selectedId === pendingDelete.id) setSearchParams({});
-      setPendingDelete(null);
-      setThread(null);
+      const updated = await api.archiveTicket(pendingArchive.id);
+      setItems((current) => {
+        if (!current) return current;
+        const remaining = current.filter((item) => item.id !== updated.id);
+        if (!ticketMatchesFilters(updated, siteSelRef.current, statusSelRef.current)) return remaining;
+        return sortTickets([updated, ...remaining]).slice(0, 100);
+      });
+      setThread((current) => (current ? { ...current, ticket: updated } : current));
+      setPendingArchive(null);
     } catch {
-      setError('Could not delete the ticket.');
+      setError('Could not archive the ticket.');
     } finally {
-      setDeleting(false);
+      setArchiving(false);
     }
   }
 
@@ -265,9 +258,9 @@ export function useTickets() {
     loadingThread,
     sending,
     error,
-    pendingDelete,
-    setPendingDelete,
-    deleting,
+    pendingArchive,
+    setPendingArchive,
+    archiving,
     filtersOpen,
     setFiltersOpen,
     selectedId,
@@ -275,6 +268,6 @@ export function useTickets() {
     openTicket,
     updateStatus,
     reply,
-    confirmDelete,
+    confirmArchive,
   };
 }

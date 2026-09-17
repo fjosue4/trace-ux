@@ -24,9 +24,9 @@ export default function Tickets() {
     loadingThread,
     sending,
     error,
-    pendingDelete,
-    setPendingDelete,
-    deleting,
+    pendingArchive,
+    setPendingArchive,
+    archiving,
     filtersOpen,
     setFiltersOpen,
     selectedId,
@@ -34,7 +34,7 @@ export default function Tickets() {
     openTicket,
     updateStatus,
     reply,
-    confirmDelete,
+    confirmArchive,
   } = useTickets();
 
   return (
@@ -86,7 +86,8 @@ export default function Tickets() {
               userRole={user.role}
               onStatus={updateStatus}
               onReply={reply}
-              onDelete={() => setPendingDelete(thread.ticket)}
+              onArchive={() => setPendingArchive(thread.ticket)}
+              archiving={archiving}
               sending={sending}
             />
           ) : (
@@ -96,13 +97,13 @@ export default function Tickets() {
       </div>
 
       <ConfirmDialog
-        open={pendingDelete !== null}
-        title="Delete this ticket?"
-        description={pendingDelete ? <>Ticket #{pendingDelete.id} and its entire conversation will be removed permanently.</> : ''}
-        confirmLabel="Delete ticket"
-        busy={deleting}
-        onConfirm={confirmDelete}
-        onClose={() => setPendingDelete(null)}
+        open={pendingArchive !== null}
+        title="Archive this ticket?"
+        description={pendingArchive ? <>Ticket #{pendingArchive.id} and its full conversation will be retained for transparency. You can reopen it later.</> : ''}
+        confirmLabel="Archive ticket"
+        busy={archiving}
+        onConfirm={confirmArchive}
+        onClose={() => setPendingArchive(null)}
       />
 
       <TicketFiltersModal

@@ -77,7 +77,7 @@ export type Announcement = {
   read?: boolean;
 };
 
-type TicketStatus = 'open' | 'in_progress' | 'under_review' | 'closed';
+type TicketStatus = 'open' | 'in_progress' | 'under_review' | 'closed' | 'archived';
 type Ticket = {
   id: number;
   subject: string;
@@ -92,6 +92,7 @@ type Ticket = {
   last_message_author: 'visitor' | 'staff';
   created_at: number;
   updated_at: number;
+  archived_at?: number;
 };
 type TicketMessage = {
   id: number;
@@ -374,9 +375,12 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 			/* storage is optional; the in-memory thread still works */
 		}
 	}
-	function isTicketUnread(ticket: Ticket) {
-		return ticket.last_message_author === 'staff' && ticket.message_count > (ticketReadMarkers.get(ticket.id) || 0);
-	}
+  function isTicketLive(ticket: Ticket) {
+    return ticket.status !== 'closed' && ticket.status !== 'archived';
+  }
+  function isTicketUnread(ticket: Ticket) {
+    return ticket.status !== 'archived' && ticket.last_message_author === 'staff' && ticket.message_count > (ticketReadMarkers.get(ticket.id) || 0);
+  }
 	function unreadTicketCount() {
 		return tickets.filter(isTicketUnread).length;
 	}
@@ -462,6 +466,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   const tabs = el('div', 'tabs');
   tabs.setAttribute('role', 'tablist');
   const tabMarker = el('div', 'tabs__marker');
+  let tabMarkerAnimation: ReturnType<typeof animate> | null = null;
   const updatesCount = el('span', 'tab__count');
   updatesCount.hidden = true;
   const ticketsCount = el('span', 'tab__count');
@@ -575,6 +580,10 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   function moveTabMarker(animated = true) {
     const active = tabButtons.get(section);
     if (!active || tabs.hidden) return;
+    // A fast tab switch, or the first layout snap after opening, can otherwise
+    // leave two animations competing to write the marker's transform.
+    tabMarkerAnimation?.stop();
+    tabMarkerAnimation = null;
     const width = active.offsetWidth;
     const offset = active.offsetLeft - tabs.offsetLeft;
     tabMarker.style.width = `${width}px`;
@@ -582,7 +591,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       tabMarker.style.transform = `translateX(${offset}px)`;
       return;
     }
-    animate(tabMarker, { transform: `translateX(${offset}px)` }, { duration: 0.32, ease: EASE_OUT });
+    tabMarkerAnimation = animate(tabMarker, { transform: `translateX(${offset}px)` }, { duration: 0.32, ease: EASE_OUT });
   }
 
   // ---- announcements: list ----
@@ -749,6 +758,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       case 'in_progress': return 'In progress';
       case 'under_review': return 'Under review';
       case 'closed': return 'Closed';
+      case 'archived': return 'Archived';
       default: return 'Open';
     }
   }
@@ -840,9 +850,11 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
         el('span', 'ticket-item__subject', ticket.subject),
         el('span', `ticket-status ticket-status--${ticket.status}`, ticketStatusLabel(ticket.status)),
       );
-      const excerpt = el('p', 'item__excerpt', ticket.last_message_author === 'visitor'
-        ? 'Waiting for a reply from support'
-        : 'Last reply from support');
+      const excerpt = el('p', 'item__excerpt', ticket.status === 'archived'
+        ? 'Conversation archived'
+        : ticket.last_message_author === 'visitor'
+          ? 'Waiting for a reply from support'
+          : 'Last reply from support');
       const meta = el('div', 'item__meta');
       meta.append(
         el('span', undefined, ticketRequester(ticket)),
@@ -918,8 +930,10 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     });
     detail.appendChild(messages);
 
-    if (ticket.status === 'closed') {
-      detail.appendChild(el('div', 'ticket-closed', 'This ticket is closed.'));
+    if (ticket.status === 'closed' || ticket.status === 'archived') {
+      detail.appendChild(el('div', 'ticket-closed', ticket.status === 'archived'
+        ? 'This ticket is archived. Its conversation is retained for transparency.'
+        : 'This ticket is closed.'));
     } else {
       const composer = el('form', 'ticket-composer');
       const input = el('textarea', 'ticket-composer__input');
@@ -951,7 +965,9 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
         send.disabled = true;
         const res = await postTicket(`/${ticket.id}/messages`, { body: bodyText }).catch(() => null);
         if (!res || !res.ok) {
-          error.textContent = res?.status === 409 ? 'This ticket is closed.' : res?.status === 429 ? 'This ticket has reached its message limit.' : 'That reply could not be sent.';
+          error.textContent = res?.status === 409
+            ? ticket.status === 'archived' ? 'This ticket is archived.' : 'This ticket is closed.'
+            : res?.status === 429 ? 'This ticket has reached its message limit.' : 'That reply could not be sent.';
           error.hidden = false;
           input.disabled = false;
           send.disabled = false;
@@ -1175,7 +1191,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     ticketInterval = ticketBaseInterval;
     ticketRetryPending = false;
     tickets = next;
-    hasLiveTicket = next.some((ticket) => ticket.status !== 'closed');
+    hasLiveTicket = next.some(isTicketLive);
     lastTicketFetch = Date.now();
     syncBadges();
     if (panelOpen && section === 'tickets') {
@@ -1530,7 +1546,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     tickets = [ticket, ...tickets.filter((item) => item.id !== ticket.id)].sort(
       (a, b) => b.last_message_at - a.last_message_at || b.id - a.id,
     );
-    hasLiveTicket = tickets.some((item) => item.status !== 'closed');
+    hasLiveTicket = tickets.some(isTicketLive);
     syncBadges();
     if (!panelOpen || section !== 'tickets') return;
     if (ticketView.kind === 'list') {
@@ -1547,18 +1563,6 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     const statusChanged = ticketThread.ticket.status !== ticket.status;
     ticketThread = { ...ticketThread, ticket };
     if (statusChanged) repaintTicketView();
-  }
-
-  function removeTicketFromSocket(id: number) {
-    tickets = tickets.filter((item) => item.id !== id);
-    hasLiveTicket = tickets.some((item) => item.status !== 'closed');
-    if (ticketView.kind === 'thread' && ticketView.id === id) {
-      ticketView = { kind: 'list' };
-      ticketThread = null;
-      ticketError = 'This ticket is no longer available.';
-    }
-    syncBadges();
-    if (panelOpen && section === 'tickets') repaintTicketView();
   }
 
   function appendTicketMessageToView(message: TicketMessage): boolean {
@@ -1599,10 +1603,6 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     }
 
     if (!event.type.startsWith('ticket.')) return;
-    if (event.type === 'ticket.deleted') {
-      if (event.id) removeTicketFromSocket(event.id);
-      return;
-    }
     const ticket = event.ticket;
     if (!ticket) return;
     if (event.type === 'ticket.created') markTicketHistory();

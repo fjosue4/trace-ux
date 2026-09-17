@@ -299,7 +299,7 @@ export function widgetCSS(): string {
 }
 .ticket-status--open, .ticket-status--in_progress { border-color: color-mix(in srgb, var(--w-accent) 38%, var(--w-line)); color: var(--w-accent); }
 .ticket-status--under_review { color: #c06b24; border-color: color-mix(in srgb, #c06b24 35%, var(--w-line)); }
-.ticket-status--closed { opacity: .72; }
+.ticket-status--closed, .ticket-status--archived { opacity: .72; }
 .ticket-footer { padding: 14px 20px 18px; border-top: 1px solid var(--w-line-soft); }
 .ticket-footer .submit, .ticket-empty .submit { margin-top: 12px; }
 .ticket-empty .submit { width: auto; padding: 0 18px; }

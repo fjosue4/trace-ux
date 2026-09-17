@@ -375,6 +375,13 @@ var migrations = []string{
 	);
 	CREATE INDEX IF NOT EXISTS idx_session_css_hash ON session_css(hash);
 	`,
+	// v17: archive support tickets without removing their conversation. The
+	// archive timestamp is separate from the workflow status so unarchiving can
+	// restore the ticket to the state it had before it was archived.
+	`
+	ALTER TABLE tickets ADD COLUMN archived_at INTEGER NOT NULL DEFAULT 0;
+	CREATE INDEX IF NOT EXISTS idx_tickets_site_archived ON tickets(site_id, archived_at, last_message_at DESC);
+	`,
 }
 
 func (s *Store) migrate() error {

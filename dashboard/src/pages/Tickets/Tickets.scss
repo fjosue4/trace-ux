@@ -172,7 +172,7 @@
     margin-top: .85rem;
   }
 
-  &__danger {
+  &__archive {
     display: flex;
     flex: none;
     justify-content: flex-end;
@@ -306,5 +306,5 @@
   .ticket-thread__title-row { flex-direction: column; }
   .ticket-status-select { width: 100%; flex-basis: auto; }
   .ticket-message { max-width: 92%; }
-  .ticket-thread__danger { padding-left: 1rem; padding-right: 1rem; }
+  .ticket-thread__archive { padding-left: 1rem; padding-right: 1rem; }
 }

@@ -8,4 +8,5 @@ export const statusOptions: { value: StatusSelection; label: string }[] = [
   { value: 'in_progress', label: 'In progress' },
   { value: 'under_review', label: 'Under review' },
   { value: 'closed', label: 'Closed' },
+  { value: 'archived', label: 'Archived' },
 ];

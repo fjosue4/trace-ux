@@ -21,6 +21,8 @@ func handleTicketStoreError(w http.ResponseWriter, err error) bool {
 		writeErr(w, http.StatusNotFound, "ticket not found")
 	case errors.Is(err, store.ErrTicketClosed):
 		writeErr(w, http.StatusConflict, "this ticket is closed")
+	case errors.Is(err, store.ErrTicketArchived):
+		writeErr(w, http.StatusConflict, "this ticket is archived")
 	case errors.Is(err, store.ErrTicketOpenLimit), errors.Is(err, store.ErrTicketLifetimeLimit), errors.Is(err, store.ErrTicketMessagesLimit):
 		writeRateLimited(w, err.Error())
 	default:
@@ -135,6 +137,25 @@ func (s *Server) handleUpdateTicket(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid ticket status")
 		return
 	}
+	user := currentUser(r)
+	if status == "archived" && (user == nil || user.Role != "admin") {
+		writeErr(w, http.StatusForbidden, "admin only")
+		return
+	}
+	if status != "archived" {
+		current, err := s.store.GetTicket(id)
+		if err != nil {
+			if handleTicketStoreError(w, err) {
+				return
+			}
+			writeErr(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		if current.Status == "archived" && (user == nil || user.Role != "admin") {
+			writeErr(w, http.StatusForbidden, "admin only")
+			return
+		}
+	}
 	if err := s.store.SetTicketStatus(id, status); err != nil {
 		if handleTicketStoreError(w, err) {
 			return
@@ -157,27 +178,37 @@ func (s *Server) handleUpdateTicket(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, t)
 }
 
-func (s *Server) handleDeleteTicket(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleArchiveTicket(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseTicketID(r)
 	if !ok {
 		writeErr(w, http.StatusBadRequest, "invalid ticket id")
 		return
 	}
-	previous, _ := s.store.GetTicket(id)
-	if err := s.store.DeleteTicket(id); err != nil {
+	if err := s.store.SetTicketStatus(id, "archived"); err != nil {
 		if handleTicketStoreError(w, err) {
 			return
 		}
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if previous.ID > 0 {
-		s.broadcastWidgetEvent(previous.SiteID, previous.VisitorKey, "tickets", widgetSocketEvent{
-			Type: "ticket.deleted",
-			ID:   previous.ID,
-		})
+	t, err := s.store.GetTicket(id)
+	if err != nil {
+		if handleTicketStoreError(w, err) {
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	s.broadcastWidgetEvent(t.SiteID, t.VisitorKey, "tickets", widgetSocketEvent{
+		Type:   "ticket.updated",
+		Ticket: &t,
+	})
+	writeJSON(w, http.StatusOK, t)
+}
+
+func (s *Server) handleDeleteTicket(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Allow", "GET, PATCH")
+	writeErr(w, http.StatusMethodNotAllowed, "tickets cannot be deleted; archive the ticket instead")
 }
 
 func (s *Server) allowPublicTickets(w http.ResponseWriter, r *http.Request, siteID int64, write bool) bool {

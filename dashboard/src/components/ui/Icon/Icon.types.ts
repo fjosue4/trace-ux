@@ -1,6 +1,7 @@
 export type IconName =
   | 'globe'
   | 'trash'
+  | 'archive'
   | 'plus'
   | 'copy'
   | 'check'

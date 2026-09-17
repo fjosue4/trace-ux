@@ -340,13 +340,14 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("DELETE /api/announcements/comments/{id}", s.auth(s.requireAdmin(s.handleDeleteAnnouncementComment)))
 	mux.HandleFunc("GET /api/announcements/{id}/engagement", s.auth(s.handleAnnouncementEngagement))
 
-	// Support tickets. Staff can read and reply; only admins can delete.
+	// Support tickets. Staff can read and reply; only admins can archive.
 	mux.HandleFunc("GET /api/tickets", s.auth(s.handleListTickets))
 	mux.HandleFunc("POST /api/tickets", s.auth(s.handleCreateStaffTicket))
 	mux.HandleFunc("GET /api/tickets/socket", s.auth(s.handleDashboardTicketSocket))
 	mux.HandleFunc("GET /api/tickets/{id}", s.auth(s.handleGetTicket))
 	mux.HandleFunc("POST /api/tickets/{id}/messages", s.auth(s.handleStaffTicketReply))
 	mux.HandleFunc("PATCH /api/tickets/{id}", s.auth(s.handleUpdateTicket))
+	mux.HandleFunc("POST /api/tickets/{id}/archive", s.auth(s.requireAdmin(s.handleArchiveTicket)))
 	mux.HandleFunc("DELETE /api/tickets/{id}", s.auth(s.requireAdmin(s.handleDeleteTicket)))
 
 	// Public tracker-facing endpoints. Cross-origin access is granted per

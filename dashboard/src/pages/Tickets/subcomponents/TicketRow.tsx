@@ -10,7 +10,7 @@ type TicketRowProps = {
 };
 
 export function TicketRow({ ticket, isSelected, showSite, onOpen }: TicketRowProps) {
-  const isWaiting = ticket.last_message_author === 'visitor';
+  const isWaiting = ticket.status !== 'closed' && ticket.status !== 'archived' && ticket.last_message_author === 'visitor';
   const subtitle = [requester(ticket), showSite ? ticket.site_name : ''].filter(Boolean).join(' · ');
 
   return (

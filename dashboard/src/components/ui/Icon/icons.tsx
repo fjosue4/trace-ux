@@ -19,6 +19,13 @@ export const GLYPHS: Record<IconName, ReactNode> = {
       <path d="M10 11v6M14 11v6" />
     </>
   ),
+  archive: (
+    <>
+      <path d="M4 5h16v4H4z" />
+      <path d="M6 9v10h12V9" />
+      <path d="M9 13h6" />
+    </>
+  ),
   plus: <path d="M12 5v14M5 12h14" />,
   copy: (
     <>

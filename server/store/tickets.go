@@ -22,6 +22,7 @@ var (
 	ErrTicketLifetimeLimit = errors.New("too many tickets")
 	ErrTicketMessagesLimit = errors.New("too many messages")
 	ErrTicketClosed        = errors.New("this ticket is closed")
+	ErrTicketArchived      = errors.New("this ticket is archived")
 )
 
 type Ticket struct {
@@ -41,6 +42,7 @@ type Ticket struct {
 	LastMessageAuthor string `json:"last_message_author"`
 	CreatedAt         int64  `json:"created_at"`
 	UpdatedAt         int64  `json:"updated_at"`
+	ArchivedAt        int64  `json:"archived_at,omitempty"`
 }
 
 type TicketMessage struct {
@@ -86,19 +88,25 @@ type NewTicket struct {
 }
 
 const ticketColumns = `t.id,t.site_id,t.visitor_key,t.user_id,t.email,t.name,t.subject,t.status,
-	t.session_id,t.page_url,t.message_count,t.last_message_at,t.last_message_author,t.created_at,t.updated_at`
+	t.session_id,t.page_url,t.message_count,t.last_message_at,t.last_message_author,t.created_at,t.updated_at,t.archived_at`
 
 func scanTicket(row interface{ Scan(...any) error }, withSiteName bool) (Ticket, error) {
 	var t Ticket
 	dest := []any{
 		&t.ID, &t.SiteID, &t.VisitorKey, &t.UserID, &t.Email, &t.Name, &t.Subject,
 		&t.Status, &t.SessionID, &t.PageURL, &t.MessageCount, &t.LastMessageAt,
-		&t.LastMessageAuthor, &t.CreatedAt, &t.UpdatedAt,
+		&t.LastMessageAuthor, &t.CreatedAt, &t.UpdatedAt, &t.ArchivedAt,
 	}
 	if withSiteName {
 		dest = append(dest, &t.SiteName)
 	}
-	return t, row.Scan(dest...)
+	if err := row.Scan(dest...); err != nil {
+		return Ticket{}, err
+	}
+	if t.ArchivedAt > 0 {
+		t.Status = "archived"
+	}
+	return t, nil
 }
 
 func (s *Store) CreateTicket(input NewTicket) (Ticket, error) {
@@ -126,7 +134,7 @@ func (s *Store) CreateTicket(input NewTicket) (Ticket, error) {
 
 	if author == "visitor" {
 		var openCount, totalCount int64
-		if err := tx.QueryRow(`SELECT COALESCE(SUM(CASE WHEN status <> 'closed' THEN 1 ELSE 0 END),0), COUNT(*)
+		if err := tx.QueryRow(`SELECT COALESCE(SUM(CASE WHEN status <> 'closed' AND archived_at=0 THEN 1 ELSE 0 END),0), COUNT(*)
 			FROM tickets WHERE site_id=? AND visitor_key=?`, input.SiteID, input.VisitorKey).Scan(&openCount, &totalCount); err != nil {
 			return Ticket{}, err
 		}
@@ -174,8 +182,10 @@ func (s *Store) ListTickets(f TicketFilter) ([]Ticket, error) {
 		q += ` AND t.site_id=?`
 		args = append(args, f.SiteID)
 	}
-	if f.Status != "" {
-		q += ` AND t.status=?`
+	if f.Status == "archived" {
+		q += ` AND t.archived_at>0`
+	} else if f.Status != "" {
+		q += ` AND t.archived_at=0 AND t.status=?`
 		args = append(args, f.Status)
 	}
 	q += ` ORDER BY t.last_message_at DESC,t.id DESC LIMIT ?`
@@ -259,11 +269,15 @@ func (s *Store) AddTicketMessage(ticketID int64, author string, userID int64, au
 	defer tx.Rollback()
 	var status string
 	var messageCount int
-	if err := tx.QueryRow(`SELECT status,message_count FROM tickets WHERE id=?`, ticketID).Scan(&status, &messageCount); err != nil {
+	var archivedAt int64
+	if err := tx.QueryRow(`SELECT status,message_count,archived_at FROM tickets WHERE id=?`, ticketID).Scan(&status, &messageCount, &archivedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return TicketMessage{}, ErrTicketNotFound
 		}
 		return TicketMessage{}, err
+	}
+	if archivedAt > 0 {
+		return TicketMessage{}, ErrTicketArchived
 	}
 	if author == "visitor" && status == "closed" {
 		return TicketMessage{}, ErrTicketClosed
@@ -299,19 +313,16 @@ func (s *Store) SetTicketStatus(id int64, status string) error {
 	if !ValidTicketStatus(status) {
 		return errBadJSON
 	}
-	res, err := s.DB.Exec(`UPDATE tickets SET status=?,updated_at=? WHERE id=?`, status, time.Now().Unix(), id)
-	if err != nil {
-		return err
+	now := time.Now().Unix()
+	var (
+		res sql.Result
+		err error
+	)
+	if status == "archived" {
+		res, err = s.DB.Exec(`UPDATE tickets SET archived_at=CASE WHEN archived_at=0 THEN ? ELSE archived_at END,updated_at=? WHERE id=?`, now, now, id)
+	} else {
+		res, err = s.DB.Exec(`UPDATE tickets SET status=?,archived_at=0,updated_at=? WHERE id=?`, status, now, id)
 	}
-	n, err := res.RowsAffected()
-	if err == nil && n == 0 {
-		return ErrTicketNotFound
-	}
-	return err
-}
-
-func (s *Store) DeleteTicket(id int64) error {
-	res, err := s.DB.Exec(`DELETE FROM tickets WHERE id=?`, id)
 	if err != nil {
 		return err
 	}
@@ -323,7 +334,7 @@ func (s *Store) DeleteTicket(id int64) error {
 }
 
 func (s *Store) CountVisitorTickets(siteID int64, visitorKey string) (open, total int64, err error) {
-	err = s.DB.QueryRow(`SELECT COALESCE(SUM(CASE WHEN status <> 'closed' THEN 1 ELSE 0 END),0),COUNT(*)
+	err = s.DB.QueryRow(`SELECT COALESCE(SUM(CASE WHEN status <> 'closed' AND archived_at=0 THEN 1 ELSE 0 END),0),COUNT(*)
 		FROM tickets WHERE site_id=? AND visitor_key=?`, siteID, visitorKey).Scan(&open, &total)
 	return
 }
@@ -331,6 +342,8 @@ func (s *Store) CountVisitorTickets(siteID int64, visitorKey string) (open, tota
 func ValidTicketStatus(status string) bool {
 	switch status {
 	case "open", "in_progress", "under_review", "closed":
+		return true
+	case "archived":
 		return true
 	default:
 		return false
