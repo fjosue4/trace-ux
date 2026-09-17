@@ -87,8 +87,14 @@ export function widgetCSS(): string {
    transform would be overwritten the moment the panel animated. */
 @media (min-width: 600px) {
   .root--middle .launcher {
-    bottom: auto; top: 0;
-    margin-block: auto;
+    /* Centred by auto margins, which split the leftover space only when the
+       box is over-constrained: BOTH insets pinned AND a definite height. With
+       bottom:auto the margins resolve to 0 and the tab sits at the top.
+       These must be PHYSICAL. The tab is writing-mode: vertical-rl, so its
+       block axis runs horizontally -- inset-block/margin-block here would pin
+       and centre it left-to-right and stretch it across the viewport. */
+    top: 0; bottom: 0;
+    margin-top: auto; margin-bottom: auto;
     height: fit-content;
     /* One letter per line, each upright. A single text node keeps the
        accessible name the whole word -- per-letter spans would have a screen
@@ -107,8 +113,9 @@ export function widgetCSS(): string {
   /* The panel clears the tab rather than sitting under it: one gap to the
      viewport edge, the tab, then another gap. */
   .root--middle .panel {
-    bottom: auto; top: 0;
-    margin-block: auto;
+    top: 0; bottom: 0;
+    margin-top: auto; margin-bottom: auto;
+    height: fit-content; /* definite, so the auto margins centre it -- see above */
     right: calc(var(--w-space) * 2 + 44px);
     max-height: min(660px, calc(100vh - var(--w-space) * 2));
   }

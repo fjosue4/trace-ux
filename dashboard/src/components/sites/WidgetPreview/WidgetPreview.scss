@@ -229,20 +229,44 @@
   .widget-preview { min-height: 420px; }
 }
 
-/* Mid-edge anchor: the launcher becomes a vertical tab floating off the side,
-   mirroring what the tracker draws. Centred with auto margins rather than a
-   translate so it cannot fight any transform the preview animates. */
+/* Mid-edge anchor: the launcher becomes a vertical tab at the side, and the
+   panel sits BESIDE it rather than above -- the preview's job is to show which
+   way the widget expands, and sideways is the whole point of this anchor.
+
+   Positioning here is flow layout inside the flex stage, not the fixed
+   positioning the tracker uses. Insets and auto margins are inert on a flex
+   item, so centring is `align-items` on the stage. */
 .widget-preview.is-middle {
+  .widget-preview__stage {
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end; /* packs against the anchored edge in both directions */
+    gap: 0.75rem;
+  }
+  /* DOM order is panel-then-launcher, so reversing puts the tab on the left. */
+  &.is-left .widget-preview__stage { flex-direction: row-reverse; }
+
+  .widget-preview__panel { flex: 0 1 auto; min-width: 0; }
+
   .widget-preview__launcher {
-    bottom: auto;
-    top: 0;
-    margin-block: auto;
-    height: fit-content;
+    flex: 0 0 auto;
+    margin-top: 0; /* the column gap; the row has its own */
+  }
+
+  /* Text only. The icon launcher is a fixed 48x48 circle with no label, and
+     its modifier class is less specific than this block -- without the guard
+     the padding below would win and stretch it. */
+  .widget-preview__launcher:not(.widget-preview__launcher--icon) {
     min-width: 34px;
-    padding: 12px 0 10px;
+    padding: 0.9rem 0.55rem; /* the pill's padding, axes swapped */
     writing-mode: vertical-rl;
     text-orientation: upright;
     -webkit-text-orientation: upright;
     letter-spacing: 0.08em;
+    /* The inline axis is now vertical, so the pill is bounded by height. */
+    max-width: none;
+    max-height: 100%;
+
+    b { margin-left: 0; margin-top: 0.35rem; }
   }
 }
