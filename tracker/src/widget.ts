@@ -281,13 +281,12 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   const root = el('div', 'root');
   const container = el('div');
   container.id = 'trace-ux-widget-root';
-  // Keep our own chrome out of the customer's recording. Replaying it is
-  // worthless — it is our UI, not their page — and it actively misleads: the
-  // badge is a text node inside a shadow root, and rrweb replays those
-  // mutations additively, so a count of 1 plays back as 1, 11, 110. It would
-  // also copy announcement bodies and whatever the visitor typed into a
-  // support ticket into the session blob a second time.
-  container.className = 'trace-ux-block';
+  // Keep the widget identifiable without opting it out of the customer's
+  // recording. rrweb can serialize this shadow root, so the replay shows the
+  // same launcher/panel state and interactions the visitor saw. The tracker
+  // still masks form inputs and continues to honor `trace-ux-block` on any
+  // customer-owned element.
+  container.className = 'trace-ux-widget';
   const shadow = container.attachShadow({ mode: 'open' });
 
   const style = document.createElement('style');

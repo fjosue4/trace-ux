@@ -1,6 +1,8 @@
 import { request } from '../client';
 import { CustomEvent, Session, SessionFilter, SessionPage, SharedSession } from '../types/sessions';
 import { Log, SharedLog } from '../types/logs';
+import { Ticket } from '../types/tickets';
+import { Feedback } from '../types/feedback';
 
 export const sessionsEndpoints = {
   // siteId === null lists sessions across all sites (rows carry site_name).
@@ -22,9 +24,14 @@ export const sessionsEndpoints = {
     request<string[]>(`/api/sessions/countries${siteId ? `?site_id=${siteId}` : ''}`),
 
   getSession: (id: string) =>
-    request<{ session: Session; pages: SessionPage[]; custom_events: CustomEvent[]; logs: Log[] }>(
-      `/api/sessions/${id}`,
-    ),
+    request<{
+      session: Session;
+      pages: SessionPage[];
+      custom_events: CustomEvent[];
+      logs: Log[];
+      tickets: Ticket[];
+      feedback: Feedback[];
+    }>(`/api/sessions/${id}`),
 
   // In-progress vs completed counts (optional per-site scope).
   sessionStats: (siteId: number | null) =>

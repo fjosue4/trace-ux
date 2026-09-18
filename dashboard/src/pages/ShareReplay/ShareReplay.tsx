@@ -40,9 +40,12 @@ export default function ShareReplay() {
             session={session}
             activity={activity}
             logs={logs}
-            // Public bearer link: the visitor's page-by-page path is withheld
-            // here for the same reason referrers and identity fields are.
+            // Public bearer link: the visitor's page-by-page path, tickets and
+            // feedback are withheld here for the same reason referrers and
+            // identity fields are -- this link needs no login to open.
             pages={[]}
+            tickets={[]}
+            feedback={[]}
             currentTimeMs={currentTime}
             eventsReady={loaded}
             firstTs={firstTs.current}

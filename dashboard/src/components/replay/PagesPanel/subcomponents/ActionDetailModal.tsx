@@ -1,4 +1,4 @@
-import { fmtClock } from '../../../../lib/format';
+import { fmtLocalDateTime } from '../../../../lib/format';
 import Badge from '../../../ui/Badge';
 import Modal from '../../../ui/Modal';
 import { formatReplayOffset, logTone } from '../actionHelpers';
@@ -18,7 +18,7 @@ export function ActionDetailModal({ log, firstTs, onClose }: ActionDetailModalPr
           <div className="action-log-detail__meta">
             <Badge tone={logTone(log.severity)}>{log.severity}</Badge>
             <span className="muted small">
-              {formatReplayOffset(log.timestamp_ms, firstTs)} · {fmtClock(Math.floor(log.timestamp_ms / 1000))}
+              {formatReplayOffset(log.timestamp_ms, firstTs)} · {fmtLocalDateTime(Math.floor(log.timestamp_ms / 1000))}
             </span>
           </div>
           <pre className="action-log-detail__message">{log.message || '—'}</pre>

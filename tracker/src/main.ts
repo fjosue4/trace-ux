@@ -5,7 +5,8 @@
  *
  * Privacy: all form inputs are masked, elements with class `trace-ux-block` are
  * removed from the recording, `trace-ux-mask` masks their text, and Do Not Track /
- * localStorage.trace_ux_optout=1 disables tracking entirely.
+ * localStorage.trace_ux_optout=1 disables tracking entirely. The optional TraceUX
+ * widget is recorded as part of the page when it is enabled.
  */
 import { record } from '@rrweb/record';
 import type { eventWithTime } from '@rrweb/types';

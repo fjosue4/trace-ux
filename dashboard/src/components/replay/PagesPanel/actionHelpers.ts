@@ -1,3 +1,4 @@
+import { fmtLocalDateTime } from '../../../lib/format';
 import { Action, ReplayLog } from './PagesPanel.types';
 
 export function formatReplayOffset(timestamp: number, firstTs: number): string {
@@ -32,12 +33,14 @@ function customLabel(action: Extract<Action, { kind: 'custom' }>): string {
 export function actionLabel(action: Action): string {
   if (action.kind === 'custom') return customLabel(action);
   if (action.kind === 'page') return `${action.first ? 'Opened' : 'Navigated to'} ${pagePath(action.url)}`;
+  if (action.kind === 'ticket') return `Ticket created${action.subject ? `: ${action.subject}` : ''}`;
+  if (action.kind === 'feedback') return 'Feedback given';
   return action.message || 'Browser log';
 }
 
 export function actionSearchText(action: Action): string {
   const label = actionLabel(action);
-  const common = 'action actions activity activities';
+  const common = `action actions activity activities ${fmtLocalDateTime(Math.floor(action.ts / 1000))}`;
 
   if (action.kind === 'custom') {
     const clickTerms = action.name === 'click' ? 'click clicks clicked' : '';
@@ -46,6 +49,14 @@ export function actionSearchText(action: Action): string {
 
   if (action.kind === 'page') {
     return `${label} ${common} page pages page visit page visits visit visits visited navigation navigated opened ${action.title} ${action.url} ${pagePath(action.url)}`.toLowerCase();
+  }
+
+  if (action.kind === 'ticket') {
+    return `${label} ${common} ticket tickets support ticket created ${action.subject} ${action.status}`.toLowerCase();
+  }
+
+  if (action.kind === 'feedback') {
+    return `${label} ${common} feedback survey rating review ${action.rating} ${action.comment}`.toLowerCase();
   }
 
   return `${label} ${common} log logs browser log browser logs console ${action.severity} ${action.message} ${action.url}`.toLowerCase();

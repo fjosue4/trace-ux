@@ -513,7 +513,13 @@
 .action-row__button:hover { color: $ink; background: $surface-2; border-color: $line; }
 .action-row__button--seek { color: $accent; }
 .action-row__button--seek:hover { color: $on-accent; background: $accent; border-color: $accent; }
-.action-row__num { margin-top: 0.08rem; background: $accent-soft; color: $accent; }
+.action-row__num {
+  align-self: center;
+  margin-top: 0;
+  background: $accent-soft;
+  color: $accent;
+}
+.action-row__num > svg { display: block; }
 .action-row--log .action-row__num { background: $surface-2; color: $muted; }
 .action-row__num--error { color: $danger !important; background: $danger-soft !important; }
 .action-row__num--warn { color: $accent-strong !important; background: $accent-soft !important; }
@@ -538,7 +544,8 @@
 .action-row__severity--error { color: $danger; background: $danger-soft; }
 .action-row__severity--warn { color: $accent-strong; background: $accent-soft; }
 .action-row__meta { display: flex; align-items: center; gap: 0.12rem; }
-.action-row__offset { color: $accent; font-variant-numeric: tabular-nums; font-weight: 700; }
+.action-row__offset { flex: none; color: $accent; font-variant-numeric: tabular-nums; font-weight: 700; }
+.action-row__local-time { flex: none; }
 
 .action-log-detail__meta { display: flex; align-items: center; gap: 0.6rem; }
 .action-log-detail__message {
@@ -642,6 +649,16 @@
   background: color-mix(in srgb, #{$accent} 14%, transparent);
 }
 .action-row--page .action-row__message { font-weight: 600; }
+
+.action-row__severity--ticket { color: $info; background: $info-soft; }
+.action-row--ticket .action-row__num { color: $info; background: $info-soft; }
+.action-row--ticket.is-active .action-row__num,
+.action-row--ticket:hover .action-row__num { background: $info; color: #fff; }
+
+.action-row__severity--feedback { color: $success; background: $success-soft; }
+.action-row--feedback .action-row__num { color: $success; background: $success-soft; }
+.action-row--feedback.is-active .action-row__num,
+.action-row--feedback:hover .action-row__num { background: $success; color: #fff; }
 
 /* ---- session details: a two-row strip under the player, collapsible ---- */
 .replay-meta {

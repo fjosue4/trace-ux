@@ -2,7 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { actionSearchText } from '../actionHelpers';
 import { Action, PagesPanelProps, ReplayLog } from '../PagesPanel.types';
 
-export function usePagesPanel({ activity, logs, pages, firstTs, currentTimeMs }: Pick<PagesPanelProps, 'activity' | 'logs' | 'pages' | 'firstTs' | 'currentTimeMs'>) {
+export function usePagesPanel({
+  activity,
+  logs,
+  pages,
+  tickets,
+  feedback,
+  firstTs,
+  currentTimeMs,
+}: Pick<PagesPanelProps, 'activity' | 'logs' | 'pages' | 'tickets' | 'feedback' | 'firstTs' | 'currentTimeMs'>) {
   const [selectedLog, setSelectedLog] = useState<ReplayLog | null>(null);
   const [query, setQuery] = useState('');
   const listRef = useRef<HTMLOListElement | null>(null);
@@ -38,10 +46,32 @@ export function usePagesPanel({ activity, logs, pages, firstTs, currentTimeMs }:
       first: index === 0,
       order: index,
     }));
-    return [...customActions, ...logActions, ...pageActions].sort(
+    // Tickets and feedback are stored server-side with a unix-seconds
+    // created_at (receive time), not the visitor-clock milliseconds the rest
+    // of the feed uses -- converted here so they sort and seek correctly
+    // alongside custom events, logs and pages.
+    const ticketActions: Action[] = tickets.map((t, index) => ({
+      kind: 'ticket',
+      key: `ticket-${t.id}`,
+      ts: t.created_at * 1000,
+      ticketId: t.id,
+      subject: t.subject,
+      status: t.status,
+      order: index,
+    }));
+    const feedbackActions: Action[] = feedback.map((f, index) => ({
+      kind: 'feedback',
+      key: `feedback-${f.id}`,
+      ts: f.created_at * 1000,
+      feedbackId: f.id,
+      rating: f.rating,
+      comment: f.comment,
+      order: index,
+    }));
+    return [...customActions, ...logActions, ...pageActions, ...ticketActions, ...feedbackActions].sort(
       (a, b) => a.ts - b.ts || a.order - b.order,
     );
-  }, [activity, logs, pages]);
+  }, [activity, logs, pages, tickets, feedback]);
 
   // One searchable string per action. Kept alongside the row rather than
   // recomputed in the filter so the same text can back a server-side search

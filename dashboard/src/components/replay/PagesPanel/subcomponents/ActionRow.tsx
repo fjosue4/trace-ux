@@ -1,5 +1,5 @@
 import { motion } from 'motion/react';
-import { fmtClock, fmtLocalDateTime, stripProto, truncate } from '../../../../lib/format';
+import { fmtLocalDateTime, stripProto, truncate } from '../../../../lib/format';
 import { Icon } from '../../../ui/Icon';
 import { actionLabel, formatReplayOffset, logIcon } from '../actionHelpers';
 import { Action } from '../PagesPanel.types';
@@ -20,7 +20,11 @@ export function ActionRow({ action, isActive, firstTs, setRowRef, onSeek, onOpen
       ? `${action.name}${action.trackId ? ` · ${action.trackId}` : ''}`
       : action.kind === 'page'
         ? `${action.title || 'Page'} — ${action.url}`
-        : action.message;
+        : action.kind === 'ticket'
+          ? `${action.subject} (${action.status})`
+          : action.kind === 'feedback'
+            ? action.comment || `Rating: ${action.rating}`
+            : action.message;
   const seek = () => onSeek(action);
 
   return (
@@ -50,7 +54,17 @@ export function ActionRow({ action, isActive, firstTs, setRowRef, onSeek, onOpen
           className={`page-row__num action-row__num${action.kind === 'log' ? ` action-row__num--${action.severity}` : ''}`}
         >
           <Icon
-            name={action.kind === 'custom' ? 'bolt' : action.kind === 'page' ? 'globe' : logIcon(action.severity)}
+            name={
+              action.kind === 'custom'
+                ? 'bolt'
+                : action.kind === 'page'
+                  ? 'globe'
+                  : action.kind === 'ticket'
+                    ? 'lifebuoy'
+                    : action.kind === 'feedback'
+                      ? 'message'
+                      : logIcon(action.severity)
+            }
             size={12}
           />
         </span>
@@ -64,18 +78,28 @@ export function ActionRow({ action, isActive, firstTs, setRowRef, onSeek, onOpen
             {action.kind === 'page' && (
               <span className="action-row__severity action-row__severity--page">page</span>
             )}
+            {action.kind === 'ticket' && (
+              <span className="action-row__severity action-row__severity--ticket">ticket</span>
+            )}
+            {action.kind === 'feedback' && (
+              <span className="action-row__severity action-row__severity--feedback">feedback</span>
+            )}
             <span className="action-row__message">{label}</span>
           </span>
           <span className="page-row__meta action-row__meta">
             <span className="action-row__offset">{formatReplayOffset(action.ts, firstTs)}</span>
+            <span className="action-row__local-time"> · {fmtLocalDateTime(Math.floor(action.ts / 1000))}</span>
             {action.kind === 'log' && action.url
               ? ` · ${truncate(stripProto(action.url), 34)}`
               : action.kind === 'custom'
-                ? ` · custom event · ${fmtLocalDateTime(Math.floor(action.ts / 1000))}`
+                ? ' · custom event'
                 : action.kind === 'page' && action.title
                   ? ` · ${truncate(action.title, 34)}`
-                  : ''}
-            {action.kind === 'log' && <span> · {fmtClock(Math.floor(action.ts / 1000))}</span>}
+                  : action.kind === 'ticket'
+                    ? ` · ${action.status}`
+                    : action.kind === 'feedback'
+                      ? ` · rating ${action.rating}${action.comment ? ` · ${truncate(action.comment, 34)}` : ''}`
+                      : ''}
           </span>
         </span>
         <span className="action-row__actions">

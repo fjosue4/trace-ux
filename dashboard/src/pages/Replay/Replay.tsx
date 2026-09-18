@@ -54,7 +54,7 @@ export default function Replay() {
     );
   }
 
-  const { session, custom_events: activity, logs } = meta;
+  const { session, custom_events: activity, logs, tickets, feedback } = meta;
 
   return (
     <main className="page page--wide">
@@ -122,6 +122,8 @@ export default function Replay() {
             activity={activity}
             logs={logs}
             pages={meta.pages}
+            tickets={tickets}
+            feedback={feedback}
             eventsReady={loaded}
             currentTimeMs={currentTime}
             onSeekMs={(ms) => playerRef.current?.seekToOffset(ms)}
