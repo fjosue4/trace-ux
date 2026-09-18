@@ -29,9 +29,6 @@ export default function Sidebar({ user, onLogout }: SidebarProps) {
         {user.role === 'admin' && (
           <NavItem to="/system-health" icon="bolt" label="System health" />
         )}
-        {user.role === 'admin' && (
-          <NavItem to="/integrations" icon="integrations" label="Integrations" />
-        )}
         <NavItem to="/settings" icon="settings" label="Settings" />
       </motion.nav>
 

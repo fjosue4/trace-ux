@@ -1,8 +1,12 @@
 import { useState } from 'react';
-import Button from '../../../components/ui/Button';
-import { Field, Input } from '../../../components/ui/fields';
-import { SlackWebhookView } from '../../../api';
-import { WebhookDraft } from '../hooks/useIntegrations';
+import Button from '../ui/Button';
+import { Field, Input } from '../ui/fields';
+import { SlackWebhookView } from '../../api';
+import './WebhookField.scss';
+
+export type WebhookDraft = { value: string; clear: boolean };
+
+export const emptyWebhookDraft: WebhookDraft = { value: '', clear: false };
 
 type WebhookFieldProps = {
   label: string;

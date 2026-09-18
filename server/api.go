@@ -312,8 +312,9 @@ func (s *Server) routes() http.Handler {
 	// Server resource usage (admin only).
 	mux.HandleFunc("GET /api/system/health", s.auth(s.requireAdmin(s.handleSystemHealth)))
 
-	// Instance-wide Slack integration: tickets, matched browser logs and
-	// system-health alerts. Admin only -- the settings hold webhook secrets.
+	// Instance-wide Slack integration: system-health alerts only. CPU/RAM/disk
+	// describe the server itself, not a site, so this stays a single global
+	// toggle+webhook. Admin only -- the settings hold a webhook secret.
 	mux.HandleFunc("GET /api/integrations/slack", s.auth(s.requireAdmin(s.handleGetSlackIntegration)))
 	mux.HandleFunc("PUT /api/integrations/slack", s.auth(s.requireAdmin(s.handlePutSlackIntegration)))
 	mux.HandleFunc("POST /api/integrations/slack/test", s.auth(s.requireAdmin(s.handleTestSlackWebhook)))
@@ -323,6 +324,12 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/sites/{id}", s.auth(s.handleGetSite))
 	mux.HandleFunc("PATCH /api/sites/{id}", s.auth(s.requireAdmin(s.handleUpdateSite)))
 	mux.HandleFunc("PUT /api/sites/{id}/settings", s.auth(s.requireAdmin(s.handlePutSiteSettings)))
+	// Per-site Slack integration: tickets, matched browser logs, and flagged
+	// custom events all belong to this site, so the webhook is configured
+	// here rather than shared across the instance.
+	mux.HandleFunc("GET /api/sites/{id}/integrations/slack", s.auth(s.requireAdmin(s.handleGetSiteSlackIntegration)))
+	mux.HandleFunc("PUT /api/sites/{id}/integrations/slack", s.auth(s.requireAdmin(s.handlePutSiteSlackIntegration)))
+	mux.HandleFunc("POST /api/sites/{id}/integrations/slack/test", s.auth(s.requireAdmin(s.handleTestSiteSlackWebhook)))
 	mux.HandleFunc("DELETE /api/sites/{id}", s.auth(s.requireAdmin(s.handleDeleteSite)))
 	// Custom launcher icon for the unified widget.
 	mux.HandleFunc("PUT /api/sites/{id}/widget-icon", s.auth(s.requireAdmin(s.handleUploadWidgetIcon)))

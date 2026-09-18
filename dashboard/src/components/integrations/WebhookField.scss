@@ -1,0 +1,23 @@
+@use 'abstracts' as *;
+
+.webhook-field__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  .input, input { flex: 1; }
+}
+
+.webhook-field__hint {
+  flex: 1;
+  padding: 0.5rem 0.7rem;
+  border-radius: $radius;
+  background: $surface-2;
+  border: 1px solid $line;
+  color: $ink;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 700px) {
+  .webhook-field__row { flex-wrap: wrap; }
+}

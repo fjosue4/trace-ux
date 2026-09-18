@@ -25,7 +25,6 @@ import Logs from './pages/Logs';
 import Settings from './pages/Settings';
 import SystemHealth from './pages/SystemHealth';
 import Announcements from './pages/Announcements';
-import Integrations from './pages/Integrations';
 
 const router = createBrowserRouter([
   {
@@ -45,7 +44,6 @@ const router = createBrowserRouter([
       { path: 'share/:token', element: <ShareReplay /> },
       { path: 'settings', element: <Settings /> },
       { path: 'system-health', element: <SystemHealth /> },
-      { path: 'integrations', element: <Integrations /> },
     ],
   },
 ]);

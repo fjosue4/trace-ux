@@ -139,6 +139,46 @@ func buildTicketSlackMessage(t store.Ticket, body, origin string) NotificationMe
 	}
 }
 
+const maxSlackCustomEventLines = 20
+
+// buildCustomEventSlackMessage covers custom events the host page explicitly
+// flagged with notify: true (window.TraceUX.track(name, trackId, {notify:
+// true}) or a trace-ux-track-notify click) -- independent of the browser-log
+// matcher, since these are opt-in per call rather than pattern-matched.
+func buildCustomEventSlackMessage(siteName string, events []store.CustomEvent, origin string) NotificationMessage {
+	shown := events
+	if len(shown) > maxSlackCustomEventLines {
+		shown = shown[:maxSlackCustomEventLines]
+	}
+	lines := make([]string, 0, len(shown))
+	sessionID := ""
+	for _, e := range shown {
+		line := "• *" + slackMrkdwn(truncateForSlack(e.Name, slackMaxFieldLen)) + "*"
+		if e.TrackID != "" {
+			line += " — " + slackMrkdwn(truncateForSlack(e.TrackID, 150))
+		}
+		if sessionID == "" && e.SessionID != "" {
+			sessionID = e.SessionID
+		}
+		lines = append(lines, line)
+	}
+	if extra := len(events) - len(shown); extra > 0 {
+		lines = append(lines, fmt.Sprintf("… and %d more", extra))
+	}
+	message := NotificationMessage{
+		Header:  "Custom event notification",
+		Message: strings.Join(lines, "\n"),
+		Footer:  fmt.Sprintf("TraceUX · %s · %d event(s)", slackMrkdwn(truncateForSlack(siteName, 120)), len(events)),
+	}
+	if sessionID != "" {
+		message.Button = &NotificationButton{
+			Text: "Open session",
+			URL:  fmt.Sprintf("%s/replay/%s", origin, urlPathSegment(sessionID)),
+		}
+	}
+	return message
+}
+
 func buildLogsSlackMessage(siteName string, logs []store.Log, origin string) NotificationMessage {
 	shown := logs
 	if len(shown) > maxSlackLogLines {
@@ -341,18 +381,18 @@ func slackLogMatches(mode, pattern, message string) bool {
 // ---- Dispatch hooks called from the request handlers ----
 
 func (s *Server) notifySlackTicket(t store.Ticket, body string, r *http.Request) {
-	integ, err := s.store.GetSlackIntegration()
+	integ, err := s.store.GetSiteSlackIntegration(t.SiteID)
 	if err != nil || !integ.TicketsEnabled || !integ.WebhookFor("tickets").Configured() {
 		return
 	}
-	s.enqueueNotification(notificationProviderSlack, "tickets", buildTicketSlackMessage(t, body, s.originFor(r)))
+	s.enqueueNotification(notificationProviderSlack, "tickets", t.SiteID, buildTicketSlackMessage(t, body, s.originFor(r)))
 }
 
 func (s *Server) notifySlackLogs(site store.Site, logs []store.Log, r *http.Request) {
 	if len(logs) == 0 {
 		return
 	}
-	integ, err := s.store.GetSlackIntegration()
+	integ, err := s.store.GetSiteSlackIntegration(site.ID)
 	if err != nil || !integ.LogsEnabled || !integ.WebhookFor("logs").Configured() {
 		return
 	}
@@ -365,22 +405,62 @@ func (s *Server) notifySlackLogs(site store.Site, logs []store.Log, r *http.Requ
 	if len(matched) == 0 {
 		return
 	}
-	s.enqueueNotification(notificationProviderSlack, "logs", buildLogsSlackMessage(site.Name, matched, s.originFor(r)))
+	s.enqueueNotification(notificationProviderSlack, "logs", site.ID, buildLogsSlackMessage(site.Name, matched, s.originFor(r)))
+}
+
+// notifySlackCustomEvents fires for custom events the tracker call or
+// trace-ux-track-notify click explicitly flagged with notify: true. Unlike
+// logs, there is no pattern to match here -- the opt-in already happened at
+// the source, so every flagged event that reaches this hook is notified.
+func (s *Server) notifySlackCustomEvents(site store.Site, events []store.CustomEvent, r *http.Request) {
+	if len(events) == 0 {
+		return
+	}
+	integ, err := s.store.GetSiteSlackIntegration(site.ID)
+	if err != nil || !integ.CustomEnabled || !integ.WebhookFor("custom").Configured() {
+		return
+	}
+	flagged := make([]store.CustomEvent, 0, len(events))
+	for _, e := range events {
+		if e.Notify {
+			flagged = append(flagged, e)
+		}
+	}
+	if len(flagged) == 0 {
+		return
+	}
+	s.enqueueNotification(notificationProviderSlack, "custom", site.ID, buildCustomEventSlackMessage(site.Name, flagged, s.originFor(r)))
 }
 
 // resolveSlackNotificationDestination is the Slack-specific half of the
 // provider registry. The generic dispatcher only asks a registered provider
 // for an enabled destination; it does not know how that provider stores or
-// decrypts its credentials.
-func (s *Server) resolveSlackNotificationDestination(kind string) (string, bool, error) {
-	integ, err := s.store.GetSlackIntegration()
+// decrypts its credentials. "system" is instance-wide and ignores siteID;
+// every other kind belongs to the site it was enqueued for.
+func (s *Server) resolveSlackNotificationDestination(kind string, siteID int64) (string, bool, error) {
+	if kind == "system" {
+		integ, err := s.store.GetSlackSystemIntegration()
+		if err != nil {
+			return "", false, err
+		}
+		if !integ.Enabled || !integ.Webhook.Configured() {
+			return "", false, nil
+		}
+		destination, err := decryptSlackWebhook(s.secret, integ.Webhook.Ciphertext)
+		if err != nil {
+			return "", false, err
+		}
+		return destination, true, nil
+	}
+
+	integ, err := s.store.GetSiteSlackIntegration(siteID)
 	if err != nil {
 		return "", false, err
 	}
 	enabled := map[string]bool{
 		"tickets": integ.TicketsEnabled,
 		"logs":    integ.LogsEnabled,
-		"system":  integ.SystemEnabled,
+		"custom":  integ.CustomEnabled,
 	}[kind]
 	secret := integ.WebhookFor(kind)
 	if !enabled || !secret.Configured() {
@@ -406,7 +486,7 @@ func (s *Server) runSlackHealthMonitor() {
 }
 
 func (s *Server) checkSlackSystemHealth() {
-	integ, err := s.store.GetSlackIntegration()
+	integ, err := s.store.GetSlackSystemIntegration()
 	if err != nil {
 		return
 	}
@@ -422,10 +502,10 @@ func (s *Server) checkSlackSystemHealth() {
 	}
 	above := evaluateSlackHealthCrossing(s.slackHealthAbove, metrics)
 	s.slackHealthMu.Unlock()
-	if !integ.SystemEnabled || !integ.WebhookFor("system").Configured() || len(above) == 0 {
+	if !integ.Enabled || !integ.Webhook.Configured() || len(above) == 0 {
 		return
 	}
-	s.enqueueNotification(notificationProviderSlack, "system", buildSystemHealthSlackMessage(snapshot, above))
+	s.enqueueNotification(notificationProviderSlack, "system", 0, buildSystemHealthSlackMessage(snapshot, above))
 }
 
 // evaluateSlackHealthCrossing updates the per-metric alerting state in place

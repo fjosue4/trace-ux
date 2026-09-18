@@ -7,7 +7,12 @@ import (
 	"trace-ux/server/store"
 )
 
-// ---- Slack integration settings (admin only) ----
+// ---- Slack integration settings: system health (instance-wide, admin only) ----
+//
+// CPU/RAM/disk describe the TraceUX server itself, not any one site, so this
+// stays a single global toggle+webhook. Per-site notifications (tickets,
+// browser logs, custom events) live in site_slack_api.go instead, since each
+// of those events already belongs to one site.
 //
 // GET/PUT never see or return a decryptable webhook: the dashboard gets a
 // masked hint, and a blank field on PUT means "keep the current secret" so
@@ -18,78 +23,46 @@ type slackWebhookView struct {
 	Hint       string `json:"hint,omitempty"`
 }
 
-type slackIntegrationView struct {
-	RoutingMode string `json:"routing_mode"`
-
-	CommonWebhook slackWebhookView `json:"common_webhook"`
-
-	TicketsEnabled bool             `json:"tickets_enabled"`
-	TicketsWebhook slackWebhookView `json:"tickets_webhook"`
-
-	LogsEnabled   bool             `json:"logs_enabled"`
-	LogsWebhook   slackWebhookView `json:"logs_webhook"`
-	LogMatchMode  string           `json:"log_match_mode"`
-	LogMatchValue string           `json:"log_match_value"`
-
-	SystemEnabled bool             `json:"system_enabled"`
-	SystemWebhook slackWebhookView `json:"system_webhook"`
-
-	UpdatedAt int64 `json:"updated_at"`
-}
-
 func slackWebhookViewFrom(w store.SlackWebhookSecret) slackWebhookView {
 	return slackWebhookView{Configured: w.Configured(), Hint: w.Hint}
 }
 
-func slackIntegrationViewFrom(si store.SlackIntegration) slackIntegrationView {
-	return slackIntegrationView{
-		RoutingMode:    si.RoutingMode,
-		CommonWebhook:  slackWebhookViewFrom(si.Common),
-		TicketsEnabled: si.TicketsEnabled,
-		TicketsWebhook: slackWebhookViewFrom(si.Tickets),
-		LogsEnabled:    si.LogsEnabled,
-		LogsWebhook:    slackWebhookViewFrom(si.Logs),
-		LogMatchMode:   si.LogMatchMode,
-		LogMatchValue:  si.LogMatchValue,
-		SystemEnabled:  si.SystemEnabled,
-		SystemWebhook:  slackWebhookViewFrom(si.System),
-		UpdatedAt:      si.UpdatedAt,
+type slackSystemIntegrationView struct {
+	Enabled   bool             `json:"enabled"`
+	Webhook   slackWebhookView `json:"webhook"`
+	UpdatedAt int64            `json:"updated_at"`
+}
+
+func slackSystemIntegrationViewFrom(si store.SlackSystemIntegration) slackSystemIntegrationView {
+	return slackSystemIntegrationView{
+		Enabled:   si.Enabled,
+		Webhook:   slackWebhookViewFrom(si.Webhook),
+		UpdatedAt: si.UpdatedAt,
 	}
 }
 
 func (s *Server) handleGetSlackIntegration(w http.ResponseWriter, r *http.Request) {
-	integ, err := s.store.GetSlackIntegration()
+	integ, err := s.store.GetSlackSystemIntegration()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "could not load slack settings")
 		return
 	}
-	writeJSON(w, http.StatusOK, slackIntegrationViewFrom(integ))
+	writeJSON(w, http.StatusOK, slackSystemIntegrationViewFrom(integ))
 }
 
-type slackIntegrationPutRequest struct {
-	RoutingMode    string `json:"routing_mode"`
-	TicketsEnabled bool   `json:"tickets_enabled"`
-	LogsEnabled    bool   `json:"logs_enabled"`
-	SystemEnabled  bool   `json:"system_enabled"`
-	LogMatchMode   string `json:"log_match_mode"`
-	LogMatchValue  string `json:"log_match_value"`
+type slackSystemIntegrationPutRequest struct {
+	Enabled bool `json:"enabled"`
 
-	// Blank means "keep the current secret"; the corresponding clear_* flag
-	// is the only way to remove one.
-	CommonWebhook  string `json:"common_webhook,omitempty"`
-	TicketsWebhook string `json:"tickets_webhook,omitempty"`
-	LogsWebhook    string `json:"logs_webhook,omitempty"`
-	SystemWebhook  string `json:"system_webhook,omitempty"`
-
-	ClearCommonWebhook  bool `json:"clear_common_webhook,omitempty"`
-	ClearTicketsWebhook bool `json:"clear_tickets_webhook,omitempty"`
-	ClearLogsWebhook    bool `json:"clear_logs_webhook,omitempty"`
-	ClearSystemWebhook  bool `json:"clear_system_webhook,omitempty"`
+	// Blank means "keep the current secret"; clear_webhook is the only way
+	// to remove one.
+	Webhook      string `json:"webhook,omitempty"`
+	ClearWebhook bool   `json:"clear_webhook,omitempty"`
 }
 
-// resolvedSlackWebhook is what one PUT field decided to do, expressed both as
-// a store update (ciphertext only) and as the resulting plaintext-derived
-// secret (used to validate the final "enabled needs a webhook" state).
+// resolveSlackWebhookField is what one PUT field decided to do, expressed
+// both as a store update (ciphertext only) and as the resulting
+// plaintext-derived secret (used to validate the final "enabled needs a
+// webhook" state). Shared with the per-site handlers in site_slack_api.go.
 func (s *Server) resolveSlackWebhookField(clear bool, raw string, existing store.SlackWebhookSecret) (store.SlackWebhookUpdate, store.SlackWebhookSecret, error) {
 	raw = strings.TrimSpace(raw)
 	switch {
@@ -115,120 +88,49 @@ func (s *Server) resolveSlackWebhookField(clear bool, raw string, existing store
 }
 
 func (s *Server) handlePutSlackIntegration(w http.ResponseWriter, r *http.Request) {
-	var body slackIntegrationPutRequest
+	var body slackSystemIntegrationPutRequest
 	if err := readJSON(w, r, &body); err != nil {
 		return
 	}
-	body.RoutingMode = strings.TrimSpace(body.RoutingMode)
-	body.LogMatchMode = strings.TrimSpace(body.LogMatchMode)
 
-	if !store.ValidSlackRoutingMode(body.RoutingMode) {
-		writeErr(w, http.StatusBadRequest, "invalid routing mode")
-		return
-	}
-	if !store.ValidSlackLogMatchMode(body.LogMatchMode) {
-		writeErr(w, http.StatusBadRequest, "invalid log match mode")
-		return
-	}
-	if len(body.LogMatchValue) > store.MaxSlackMatchValueLen {
-		writeErr(w, http.StatusBadRequest, "log match pattern is too long")
-		return
-	}
-
-	current, err := s.store.GetSlackIntegration()
+	current, err := s.store.GetSlackSystemIntegration()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "could not load slack settings")
 		return
 	}
 
-	commonUpdate, commonFinal, err := s.resolveSlackWebhookField(body.ClearCommonWebhook, body.CommonWebhook, current.Common)
+	webhookUpdate, webhookFinal, err := s.resolveSlackWebhookField(body.ClearWebhook, body.Webhook, current.Webhook)
 	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid common webhook: "+err.Error())
+		writeErr(w, http.StatusBadRequest, "invalid webhook: "+err.Error())
 		return
 	}
-	ticketsUpdate, ticketsFinal, err := s.resolveSlackWebhookField(body.ClearTicketsWebhook, body.TicketsWebhook, current.Tickets)
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid tickets webhook: "+err.Error())
-		return
-	}
-	logsUpdate, logsFinal, err := s.resolveSlackWebhookField(body.ClearLogsWebhook, body.LogsWebhook, current.Logs)
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid logs webhook: "+err.Error())
-		return
-	}
-	systemUpdate, systemFinal, err := s.resolveSlackWebhookField(body.ClearSystemWebhook, body.SystemWebhook, current.System)
-	if err != nil {
-		writeErr(w, http.StatusBadRequest, "invalid system webhook: "+err.Error())
-		return
-	}
-
-	finalState := store.SlackIntegration{
-		RoutingMode: body.RoutingMode,
-		Common:      commonFinal,
-		Tickets:     ticketsFinal,
-		Logs:        logsFinal,
-		System:      systemFinal,
-	}
-	if body.TicketsEnabled && !finalState.WebhookFor("tickets").Configured() {
-		writeErr(w, http.StatusBadRequest, "ticket notifications need a configured webhook")
-		return
-	}
-	if body.LogsEnabled && !finalState.WebhookFor("logs").Configured() {
-		writeErr(w, http.StatusBadRequest, "log notifications need a configured webhook")
-		return
-	}
-	if body.SystemEnabled && !finalState.WebhookFor("system").Configured() {
+	if body.Enabled && !webhookFinal.Configured() {
 		writeErr(w, http.StatusBadRequest, "system health notifications need a configured webhook")
 		return
 	}
 
-	updated, err := s.store.UpdateSlackIntegration(store.SlackIntegrationUpdate{
-		RoutingMode:    body.RoutingMode,
-		TicketsEnabled: body.TicketsEnabled,
-		LogsEnabled:    body.LogsEnabled,
-		SystemEnabled:  body.SystemEnabled,
-		LogMatchMode:   body.LogMatchMode,
-		LogMatchValue:  body.LogMatchValue,
-		Common:         commonUpdate,
-		Tickets:        ticketsUpdate,
-		Logs:           logsUpdate,
-		System:         systemUpdate,
+	updated, err := s.store.UpdateSlackSystemIntegration(store.SlackSystemIntegrationUpdate{
+		Enabled: body.Enabled,
+		Webhook: webhookUpdate,
 	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "could not save slack settings")
 		return
 	}
-	writeJSON(w, http.StatusOK, slackIntegrationViewFrom(updated))
+	writeJSON(w, http.StatusOK, slackSystemIntegrationViewFrom(updated))
 }
 
 func (s *Server) handleTestSlackWebhook(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Kind string `json:"kind"`
-	}
-	if err := readJSON(w, r, &body); err != nil {
-		return
-	}
-	body.Kind = strings.TrimSpace(body.Kind)
-
-	integ, err := s.store.GetSlackIntegration()
+	integ, err := s.store.GetSlackSystemIntegration()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "could not load slack settings")
 		return
 	}
-	if integ.RoutingMode == store.SlackRoutingPerNotification {
-		switch body.Kind {
-		case "tickets", "logs", "system":
-		default:
-			writeErr(w, http.StatusBadRequest, "kind must be tickets, logs, or system")
-			return
-		}
-	}
-	secret := integ.WebhookFor(body.Kind)
-	if !secret.Configured() {
+	if !integ.Webhook.Configured() {
 		writeErr(w, http.StatusBadRequest, "no webhook is configured for this notification")
 		return
 	}
-	webhookURL, err := decryptSlackWebhook(s.secret, secret.Ciphertext)
+	webhookURL, err := decryptSlackWebhook(s.secret, integ.Webhook.Ciphertext)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "could not decrypt the saved webhook")
 		return

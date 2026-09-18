@@ -4,6 +4,7 @@ import { TicketStatus, TicketThread } from '../../../api';
 import { fmtClock, fmtTime } from '../../../lib/format';
 import Button from '../../../components/ui/Button';
 import { Icon } from '../../../components/ui/Icon';
+import Notice from '../../../components/ui/Notice';
 import { Select } from '../../../components/ui/fields';
 import { statusOptions } from '../Tickets.constants';
 import { requester } from '../Tickets.helpers';
@@ -116,7 +117,7 @@ export function TicketThreadView({ thread, userRole, onStatus, onReply, onArchiv
           />
           <div className="ticket-reply__bottom">
             <span className="muted small">⌘↵ to send</span>
-            {replyError && <span className="ticket-form-error">{replyError}</span>}
+            {replyError && <Notice tone="error">{replyError}</Notice>}
             <Button size="sm" onClick={() => void submitReply()} disabled={sending || !body.trim()}>
               {sending ? 'Sending…' : 'Send reply'}
               {!sending && <Icon name="send" size={12} />}

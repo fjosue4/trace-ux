@@ -43,6 +43,9 @@ type ingestCustomEvent struct {
 	TS      int64  `json:"ts"`
 	Name    string `json:"name"`
 	TrackID string `json:"track_id"`
+	// Notify asks for a Slack notification alongside storing the event (see
+	// the "custom" Slack notification kind). It is never persisted.
+	Notify bool `json:"notify,omitempty"`
 }
 
 type ingestCustom struct {
@@ -158,6 +161,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var insertedLogs []store.Log
+	var insertedCustom []store.CustomEvent
 	switch env.Type {
 	case "hello":
 		var m store.IngestHello
@@ -253,9 +257,9 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 				writeErr(w, http.StatusBadRequest, "invalid custom event")
 				return
 			}
-			events = append(events, store.CustomEvent{TS: e.TS, Name: e.Name, TrackID: e.TrackID})
+			events = append(events, store.CustomEvent{TS: e.TS, Name: e.Name, TrackID: e.TrackID, Notify: e.Notify})
 		}
-		err = s.store.SaveCustomEvents(site.ID, env.SessionID, events)
+		insertedCustom, err = s.store.SaveCustomEvents(site.ID, env.SessionID, events)
 	case "logs":
 		var m ingestLogs
 		if err := json.Unmarshal(body, &m); err != nil {
@@ -370,6 +374,9 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(insertedLogs) > 0 {
 		s.notifySlackLogs(site, insertedLogs, r)
+	}
+	if len(insertedCustom) > 0 {
+		s.notifySlackCustomEvents(site, insertedCustom, r)
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

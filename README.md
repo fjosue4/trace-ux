@@ -441,6 +441,18 @@ Mark any element to appear as seekable activity in the replay sidebar:
 
 or programmatically: `window.TraceUX.track('checkout-click')`. Clicking an activity row jumps the recording to that exact moment.
 
+Ask for a Slack notification alongside the event (see the site's **Integrations** tab in the dashboard) by adding `notify: true`:
+
+```ts
+traceux.track('checkout_error', 'checkout-button', { notify: true });
+```
+
+```html
+<button trace-ux-track-id="checkout-button" trace-ux-track-notify="true">Buy now</button>
+```
+
+This is independent of the browser-log matcher: it fires whenever the call or click sets `notify`, with no pattern to configure. An admin still has to enable **Custom events** and configure its webhook from that site's **Integrations** tab for anything to be sent. Server CPU, RAM, and disk alerts are configured under **System health**.
+
 Masking: all form inputs are masked by default; any element carrying `trace-ux-mask` — as a class or as a bare attribute — has its text masked, and `trace-ux-block` (class) removes the element from the recording entirely.
 
 ### Logs

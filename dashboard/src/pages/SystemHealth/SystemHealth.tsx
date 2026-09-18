@@ -1,11 +1,15 @@
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
+import Button from '../../components/ui/Button';
 import Notice from '../../components/ui/Notice';
 import Loading from '../../components/ui/Loading';
 import Badge from '../../components/ui/Badge';
+import Switch from '../../components/ui/Switch';
 import { Icon } from '../../components/ui/Icon';
+import { WebhookField } from '../../components/integrations/WebhookField';
 import { fmtBytes, fmtClock, fmtDuration } from '../../lib/format';
 import { useSystemHealth } from './hooks/useSystemHealth';
+import { useSlackSystemIntegration } from './hooks/useSlackSystemIntegration';
 import { Meter } from './subcomponents/Meter';
 import { Row } from './subcomponents/Row';
 import { pctLabel } from './SystemHealth.constants';
@@ -13,6 +17,21 @@ import './SystemHealth.scss';
 
 export default function SystemHealth() {
   const { health, error, stamp } = useSystemHealth();
+  const {
+    integration: slackIntegration,
+    loading: slackLoading,
+    error: slackError,
+    notice: slackNotice,
+    busy: slackBusy,
+    dirty: slackDirty,
+    testing: slackTesting,
+    enabled: slackEnabled,
+    setEnabled: setSlackEnabled,
+    webhook: slackWebhook,
+    setWebhook: setSlackWebhook,
+    save: saveSlack,
+    test: testSlack,
+  } = useSlackSystemIntegration();
 
   if (error) {
     return (
@@ -130,6 +149,55 @@ export default function SystemHealth() {
           </div>
         </div>
       </Card>
+
+      <form className="system-health__form" onSubmit={saveSlack}>
+        <Card className="health-alerts">
+          <div className="health-alerts__head">
+            <div className="health-alerts__title">
+              <Icon name="slack" size={18} />
+              <div>
+                <h2>Slack system alerts</h2>
+                <p className="muted small">
+                  Send a Slack alert when CPU, RAM, or disk usage crosses 90%. This webhook belongs to the TraceUX server,
+                  not to an individual site.
+                </p>
+              </div>
+            </div>
+            {!slackLoading && <Switch checked={slackEnabled} onChange={setSlackEnabled} label="Enable alerts" />}
+          </div>
+
+          {slackLoading ? (
+            <Loading />
+          ) : (
+            <>
+              <WebhookField
+                label="Slack webhook"
+                hint="An incoming webhook URL from a Slack app — https://hooks.slack.com/services/…"
+                view={slackIntegration?.webhook ?? { configured: false }}
+                draft={slackWebhook}
+                onChange={setSlackWebhook}
+              />
+              {slackEnabled && (
+                <div className="health-alerts__actions">
+                  <Button type="button" variant="secondary" size="sm" disabled={slackTesting} onClick={testSlack}>
+                    {slackTesting ? 'Sending…' : 'Send test message'}
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+
+        {slackNotice && <Notice tone="success">{slackNotice}</Notice>}
+        {slackError && <Notice tone="error">{slackError}</Notice>}
+        {slackDirty && (
+          <div className="system-health__save">
+            <Button type="submit" disabled={slackBusy} title="Save unsaved changes">
+              {slackBusy ? 'Saving…' : 'Save changes'}
+            </Button>
+          </div>
+        )}
+      </form>
     </main>
   );
 }

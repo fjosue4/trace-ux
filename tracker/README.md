@@ -58,6 +58,7 @@ for parity with the script tag.
 ```ts
 traceux.identify({ userId, clientId, remoteId });  // attach identity mid-session
 traceux.track('checkout_started', 'cta-hero');     // seekable activity in the replay
+traceux.track('checkout_error', 'checkout-button', { notify: true }); // also notify Slack when enabled
 traceux.setUserStatus('trialing');                 // lifecycle state as an activity
 traceux.updateUserStatus('active');                // alias, for update-style call sites
 
@@ -76,6 +77,12 @@ traceux.stop();                                    // flush, stop recording, rem
 `track` and `setUserStatus` write seekable markers into the replay timeline, so
 you can jump straight to the moment in the session. `setUserStatus` does not
 create a server-side user record — it is an activity, not a table.
+
+Pass `{ notify: true }` as the third argument to `track` when an event should
+also notify Slack. The TraceUX admin must enable **Custom events** and configure
+the Slack webhook under **Integrations**. The notification includes a button
+linking directly to the current session replay. Events without `notify: true`
+remain normal replay activity and do not notify.
 
 ## React
 

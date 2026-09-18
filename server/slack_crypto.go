@@ -73,23 +73,19 @@ func slackWebhookFingerprint(rawURL string) string {
 }
 
 // slackWebhookHint is the masked value shown in the dashboard, keeping only
-// the first and last four characters of the saved value, e.g. "http***abcd".
-// The middle is deliberately not reversible and never contains enough of the
-// webhook path or token to reconstruct the secret.
+// the last four characters of the saved value, e.g. "***abcd". Showing the
+// URL's "http" prefix adds no useful recognition and makes the hint look like
+// a broken URL.
 func slackWebhookHint(rawURL string) string {
 	runes := []rune(rawURL)
 	if len(runes) == 0 {
 		return ""
 	}
-	first := runes
-	if len(first) > 4 {
-		first = first[:4]
-	}
 	last := runes
 	if len(last) > 4 {
 		last = last[len(last)-4:]
 	}
-	return string(first) + "***" + string(last)
+	return "***" + string(last)
 }
 
 // validateSlackWebhookURL accepts only Slack's own incoming-webhook hosts

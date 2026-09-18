@@ -69,6 +69,7 @@ export default function App() {
     <MotionConfig reducedMotion="user">
       <AuthContext.Provider value={auth}>
         <AnimatePresence mode="wait">{content}</AnimatePresence>
+        <div id="floating-notifications" className="floating-notifications" aria-live="assertive" aria-atomic="true" />
       </AuthContext.Provider>
     </MotionConfig>
   );

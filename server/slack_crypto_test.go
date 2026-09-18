@@ -83,11 +83,11 @@ func TestSlackWebhookHintAndFingerprint(t *testing.T) {
 	a := "https://hooks.slack.com/services/T000/B000/aaaaaaaaaaaaaaaa"
 	b := "https://hooks.slack.com/services/T000/B000/bbbbbbbbbbbbbbbb"
 
-	if got := slackWebhookHint(a); got != "http***aaaa" {
-		t.Fatalf("hint = %q, want first four and last four characters", got)
+	if got := slackWebhookHint(a); got != "***aaaa" {
+		t.Fatalf("hint = %q, want a masked value ending in the last four characters", got)
 	}
-	if got := slackWebhookHint("short"); got != "shor***hort" {
-		t.Fatalf("short hint = %q, want a masked first/last view", got)
+	if got := slackWebhookHint("short"); got != "***hort" {
+		t.Fatalf("short hint = %q, want a masked value ending in the last four characters", got)
 	}
 	if slackWebhookFingerprint(a) == slackWebhookFingerprint(b) {
 		t.Fatal("different webhooks must not share a fingerprint")

@@ -287,54 +287,67 @@ func waitForSlackDelivery(t *testing.T, receiver *slackReceiver) string {
 	}
 }
 
-// setSlackIntegrationForTest saves a common webhook pointing at a local test
-// receiver, bypassing the hooks.slack.com-only validation the PUT API
-// enforces -- appropriate here since these tests exercise delivery, not
-// input validation (that's covered in slack_api_test.go).
-func setSlackIntegrationForTest(t *testing.T, srv *Server, webhookURL string, update store.SlackIntegrationUpdate) {
+// setSiteSlackIntegrationForTest saves a common webhook for one site,
+// pointing at a local test receiver and bypassing the hooks.slack.com-only
+// validation the PUT API enforces -- appropriate here since these tests
+// exercise delivery, not input validation (that's covered in
+// site_slack_api_test.go).
+func setSiteSlackIntegrationForTest(t *testing.T, srv *Server, siteID int64, webhookURL string, update store.SiteSlackIntegrationUpdate) {
 	t.Helper()
 	ciphertext, err := encryptSlackWebhook(srv.secret, webhookURL)
 	if err != nil {
 		t.Fatal(err)
 	}
+	update.SiteID = siteID
 	update.Common = store.SlackWebhookUpdate{Set: true, Secret: store.SlackWebhookSecret{
 		Ciphertext:  ciphertext,
 		Fingerprint: slackWebhookFingerprint(webhookURL),
 		Hint:        slackWebhookHint(webhookURL),
 	}}
-	if _, err := srv.store.UpdateSlackIntegration(update); err != nil {
+	if _, err := srv.store.UpdateSiteSlackIntegration(update); err != nil {
 		t.Fatal(err)
 	}
 }
 
+func mustCreateNotifyTestSite(t *testing.T, srv *Server) store.Site {
+	t.Helper()
+	site, err := srv.store.CreateSite("Acme", "https://acme.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return site
+}
+
 func TestNotifySlackTicketDeliversWhenEnabled(t *testing.T) {
 	srv, _ := newTestServer(t)
+	site := mustCreateNotifyTestSite(t, srv)
 	receiver := newSlackReceiver(t, 0)
-	setSlackIntegrationForTest(t, srv, receiver.URL, store.SlackIntegrationUpdate{
+	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
 		RoutingMode:    store.SlackRoutingSingle,
 		LogMatchMode:   store.SlackLogMatchContains,
 		TicketsEnabled: true,
 	})
 	req := httptest.NewRequest(http.MethodPost, "https://dash.example.com/api/tickets", nil)
-	ticket := store.Ticket{ID: 7, SiteName: "Acme", Subject: "Help", Name: "Jamie"}
+	ticket := store.Ticket{ID: 7, SiteID: site.ID, SiteName: site.Name, Subject: "Help", Name: "Jamie"}
 	srv.notifySlackTicket(ticket, "Body text", req)
 
 	body := waitForSlackDelivery(t, receiver)
-	if !strings.Contains(body, "Acme") || !strings.Contains(body, "Help") {
+	if !strings.Contains(body, site.Name) || !strings.Contains(body, "Help") {
 		t.Fatalf("unexpected payload: %s", body)
 	}
 }
 
 func TestNotifySlackTicketSkippedWhenDisabled(t *testing.T) {
 	srv, _ := newTestServer(t)
+	site := mustCreateNotifyTestSite(t, srv)
 	receiver := newSlackReceiver(t, 0)
-	setSlackIntegrationForTest(t, srv, receiver.URL, store.SlackIntegrationUpdate{
+	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
 		RoutingMode:    store.SlackRoutingSingle,
 		LogMatchMode:   store.SlackLogMatchContains,
 		TicketsEnabled: false, // disabled despite having a webhook configured
 	})
 	req := httptest.NewRequest(http.MethodPost, "https://dash.example.com/api/tickets", nil)
-	srv.notifySlackTicket(store.Ticket{ID: 1, SiteName: "Acme", Subject: "Help"}, "body", req)
+	srv.notifySlackTicket(store.Ticket{ID: 1, SiteID: site.ID, SiteName: site.Name, Subject: "Help"}, "body", req)
 
 	select {
 	case body := <-receiver.bodies:
@@ -343,10 +356,36 @@ func TestNotifySlackTicketSkippedWhenDisabled(t *testing.T) {
 	}
 }
 
+func TestNotifySlackTicketUsesTheTicketsSiteNotAnotherSite(t *testing.T) {
+	srv, _ := newTestServer(t)
+	notifyingSite := mustCreateNotifyTestSite(t, srv)
+	otherSite, err := srv.store.CreateSite("Beta", "https://beta.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	receiver := newSlackReceiver(t, 0)
+	// Only the "other" site has a webhook configured; the ticket belongs to
+	// notifyingSite, which has nothing configured, so nothing should send.
+	setSiteSlackIntegrationForTest(t, srv, otherSite.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
+		RoutingMode:    store.SlackRoutingSingle,
+		LogMatchMode:   store.SlackLogMatchContains,
+		TicketsEnabled: true,
+	})
+	req := httptest.NewRequest(http.MethodPost, "https://dash.example.com/api/tickets", nil)
+	srv.notifySlackTicket(store.Ticket{ID: 1, SiteID: notifyingSite.ID, SiteName: notifyingSite.Name, Subject: "Help"}, "body", req)
+
+	select {
+	case body := <-receiver.bodies:
+		t.Fatalf("expected no delivery through another site's webhook, got %s", body)
+	case <-time.After(300 * time.Millisecond):
+	}
+}
+
 func TestNotifySlackLogsAppliesMatcher(t *testing.T) {
 	srv, _ := newTestServer(t)
+	site := mustCreateNotifyTestSite(t, srv)
 	receiver := newSlackReceiver(t, 0)
-	setSlackIntegrationForTest(t, srv, receiver.URL, store.SlackIntegrationUpdate{
+	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
 		RoutingMode:   store.SlackRoutingSingle,
 		LogMatchMode:  store.SlackLogMatchContains,
 		LogMatchValue: "Payment",
@@ -357,7 +396,7 @@ func TestNotifySlackLogsAppliesMatcher(t *testing.T) {
 		{Message: "Payment failed", Severity: "error", SessionID: "s1"},
 		{Message: "Unrelated info", Severity: "error", SessionID: "s1"},
 	}
-	srv.notifySlackLogs(store.Site{Name: "Acme"}, logs, req)
+	srv.notifySlackLogs(site, logs, req)
 
 	body := waitForSlackDelivery(t, receiver)
 	if !strings.Contains(body, "Payment failed") {
@@ -370,20 +409,133 @@ func TestNotifySlackLogsAppliesMatcher(t *testing.T) {
 
 func TestNotifySlackLogsNoMatchSendsNothing(t *testing.T) {
 	srv, _ := newTestServer(t)
+	site := mustCreateNotifyTestSite(t, srv)
 	receiver := newSlackReceiver(t, 0)
-	setSlackIntegrationForTest(t, srv, receiver.URL, store.SlackIntegrationUpdate{
+	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
 		RoutingMode:   store.SlackRoutingSingle,
 		LogMatchMode:  store.SlackLogMatchExact,
 		LogMatchValue: "Specific message",
 		LogsEnabled:   true,
 	})
 	req := httptest.NewRequest(http.MethodGet, "https://dash.example.com/api/ingest/x", nil)
-	srv.notifySlackLogs(store.Site{Name: "Acme"}, []store.Log{{Message: "Something else", Severity: "error"}}, req)
+	srv.notifySlackLogs(site, []store.Log{{Message: "Something else", Severity: "error"}}, req)
 
 	select {
 	case body := <-receiver.bodies:
 		t.Fatalf("expected no delivery for a non-matching log, got %s", body)
 	case <-time.After(300 * time.Millisecond):
+	}
+}
+
+func TestBuildCustomEventSlackMessage(t *testing.T) {
+	events := []store.CustomEvent{
+		{Name: "checkout_error", TrackID: "checkout-button", SessionID: "sess-1"},
+	}
+	message := buildCustomEventSlackMessage("Acme", events, "https://dash.example.com")
+	for _, want := range []string{"checkout_error", "checkout-button", "Acme"} {
+		if !strings.Contains(message.Message, want) && !strings.Contains(message.Footer, want) {
+			t.Errorf("custom event message missing %q:\nmessage=%s\nfooter=%s", want, message.Message, message.Footer)
+		}
+	}
+	if message.Button == nil || message.Button.Text != "Open session" || message.Button.URL != "https://dash.example.com/replay/sess-1" {
+		t.Fatalf("custom event message missing session button: %+v", message.Button)
+	}
+}
+
+func TestNotifySlackCustomEventsOnlyNotifiesFlaggedEvents(t *testing.T) {
+	srv, _ := newTestServer(t)
+	site := mustCreateNotifyTestSite(t, srv)
+	receiver := newSlackReceiver(t, 0)
+	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
+		RoutingMode:   store.SlackRoutingSingle,
+		LogMatchMode:  store.SlackLogMatchContains,
+		CustomEnabled: true,
+	})
+	req := httptest.NewRequest(http.MethodGet, "https://dash.example.com/api/ingest/x", nil)
+	events := []store.CustomEvent{
+		{Name: "checkout_error", TrackID: "checkout-button", Notify: true, SessionID: "s1"},
+		{Name: "page_scroll", Notify: false, SessionID: "s1"},
+	}
+	srv.notifySlackCustomEvents(site, events, req)
+
+	body := waitForSlackDelivery(t, receiver)
+	if !strings.Contains(body, "checkout_error") {
+		t.Fatalf("expected the notify-flagged event in the payload: %s", body)
+	}
+	if strings.Contains(body, "page_scroll") {
+		t.Fatalf("expected the non-flagged event to be filtered out: %s", body)
+	}
+}
+
+func TestNotifySlackCustomEventsSkippedWhenDisabled(t *testing.T) {
+	srv, _ := newTestServer(t)
+	site := mustCreateNotifyTestSite(t, srv)
+	receiver := newSlackReceiver(t, 0)
+	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
+		RoutingMode:   store.SlackRoutingSingle,
+		LogMatchMode:  store.SlackLogMatchContains,
+		CustomEnabled: false, // disabled despite having a webhook configured
+	})
+	req := httptest.NewRequest(http.MethodGet, "https://dash.example.com/api/ingest/x", nil)
+	srv.notifySlackCustomEvents(site, []store.CustomEvent{{Name: "checkout_error", Notify: true}}, req)
+
+	select {
+	case body := <-receiver.bodies:
+		t.Fatalf("expected no delivery while disabled, got %s", body)
+	case <-time.After(300 * time.Millisecond):
+	}
+}
+
+func TestNotifySlackCustomEventsNoFlaggedEventsSendsNothing(t *testing.T) {
+	srv, _ := newTestServer(t)
+	site := mustCreateNotifyTestSite(t, srv)
+	receiver := newSlackReceiver(t, 0)
+	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
+		RoutingMode:   store.SlackRoutingSingle,
+		LogMatchMode:  store.SlackLogMatchContains,
+		CustomEnabled: true,
+	})
+	req := httptest.NewRequest(http.MethodGet, "https://dash.example.com/api/ingest/x", nil)
+	srv.notifySlackCustomEvents(site, []store.CustomEvent{{Name: "page_scroll", Notify: false}}, req)
+
+	select {
+	case body := <-receiver.bodies:
+		t.Fatalf("expected no delivery when nothing is notify-flagged, got %s", body)
+	case <-time.After(300 * time.Millisecond):
+	}
+}
+
+func TestIngestCustomNotifySendsSessionLinkToSlack(t *testing.T) {
+	srv, ts := newTestServer(t)
+	receiver := newSlackReceiver(t, 0)
+	admin := login(t, ts.URL, "admin", "pw")
+	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin, `{"name":"Acme","url":"https://acme.example"}`)
+	if resp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		t.Fatalf("create site: got %d (%s)", resp.StatusCode, body)
+	}
+	var site store.Site
+	if err := json.NewDecoder(resp.Body).Decode(&site); err != nil {
+		resp.Body.Close()
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+
+	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
+		RoutingMode:   store.SlackRoutingSingle,
+		LogMatchMode:  store.SlackLogMatchContains,
+		CustomEnabled: true,
+	})
+	if resp := postJSON(t, ts.URL+"/api/ingest/"+site.SiteKey,
+		`{"type":"custom","session_id":"session-notify-1","events":[{"ts":1730000000000,"name":"checkout_error","track_id":"checkout-button","notify":true}]}`,
+		false); resp.StatusCode != http.StatusOK {
+		t.Fatalf("custom ingest: got %d", resp.StatusCode)
+	}
+
+	body := waitForSlackDelivery(t, receiver)
+	if !strings.Contains(body, "checkout_error") || !strings.Contains(body, ts.URL+"/replay/session-notify-1") {
+		t.Fatalf("Slack payload missing custom event session link: %s", body)
 	}
 }
 

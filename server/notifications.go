@@ -33,7 +33,11 @@ type NotificationProvider interface {
 
 type notificationProviderFactory func(destination string, client *http.Client) (NotificationProvider, error)
 
-type notificationDestinationResolver func(kind string) (destination string, enabled bool, err error)
+// notificationDestinationResolver resolves the destination for one
+// notification kind. siteID is the site the event belongs to (tickets, logs,
+// custom events); it is ignored for instance-wide kinds like "system", which
+// has no site to attach to.
+type notificationDestinationResolver func(kind string, siteID int64) (destination string, enabled bool, err error)
 
 type notificationProviderDefinition struct {
 	Factory notificationProviderFactory
@@ -43,6 +47,7 @@ type notificationProviderDefinition struct {
 type notificationJob struct {
 	Provider string
 	Kind     string
+	SiteID   int64
 	Message  NotificationMessage
 }
 
@@ -96,10 +101,10 @@ func (s *Server) runNotificationDispatcher() {
 	}
 }
 
-func (s *Server) enqueueNotification(provider, kind string, message NotificationMessage) {
+func (s *Server) enqueueNotification(provider, kind string, siteID int64, message NotificationMessage) {
 	s.initNotifications()
 	select {
-	case s.notificationQueue <- notificationJob{Provider: provider, Kind: kind, Message: message}:
+	case s.notificationQueue <- notificationJob{Provider: provider, Kind: kind, SiteID: siteID, Message: message}:
 	default:
 		log.Printf("notifications: queue full; dropping a %s %s notification", provider, kind)
 	}
@@ -108,8 +113,8 @@ func (s *Server) enqueueNotification(provider, kind string, message Notification
 // enqueueSlackNotification is retained as a small compatibility helper for
 // simple callers. New producers should use enqueueNotification with a full
 // NotificationMessage so providers can use their richer native formats.
-func (s *Server) enqueueSlackNotification(kind, text string) {
-	s.enqueueNotification(notificationProviderSlack, kind, NotificationMessage{Message: text})
+func (s *Server) enqueueSlackNotification(kind string, siteID int64, text string) {
+	s.enqueueNotification(notificationProviderSlack, kind, siteID, NotificationMessage{Message: text})
 }
 
 func (s *Server) deliverNotificationJob(job notificationJob) {
@@ -120,7 +125,7 @@ func (s *Server) deliverNotificationJob(job notificationJob) {
 		return
 	}
 
-	destination, enabled, err := definition.Resolve(job.Kind)
+	destination, enabled, err := definition.Resolve(job.Kind, job.SiteID)
 	if err != nil {
 		log.Printf("notifications: could not resolve %s %s destination: %v", job.Provider, job.Kind, err)
 		return
