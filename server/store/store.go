@@ -486,6 +486,12 @@ var migrations = []string{
 	DROP TABLE slack_integration;
 	ALTER TABLE slack_integration_v20 RENAME TO slack_integration;
 	`,
+	// v21: announcements may carry non-visual key/value metadata to the npm
+	// integration's onAnnouncement callback. It is deliberately separate from
+	// the visitor-facing copy, but it is still browser-visible metadata.
+	`
+	ALTER TABLE announcements ADD COLUMN internal_headers TEXT NOT NULL DEFAULT '{}';
+	`,
 }
 
 func (s *Store) migrate() error {

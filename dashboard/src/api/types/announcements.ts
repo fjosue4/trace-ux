@@ -8,7 +8,7 @@ export type AnnouncementAppearance = {
 export type AnnouncementStatus = 'draft' | 'published' | 'archived';
 export type Announcement = {
   id: number; site_id: number; site_name?: string; title: string; summary: string; body: string;
-  release_label: string; link_url: string; status: AnnouncementStatus; published_at: number;
+  release_label: string; link_url: string; internal_headers?: Record<string, string>; status: AnnouncementStatus; published_at: number;
   created_at: number; updated_at: number; reactions: number; comments: number; reads: number;
 };
 

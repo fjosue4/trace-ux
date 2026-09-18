@@ -42,6 +42,70 @@ func TestAnnouncementLinkRejectsAttributeInjection(t *testing.T) {
 	}
 }
 
+func TestAnnouncementInternalHeadersRoundTrip(t *testing.T) {
+	srv, ts := newTestServer(t)
+	site, err := srv.store.CreateSite("Site", "https://example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp := authed(t, ts.URL, http.MethodPost, "/api/announcements", fmt.Sprintf(`{
+		"site_id":%d,
+		"title":"Version update",
+		"internal_headers":{"current_version":"0.1.1","rollout":"beta"}
+	}`, site.ID))
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create announcement: got %d", resp.StatusCode)
+	}
+	var created store.Announcement
+	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	if created.InternalHeaders["current_version"] != "0.1.1" || created.InternalHeaders["rollout"] != "beta" {
+		t.Fatalf("created internal headers = %#v", created.InternalHeaders)
+	}
+
+	loaded, err := srv.store.GetAnnouncement(created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.InternalHeaders["current_version"] != "0.1.1" {
+		t.Fatalf("stored internal headers = %#v", loaded.InternalHeaders)
+	}
+
+	resp = authed(t, ts.URL, http.MethodPatch, fmt.Sprintf("/api/announcements/%d", created.ID), `{
+		"title":"Version update",
+		"internal_headers":{"current_version":"0.1.2"}
+	}`)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("update announcement: got %d", resp.StatusCode)
+	}
+	loaded, err = srv.store.GetAnnouncement(created.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.InternalHeaders) != 1 || loaded.InternalHeaders["current_version"] != "0.1.2" {
+		t.Fatalf("updated internal headers = %#v", loaded.InternalHeaders)
+	}
+}
+
+func TestAnnouncementInternalHeadersAreBounded(t *testing.T) {
+	if store.ValidateAnnouncement(store.Announcement{
+		Title:           "t",
+		InternalHeaders: map[string]string{"bad\nkey": "value"},
+	}) == nil {
+		t.Fatal("newline in internal header key was accepted")
+	}
+	if store.ValidateAnnouncement(store.Announcement{
+		Title:           "t",
+		InternalHeaders: map[string]string{"key": strings.Repeat("x", 1001)},
+	}) == nil {
+		t.Fatal("overlong internal header value was accepted")
+	}
+}
+
 // Widget colors land inside the <style> block the tracker injects into visitor
 // pages, so only real hex triplets may be stored or served.
 func TestAnnouncementAppearanceRequiresHexColors(t *testing.T) {

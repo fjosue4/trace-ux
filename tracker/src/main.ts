@@ -9,7 +9,7 @@
  */
 import { record } from '@rrweb/record';
 import type { eventWithTime } from '@rrweb/types';
-import type { WidgetCfg, WidgetHandle } from './widget';
+import type { Announcement, WidgetCfg, WidgetHandle } from './widget';
 
 type SurveyQuestionCfg = {
   id: string;
@@ -95,7 +95,12 @@ export interface TraceUXOptions extends TraceUXIdentity {
   origin: string;
   /** Load the optional announcements/support/feedback widget when configured. */
   widget?: boolean;
+  /** Called when a newly published or updated announcement reaches the widget. */
+  onAnnouncement?: (announcement: TraceUXAnnouncement) => void;
 }
+
+/** Full announcement content delivered to an npm/React integration. */
+export type TraceUXAnnouncement = Announcement;
 
 export interface TraceUXTrackOptions {
   /**
@@ -932,6 +937,7 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
           newId,
           sessionId: () => sessionId,
           identity: () => ({ userId: identity.user_id }),
+          onAnnouncement: options.onAnnouncement,
         });
         // An action-triggered survey opens immediately, as it did before the merge.
         if (action && feedbackAvailable(action)) unifiedWidget?.open('feedback');

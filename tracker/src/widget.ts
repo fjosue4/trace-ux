@@ -62,16 +62,22 @@ export type WidgetSurvey = {
 
 export type Announcement = {
   id: number;
+  site_id?: number;
+  site_name?: string;
   title: string;
   summary: string;
   body: string;
   release_label: string;
   link_url: string;
+  /** Non-visual key/value metadata supplied to the npm/React callback. */
+  internal_headers?: Record<string, string>;
+  status?: string;
   published_at: number;
+  created_at?: number;
+  updated_at?: number;
   reactions: number;
   comments: number;
-  status?: string;
-  updated_at?: number;
+  reads?: number;
   liked?: boolean;
   commented?: boolean;
   read?: boolean;
@@ -130,6 +136,8 @@ export type WidgetHost = {
   sessionId: () => string;
   /** The current tracker identity; a non-empty user id skips the email field. */
   identity: () => { userId: string };
+  /** Called when a newly published or updated announcement reaches the widget. */
+  onAnnouncement?: (announcement: Announcement) => void;
 };
 
 export type WidgetHandle = {
@@ -1492,6 +1500,17 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     });
   }
 
+  function notifyAnnouncement(a: Announcement) {
+    if (!host.onAnnouncement) return;
+    try {
+      // Do not let a consumer callback mutate the widget's internal object or
+      // break rendering if the host application's handler throws.
+      host.onAnnouncement({ ...a });
+    } catch {
+      /* consumer callbacks are an enhancement and must not break the widget */
+    }
+  }
+
   function showTicketToast(ticket: Ticket, message: string) {
     showPreviewToast(
       'Support reply',
@@ -1592,12 +1611,22 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       const previous = announcements.find((item) => item.id === announcement.id);
       const merged = previous ? { ...announcement, read: previous.read } : announcement;
       const isFresh = !seenIds.has(merged.id);
+      const contentChanged = !previous ||
+        previous.updated_at !== merged.updated_at ||
+        previous.title !== merged.title ||
+        previous.summary !== merged.summary ||
+        previous.body !== merged.body ||
+        previous.release_label !== merged.release_label ||
+        previous.link_url !== merged.link_url;
       seenIds.add(merged.id);
       announcements = [merged, ...announcements.filter((item) => item.id !== merged.id)].sort(
         (a, b) => b.published_at - a.published_at || (b.updated_at || 0) - (a.updated_at || 0) || b.id - a.id,
       );
       syncBadges();
       repaintUpdatesListIfVisible();
+      if ((event.type === 'announcement.published' && isFresh) || (event.type === 'announcement.updated' && contentChanged)) {
+        notifyAnnouncement(merged);
+      }
       if (!panelOpen && event.type === 'announcement.published' && isFresh) showToast(merged);
       return;
     }
@@ -1739,7 +1768,21 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     // Anything unread that we had not seen on a previous poll is "new" and
     // earns a preview. On first load nothing is announced this way — the
     // unread badge already tells that story without hijacking the page.
+    const previous = new Map(announcements.map((a) => [a.id, a]));
     const fresh = next.filter((a) => !a.read && !seenIds.has(a.id));
+    const changed = initial
+      ? []
+      : next.filter((a) => {
+          const prior = previous.get(a.id);
+          return prior && (
+            prior.updated_at !== a.updated_at ||
+            prior.title !== a.title ||
+            prior.summary !== a.summary ||
+            prior.body !== a.body ||
+            prior.release_label !== a.release_label ||
+            prior.link_url !== a.link_url
+          );
+        });
     announcements = next;
     seenIds = new Set(next.map((a) => a.id));
     syncBadges();
@@ -1747,7 +1790,10 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     if (panelOpen && section === 'updates' && body.querySelector('.item, .empty')) {
       body.replaceChildren(buildUpdatesList());
     }
-    if (!initial && fresh.length) showToast(fresh[0]);
+    if (!initial) {
+      [...fresh, ...changed.filter((a) => !fresh.some((item) => item.id === a.id))].forEach(notifyAnnouncement);
+      if (fresh.length) showToast(fresh[0]);
+    }
   }
 
   function scheduleNext() {
