@@ -311,23 +311,39 @@ type CustomEvent struct {
 	TS      int64  `json:"ts"` // unix millis, visitor's clock
 	Name    string `json:"name"`
 	TrackID string `json:"track_id"`
+	// Notify and SessionID are never persisted (there is no column for
+	// them): Notify carries the tracker's opt-in through to the Slack
+	// dispatch hook, and SessionID is filled in here for that same hook's
+	// replay link, since a caller only ever provides one session at a time.
+	Notify    bool   `json:"-"`
+	SessionID string `json:"-"`
 }
 
 // SaveCustomEvents stores tracked events for a session; duplicates (retries)
-// are ignored via the primary key.
-func (s *Store) SaveCustomEvents(siteID int64, sessionID string, events []CustomEvent) error {
+// are ignored via the primary key. It returns the subset that were newly
+// inserted, so a caller dispatching Slack notifications for notify-flagged
+// events never sends the same one twice on a retried ingest request.
+func (s *Store) SaveCustomEvents(siteID int64, sessionID string, events []CustomEvent) ([]CustomEvent, error) {
 	now := time.Now().Unix()
 	if err := s.EnsureSessionForSite(siteID, sessionID, now); err != nil {
-		return err
+		return nil, err
 	}
+	inserted := make([]CustomEvent, 0, len(events))
 	for _, e := range events {
-		if _, err := s.DB.Exec(`INSERT OR IGNORE INTO custom_events (session_id, ts, name, track_id) VALUES (?, ?, ?, ?)`,
-			sessionID, e.TS, e.Name, e.TrackID); err != nil {
-			return err
+		res, err := s.DB.Exec(`INSERT OR IGNORE INTO custom_events (session_id, ts, name, track_id) VALUES (?, ?, ?, ?)`,
+			sessionID, e.TS, e.Name, e.TrackID)
+		if err != nil {
+			return nil, err
+		}
+		if n, err := res.RowsAffected(); err == nil && n > 0 {
+			e.SessionID = sessionID
+			inserted = append(inserted, e)
 		}
 	}
-	_, err := s.DB.Exec(`UPDATE sessions SET last_seen = ? WHERE id = ? AND site_id = ?`, time.Now().Unix(), sessionID, siteID)
-	return err
+	if _, err := s.DB.Exec(`UPDATE sessions SET last_seen = ? WHERE id = ? AND site_id = ?`, time.Now().Unix(), sessionID, siteID); err != nil {
+		return nil, err
+	}
+	return inserted, nil
 }
 
 func (s *Store) GetCustomEvents(sessionID string) ([]CustomEvent, error) {

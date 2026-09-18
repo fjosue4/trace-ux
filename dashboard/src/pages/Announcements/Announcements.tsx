@@ -18,8 +18,27 @@ import './Announcements.scss';
 export default function Announcements() {
   const { user } = useUser();
   const [engaging, setEngaging] = useState<Announcement | null>(null);
-  const { sites, siteId, setSiteId, items, filter, setFilter, editing, setEditing, form, setForm, error, busy, shown, open, save, action } =
-    useAnnouncements();
+  const {
+    sites,
+    siteId,
+    setSiteId,
+    items,
+    filter,
+    setFilter,
+    editing,
+    setEditing,
+    form,
+    setForm,
+    error,
+    busy,
+    shown,
+    open,
+    save,
+    action,
+    patchHeader,
+    addHeader,
+    removeHeader,
+  } = useAnnouncements();
 
   return (
     <main className="page announcements-page">
@@ -119,6 +138,36 @@ export default function Announcements() {
               Details
               <textarea className="announcement-form__body" value={form.body} maxLength={10000} onChange={(e) => setForm({ ...form, body: e.currentTarget.value })} placeholder="Explain the update in plain text." />
             </label>
+            <div className="announcement-form__internal">
+              <div className="announcement-form__section-head">
+                <div>
+                  <strong>Internal headers</strong>
+                  <p className="announcement-form__help">Key/value metadata delivered to npm/React’s <code>onAnnouncement</code> callback. It is not shown in the visitor widget. Do not store secrets here.</p>
+                </div>
+                <Button size="sm" variant="secondary" onClick={addHeader}>Add key</Button>
+              </div>
+              {form.internal_headers.map((header, index) => (
+                <div className="announcement-form__header-row" key={index}>
+                  <Input
+                    aria-label={`Internal header ${index + 1} key`}
+                    value={header.key}
+                    onChange={(e) => patchHeader(index, { key: e.currentTarget.value })}
+                    placeholder="Key (e.g. current_version)"
+                  />
+                  <Input
+                    aria-label={`Internal header ${index + 1} value`}
+                    value={header.value}
+                    onChange={(e) => patchHeader(index, { value: e.currentTarget.value })}
+                    placeholder="Value (e.g. 0.1.1)"
+                  />
+                  {form.internal_headers.length > 1 && (
+                    <Button size="sm" variant="ghost" onClick={() => removeHeader(index)} aria-label={`Remove internal header ${index + 1}`}>
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
           <aside className="announcement-preview">
             <span>Visitor preview</span>

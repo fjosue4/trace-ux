@@ -1,0 +1,71 @@
+export type SlackRoutingMode = 'single' | 'per_notification';
+export type SlackLogMatchMode = 'contains' | 'exact';
+
+export type SlackWebhookView = {
+  configured: boolean;
+  hint?: string;
+};
+
+// Instance-wide: CPU/RAM/disk describe the TraceUX server itself, not any
+// one site, so this stays a single global toggle+webhook.
+export type SlackSystemIntegration = {
+  enabled: boolean;
+  webhook: SlackWebhookView;
+  updated_at: number;
+};
+
+export type SlackSystemIntegrationUpdate = {
+  enabled: boolean;
+  // Blank means "keep the current secret"; clear_webhook is the only way to
+  // remove one.
+  webhook?: string;
+  clear_webhook?: boolean;
+};
+
+// Per-site: tickets, browser logs, and flagged custom events all belong to
+// one site, so each site configures its own webhook(s) from its own
+// Integrations tab.
+export type SiteSlackIntegration = {
+  routing_mode: SlackRoutingMode;
+
+  common_webhook: SlackWebhookView;
+
+  tickets_enabled: boolean;
+  tickets_webhook: SlackWebhookView;
+
+  logs_enabled: boolean;
+  logs_webhook: SlackWebhookView;
+  log_match_mode: SlackLogMatchMode;
+  log_match_value: string;
+
+  // Custom events the host page explicitly flags with notify: true
+  // (track(name, trackId, { notify: true }) or a trace-ux-track-notify
+  // click), independent of the log matcher above.
+  custom_enabled: boolean;
+  custom_webhook: SlackWebhookView;
+
+  updated_at: number;
+};
+
+// A blank *_webhook field means "keep the current secret"; the matching
+// clear_* flag is the only way to remove one.
+export type SiteSlackIntegrationUpdate = {
+  routing_mode: SlackRoutingMode;
+  tickets_enabled: boolean;
+  logs_enabled: boolean;
+  custom_enabled: boolean;
+  log_match_mode: SlackLogMatchMode;
+  log_match_value: string;
+
+  common_webhook?: string;
+  tickets_webhook?: string;
+  logs_webhook?: string;
+  custom_webhook?: string;
+
+  clear_common_webhook?: boolean;
+  clear_tickets_webhook?: boolean;
+  clear_logs_webhook?: boolean;
+  clear_custom_webhook?: boolean;
+};
+
+export type SiteSlackNotificationKind = 'tickets' | 'logs' | 'custom';

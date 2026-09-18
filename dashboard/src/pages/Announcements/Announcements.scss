@@ -58,6 +58,41 @@
 
   &__row { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
 
+  &__internal {
+    display: flex;
+    flex-direction: column;
+    gap: .7rem;
+    border-top: 1px solid $line;
+    padding-top: .9rem;
+  }
+
+  &__section-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .75rem;
+
+    strong { font-size: .8rem; }
+  }
+
+  &__help {
+    color: $muted;
+    font-size: .75rem;
+    font-weight: 400;
+    line-height: 1.45;
+    margin: .3rem 0 0;
+    max-width: 42rem;
+
+    code { color: $ink-2; }
+  }
+
+  &__header-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: .55rem;
+    align-items: center;
+  }
+
   textarea {
     background: $surface-2;
     color: $ink;
@@ -122,6 +157,8 @@
   .announcement-editor { grid-template-columns: 1fr; }
   .announcement-preview { position: static; min-height: 0; }
   .announcement-form__row { grid-template-columns: 1fr; }
+  .announcement-form__header-row { grid-template-columns: 1fr; }
+  .announcement-form__header-row .btn { justify-self: start; }
   .announcement-grid { grid-template-columns: 1fr; }
   .announcement-editor-modal { max-height: calc(100vh - 1rem); }
   .modal-backdrop:has(.announcement-editor-modal) { padding: .5rem; }

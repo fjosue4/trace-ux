@@ -11,6 +11,7 @@ export * from './types/announcements';
 export * from './types/tickets';
 export * from './types/system';
 export * from './types/users';
+export * from './types/integrations';
 
 import { authEndpoints } from './endpoints/auth';
 import { usersEndpoints } from './endpoints/users';
@@ -22,6 +23,7 @@ import { feedbackEndpoints } from './endpoints/feedback';
 import { announcementsEndpoints } from './endpoints/announcements';
 import { ticketsEndpoints } from './endpoints/tickets';
 import { systemEndpoints } from './endpoints/system';
+import { integrationsEndpoints } from './endpoints/integrations';
 
 export const api = {
   ...authEndpoints,
@@ -34,4 +36,5 @@ export const api = {
   ...announcementsEndpoints,
   ...ticketsEndpoints,
   ...systemEndpoints,
+  ...integrationsEndpoints,
 };

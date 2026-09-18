@@ -1,29 +1,31 @@
 package store
 
 import (
+	"encoding/json"
 	"net/url"
 	"strings"
 )
 
 type Announcement struct {
-	ID           int64  `json:"id"`
-	SiteID       int64  `json:"site_id"`
-	SiteName     string `json:"site_name,omitempty"`
-	Title        string `json:"title"`
-	Summary      string `json:"summary"`
-	Body         string `json:"body"`
-	ReleaseLabel string `json:"release_label"`
-	LinkURL      string `json:"link_url"`
-	Status       string `json:"status"`
-	PublishedAt  int64  `json:"published_at"`
-	CreatedAt    int64  `json:"created_at"`
-	UpdatedAt    int64  `json:"updated_at"`
-	Reactions    int64  `json:"reactions"`
-	Comments     int64  `json:"comments"`
-	Reads        int64  `json:"reads"`
-	Liked        bool   `json:"liked,omitempty"`
-	Read         bool   `json:"read,omitempty"`
-	Commented    bool   `json:"commented,omitempty"`
+	ID              int64             `json:"id"`
+	SiteID          int64             `json:"site_id"`
+	SiteName        string            `json:"site_name,omitempty"`
+	Title           string            `json:"title"`
+	Summary         string            `json:"summary"`
+	Body            string            `json:"body"`
+	ReleaseLabel    string            `json:"release_label"`
+	LinkURL         string            `json:"link_url"`
+	InternalHeaders map[string]string `json:"internal_headers,omitempty"`
+	Status          string            `json:"status"`
+	PublishedAt     int64             `json:"published_at"`
+	CreatedAt       int64             `json:"created_at"`
+	UpdatedAt       int64             `json:"updated_at"`
+	Reactions       int64             `json:"reactions"`
+	Comments        int64             `json:"comments"`
+	Reads           int64             `json:"reads"`
+	Liked           bool              `json:"liked,omitempty"`
+	Read            bool              `json:"read,omitempty"`
+	Commented       bool              `json:"commented,omitempty"`
 }
 
 type AnnouncementComment struct {
@@ -32,14 +34,27 @@ type AnnouncementComment struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
-const announcementSelect = `SELECT a.id,a.site_id,s.name,a.title,a.summary,a.body,a.release_label,a.link_url,a.status,a.published_at,a.created_at,a.updated_at,
+const announcementSelect = `SELECT a.id,a.site_id,s.name,a.title,a.summary,a.body,a.release_label,a.link_url,a.internal_headers,a.status,a.published_at,a.created_at,a.updated_at,
 	(SELECT COUNT(*) FROM announcement_reactions r WHERE r.announcement_id=a.id),
 	(SELECT COUNT(*) FROM announcement_comments c WHERE c.announcement_id=a.id AND c.status='visible'),
 	(SELECT COUNT(*) FROM announcement_reads rd WHERE rd.announcement_id=a.id)`
 
 func scanAnnouncement(row interface{ Scan(...any) error }) (Announcement, error) {
 	var a Announcement
-	err := row.Scan(&a.ID, &a.SiteID, &a.SiteName, &a.Title, &a.Summary, &a.Body, &a.ReleaseLabel, &a.LinkURL, &a.Status, &a.PublishedAt, &a.CreatedAt, &a.UpdatedAt, &a.Reactions, &a.Comments, &a.Reads)
+	var rawInternalHeaders string
+	err := row.Scan(&a.ID, &a.SiteID, &a.SiteName, &a.Title, &a.Summary, &a.Body, &a.ReleaseLabel, &a.LinkURL, &rawInternalHeaders, &a.Status, &a.PublishedAt, &a.CreatedAt, &a.UpdatedAt, &a.Reactions, &a.Comments, &a.Reads)
+	if err != nil {
+		return a, err
+	}
+	a.InternalHeaders = map[string]string{}
+	if strings.TrimSpace(rawInternalHeaders) != "" && strings.TrimSpace(rawInternalHeaders) != "{}" && strings.TrimSpace(rawInternalHeaders) != "null" {
+		if err := json.Unmarshal([]byte(rawInternalHeaders), &a.InternalHeaders); err != nil {
+			return a, err
+		}
+		if a.InternalHeaders == nil {
+			a.InternalHeaders = map[string]string{}
+		}
+	}
 	return a, err
 }
 
@@ -83,6 +98,36 @@ func ValidateAnnouncement(a Announcement) error {
 		return errBadJSON
 	}
 	if a.LinkURL != "" && !ValidAnnouncementLink(a.LinkURL) {
+		return errBadJSON
+	}
+	if err := validateAnnouncementInternalHeaders(a.InternalHeaders); err != nil {
+		return err
+	}
+	return nil
+}
+
+const (
+	maxAnnouncementInternalHeaders          = 50
+	maxAnnouncementInternalHeaderKeyBytes   = 100
+	maxAnnouncementInternalHeaderValueBytes = 1000
+	maxAnnouncementInternalHeaderTotalBytes = 10_000
+)
+
+func validateAnnouncementInternalHeaders(headers map[string]string) error {
+	if len(headers) > maxAnnouncementInternalHeaders {
+		return errBadJSON
+	}
+	total := 0
+	for key, value := range headers {
+		if strings.TrimSpace(key) == "" || len(key) > maxAnnouncementInternalHeaderKeyBytes || strings.ContainsAny(key, "\r\n") {
+			return errBadJSON
+		}
+		if len(value) > maxAnnouncementInternalHeaderValueBytes {
+			return errBadJSON
+		}
+		total += len(key) + len(value)
+	}
+	if total > maxAnnouncementInternalHeaderTotalBytes {
 		return errBadJSON
 	}
 	return nil

@@ -49,6 +49,7 @@ effects, and recording starts only when you call `init()`.
 | `clientId` | `string` | no | Tenant/account id, for filtering sessions. |
 | `remoteId` | `string` | no | Any third id you filter on. |
 | `widget` | `boolean` | no | Opt into the announcements / support / feedback widget. |
+| `onAnnouncement` | `(announcement) => void` | no | Called when a newly published or updated announcement reaches the widget. |
 
 ## The handle
 
@@ -58,6 +59,7 @@ for parity with the script tag.
 ```ts
 traceux.identify({ userId, clientId, remoteId });  // attach identity mid-session
 traceux.track('checkout_started', 'cta-hero');     // seekable activity in the replay
+traceux.track('checkout_error', 'checkout-button', { notify: true }); // also notify Slack when enabled
 traceux.setUserStatus('trialing');                 // lifecycle state as an activity
 traceux.updateUserStatus('active');                // alias, for update-style call sites
 
@@ -73,9 +75,41 @@ const link = await traceux.claimReplay();          // short-lived share link, no
 traceux.stop();                                    // flush, stop recording, remove listeners
 ```
 
+When the widget receives a newly published announcement, or a published
+announcement is edited, `onAnnouncement` receives the complete announcement
+payload. It includes the title, summary, full body, release label, link,
+status, timestamps, engagement counts, and any `internal_headers` key/value
+metadata configured by the admin:
+
+```ts
+const traceux = init({
+  siteKey: 'YOUR_SITE_KEY',
+  origin: 'https://traceux.example.com',
+  widget: true,
+  onAnnouncement: (announcement) => {
+    console.log(announcement.title);
+    console.log(announcement.body);
+    console.log(announcement.internal_headers?.current_version);
+    // Run application-specific behavior here.
+  },
+});
+```
+
+The callback is not replayed for announcements already present during the
+widget's initial load. Internal headers are not rendered in the visitor widget,
+but they are delivered to the browser callback, so they must not contain
+secrets. Callback errors are isolated so they cannot break the widget or
+session recording.
+
 `track` and `setUserStatus` write seekable markers into the replay timeline, so
 you can jump straight to the moment in the session. `setUserStatus` does not
 create a server-side user record — it is an activity, not a table.
+
+Pass `{ notify: true }` as the third argument to `track` when an event should
+also notify Slack. The TraceUX admin must enable **Custom events** and configure
+the Slack webhook under **Integrations**. The notification includes a button
+linking directly to the current session replay. Events without `notify: true`
+remain normal replay activity and do not notify.
 
 ## React
 

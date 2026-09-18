@@ -125,6 +125,11 @@ const traceux = init({
   origin: 'https://your-server.example.com',
   userId: currentUser?.id,
   widget: true, // toggle in dashboard
+  onAnnouncement: (announcement) => {
+    // Full title, summary, body, release label, link and metadata are available.
+    console.log('New announcement:', announcement.title, announcement.body);
+    console.log('Version metadata:', announcement.internal_headers?.current_version);
+  },
 });
 
 traceux.identify({ userId: user.id }); // after login
@@ -138,7 +143,13 @@ traceux.stop();
 
 The package entry has no import-time side effects. `widget: true` opts into the
 optional widget's dynamic import; the widget is fetched only when the server
-configuration enables at least one section. `warn`, `error`, `info`, and
+configuration enables at least one section. `onAnnouncement` runs when a newly
+published or edited published announcement reaches the widget, with the full
+announcement payload, including any `internal_headers` key/value metadata
+configured by the admin. Those headers are not rendered in the visitor widget,
+but they are delivered to the browser callback, so they must not contain
+secrets. It is not replayed for announcements already present during the
+widget's initial load. `warn`, `error`, `info`, and
 `debug` send application logs when Logs is enabled for the site and its
 severity threshold permits them. `setUserStatus` records a seekable
 `user_status` activity; it does not create a separate server-side user table.
@@ -440,6 +451,18 @@ Mark any element to appear as seekable activity in the replay sidebar:
 ```
 
 or programmatically: `window.TraceUX.track('checkout-click')`. Clicking an activity row jumps the recording to that exact moment.
+
+Ask for a Slack notification alongside the event (see the site's **Integrations** tab in the dashboard) by adding `notify: true`:
+
+```ts
+traceux.track('checkout_error', 'checkout-button', { notify: true });
+```
+
+```html
+<button trace-ux-track-id="checkout-button" trace-ux-track-notify="true">Buy now</button>
+```
+
+This is independent of the browser-log matcher: it fires whenever the call or click sets `notify`, with no pattern to configure. An admin still has to enable **Custom events** and configure its webhook from that site's **Integrations** tab for anything to be sent. Server CPU, RAM, and disk alerts are configured under **System health**.
 
 Masking: all form inputs are masked by default; any element carrying `trace-ux-mask` — as a class or as a bare attribute — has its text masked, and `trace-ux-block` (class) removes the element from the recording entirely.
 

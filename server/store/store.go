@@ -382,6 +382,116 @@ var migrations = []string{
 	ALTER TABLE tickets ADD COLUMN archived_at INTEGER NOT NULL DEFAULT 0;
 	CREATE INDEX IF NOT EXISTS idx_tickets_site_archived ON tickets(site_id, archived_at, last_message_at DESC);
 	`,
+	// v18: instance-wide Slack integration. A single row (id=1) holds routing
+	// mode, per-notification enabled flags and the log matcher; webhook URLs
+	// are stored as opaque ciphertext blobs the store never decrypts (see
+	// slack_crypto.go). Disabled and empty by default, so existing installs
+	// are unaffected until an admin configures it from the dashboard.
+	`
+	CREATE TABLE IF NOT EXISTS slack_integration (
+		id                   INTEGER PRIMARY KEY CHECK (id = 1),
+		routing_mode         TEXT    NOT NULL DEFAULT 'single' CHECK (routing_mode IN ('single','per_notification')),
+		common_ciphertext    BLOB    NOT NULL DEFAULT x'',
+		common_fingerprint   TEXT    NOT NULL DEFAULT '',
+		common_hint          TEXT    NOT NULL DEFAULT '',
+		tickets_enabled      INTEGER NOT NULL DEFAULT 0,
+		tickets_ciphertext   BLOB    NOT NULL DEFAULT x'',
+		tickets_fingerprint  TEXT    NOT NULL DEFAULT '',
+		tickets_hint         TEXT    NOT NULL DEFAULT '',
+		logs_enabled         INTEGER NOT NULL DEFAULT 0,
+		logs_ciphertext      BLOB    NOT NULL DEFAULT x'',
+		logs_fingerprint     TEXT    NOT NULL DEFAULT '',
+		logs_hint            TEXT    NOT NULL DEFAULT '',
+		logs_match_mode      TEXT    NOT NULL DEFAULT 'contains' CHECK (logs_match_mode IN ('contains','exact')),
+		logs_match_value     TEXT    NOT NULL DEFAULT '',
+		system_enabled       INTEGER NOT NULL DEFAULT 0,
+		system_ciphertext    BLOB    NOT NULL DEFAULT x'',
+		system_fingerprint   TEXT    NOT NULL DEFAULT '',
+		system_hint          TEXT    NOT NULL DEFAULT '',
+		updated_at           INTEGER NOT NULL DEFAULT 0
+	);
+	INSERT OR IGNORE INTO slack_integration (id) VALUES (1);
+	`,
+	// v19: a fourth Slack notification kind for custom events the host page
+	// explicitly flags with notify: true (window.TraceUX.track(...) or a
+	// trace-ux-track-notify click), independent of the browser-log matcher.
+	`
+	ALTER TABLE slack_integration ADD COLUMN custom_enabled     INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE slack_integration ADD COLUMN custom_ciphertext  BLOB    NOT NULL DEFAULT x'';
+	ALTER TABLE slack_integration ADD COLUMN custom_fingerprint TEXT    NOT NULL DEFAULT '';
+	ALTER TABLE slack_integration ADD COLUMN custom_hint        TEXT    NOT NULL DEFAULT '';
+	`,
+	// v20: tickets/logs/custom-event Slack notifications become per-site --
+	// each site picks its own webhook(s), since those events all belong to one
+	// site. System health has no site to attach to (it's about the TraceUX
+	// server itself) and stays instance-wide, so slack_integration is trimmed
+	// down to just that single toggle+webhook rather than deleted.
+	`
+	CREATE TABLE IF NOT EXISTS site_slack_integration (
+		site_id             INTEGER PRIMARY KEY REFERENCES sites(id) ON DELETE CASCADE,
+		routing_mode        TEXT    NOT NULL DEFAULT 'single' CHECK (routing_mode IN ('single','per_notification')),
+		common_ciphertext   BLOB    NOT NULL DEFAULT x'',
+		common_fingerprint  TEXT    NOT NULL DEFAULT '',
+		common_hint         TEXT    NOT NULL DEFAULT '',
+		tickets_enabled     INTEGER NOT NULL DEFAULT 0,
+		tickets_ciphertext  BLOB    NOT NULL DEFAULT x'',
+		tickets_fingerprint TEXT    NOT NULL DEFAULT '',
+		tickets_hint        TEXT    NOT NULL DEFAULT '',
+		logs_enabled        INTEGER NOT NULL DEFAULT 0,
+		logs_ciphertext     BLOB    NOT NULL DEFAULT x'',
+		logs_fingerprint    TEXT    NOT NULL DEFAULT '',
+		logs_hint           TEXT    NOT NULL DEFAULT '',
+		logs_match_mode     TEXT    NOT NULL DEFAULT 'contains' CHECK (logs_match_mode IN ('contains','exact')),
+		logs_match_value    TEXT    NOT NULL DEFAULT '',
+		custom_enabled      INTEGER NOT NULL DEFAULT 0,
+		custom_ciphertext   BLOB    NOT NULL DEFAULT x'',
+		custom_fingerprint  TEXT    NOT NULL DEFAULT '',
+		custom_hint         TEXT    NOT NULL DEFAULT '',
+		updated_at          INTEGER NOT NULL DEFAULT 0
+	);
+	-- Preserve the pre-v20 instance-wide notification configuration for every
+	-- existing site. The rows are independent after this copy: changing one
+	-- site's webhook never changes another site's row. New sites get the
+	-- disabled defaults above when they first open their Integrations tab.
+	INSERT INTO site_slack_integration (
+		site_id, routing_mode,
+		common_ciphertext, common_fingerprint, common_hint,
+		tickets_enabled, tickets_ciphertext, tickets_fingerprint, tickets_hint,
+		logs_enabled, logs_ciphertext, logs_fingerprint, logs_hint,
+		logs_match_mode, logs_match_value,
+		custom_enabled, custom_ciphertext, custom_fingerprint, custom_hint,
+		updated_at
+	)
+	SELECT s.id, legacy.routing_mode,
+		legacy.common_ciphertext, legacy.common_fingerprint, legacy.common_hint,
+		legacy.tickets_enabled, legacy.tickets_ciphertext, legacy.tickets_fingerprint, legacy.tickets_hint,
+		legacy.logs_enabled, legacy.logs_ciphertext, legacy.logs_fingerprint, legacy.logs_hint,
+		legacy.logs_match_mode, legacy.logs_match_value,
+		legacy.custom_enabled, legacy.custom_ciphertext, legacy.custom_fingerprint, legacy.custom_hint,
+		legacy.updated_at
+	FROM sites s
+	CROSS JOIN slack_integration legacy
+	WHERE legacy.id = 1;
+
+	CREATE TABLE slack_integration_v20 (
+		id                 INTEGER PRIMARY KEY CHECK (id = 1),
+		system_enabled     INTEGER NOT NULL DEFAULT 0,
+		system_ciphertext  BLOB    NOT NULL DEFAULT x'',
+		system_fingerprint TEXT    NOT NULL DEFAULT '',
+		system_hint        TEXT    NOT NULL DEFAULT '',
+		updated_at         INTEGER NOT NULL DEFAULT 0
+	);
+	INSERT INTO slack_integration_v20 (id, system_enabled, system_ciphertext, system_fingerprint, system_hint, updated_at)
+		SELECT id, system_enabled, system_ciphertext, system_fingerprint, system_hint, updated_at FROM slack_integration;
+	DROP TABLE slack_integration;
+	ALTER TABLE slack_integration_v20 RENAME TO slack_integration;
+	`,
+	// v21: announcements may carry non-visual key/value metadata to the npm
+	// integration's onAnnouncement callback. It is deliberately separate from
+	// the visitor-facing copy, but it is still browser-visible metadata.
+	`
+	ALTER TABLE announcements ADD COLUMN internal_headers TEXT NOT NULL DEFAULT '{}';
+	`,
 }
 
 func (s *Store) migrate() error {

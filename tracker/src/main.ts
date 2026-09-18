@@ -5,11 +5,12 @@
  *
  * Privacy: all form inputs are masked, elements with class `trace-ux-block` are
  * removed from the recording, `trace-ux-mask` masks their text, and Do Not Track /
- * localStorage.trace_ux_optout=1 disables tracking entirely.
+ * localStorage.trace_ux_optout=1 disables tracking entirely. The optional TraceUX
+ * widget is recorded as part of the page when it is enabled.
  */
 import { record } from '@rrweb/record';
 import type { eventWithTime } from '@rrweb/types';
-import type { WidgetCfg, WidgetHandle } from './widget';
+import type { Announcement, WidgetCfg, WidgetHandle } from './widget';
 
 type SurveyQuestionCfg = {
   id: string;
@@ -95,13 +96,27 @@ export interface TraceUXOptions extends TraceUXIdentity {
   origin: string;
   /** Load the optional announcements/support/feedback widget when configured. */
   widget?: boolean;
+  /** Called when a newly published or updated announcement reaches the widget. */
+  onAnnouncement?: (announcement: TraceUXAnnouncement) => void;
+}
+
+/** Full announcement content delivered to an npm/React integration. */
+export type TraceUXAnnouncement = Announcement;
+
+export interface TraceUXTrackOptions {
+  /**
+   * Ask the TraceUX server to also fire a Slack notification for this event
+   * (the "Custom events" integration, if an admin has enabled it), alongside
+   * storing it as normal seekable replay activity.
+   */
+  notify?: boolean;
 }
 
 export interface TraceUXHandle {
   /** Attach/replace visitor identity mid-session (e.g. right after login). */
   identify: (fields: TraceUXIdentity) => void;
   /** Emit a named custom event, visible as seekable activity in the replay. */
-  track: (name: string, trackId?: string) => void;
+  track: (name: string, trackId?: string, options?: TraceUXTrackOptions) => void;
   /** Record a user lifecycle state as a seekable custom activity. */
   setUserStatus: (status: string) => void;
   /** Alias for setUserStatus for integrations that prefer update semantics. */
@@ -265,8 +280,8 @@ function createQueuedHandle(): QueuedHandle {
     identify(fields) {
       dispatch((next) => next.identify(fields));
     },
-    track(name, trackId) {
-      dispatch((next) => next.track(name, trackId));
+    track(name, trackId, options) {
+      dispatch((next) => next.track(name, trackId, options));
     },
     setUserStatus(status) {
       dispatch((next) => next.setUserStatus(status));
@@ -615,7 +630,7 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
     );
   }
 
-  function sendCustom(name: string, trackId: string) {
+  function sendCustom(name: string, trackId: string, notify = false) {
     if (stopped || disposed) return;
     send(
       {
@@ -626,6 +641,7 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
             ts: Date.now(),
             name: String(name || 'event').slice(0, 100),
             track_id: String(trackId || '').slice(0, 100),
+            notify: !!notify,
           },
         ],
       },
@@ -830,13 +846,16 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
   }
 
   // Tracked clicks: any element with a trace-ux-track-id attribute reports itself as
-  // seekable activity ("trace-ux-track").
+  // seekable activity ("trace-ux-track"). Adding trace-ux-track-notify="true" also
+  // asks the server to fire a Slack notification for that click, the same as
+  // track(name, trackId, { notify: true }).
   const onTrackedClick = (e: MouseEvent) => {
     if (disposed) return;
     const el = (e.target as Element | null)?.closest?.('[trace-ux-track-id]');
     if (!el) return;
     const trackId = el.getAttribute('trace-ux-track-id') || '';
-    sendCustom('click', trackId);
+    const notify = el.getAttribute('trace-ux-track-notify') === 'true';
+    sendCustom('click', trackId, notify);
     mountWidgetIfConfigured(trackId);
   };
   document.addEventListener('click', onTrackedClick, { capture: true, passive: true });
@@ -919,6 +938,7 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
           newId,
           sessionId: () => sessionId,
           identity: () => ({ userId: identity.user_id }),
+          onAnnouncement: options.onAnnouncement,
         });
         // An action-triggered survey opens immediately, as it did before the merge.
         if (action && feedbackAvailable(action)) unifiedWidget?.open('feedback');
@@ -963,9 +983,9 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
 
   const runtime: TraceUXHandle = {
     identify: (fields) => applyIdentity(fields),
-    track: (name, trackId) => {
+    track: (name, trackId, options) => {
       const normalizedName = String(name || 'event').slice(0, 100);
-      sendCustom(normalizedName, String(trackId || '').slice(0, 100));
+      sendCustom(normalizedName, String(trackId || '').slice(0, 100), !!options?.notify);
       mountWidgetIfConfigured(normalizedName);
     },
     setUserStatus: (status) => sendCustom('user_status', String(status || '').slice(0, 100)),

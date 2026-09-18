@@ -115,6 +115,33 @@ func (s *Store) ListFeedback(f FeedbackFilter) ([]Feedback, error) {
 	return out, rows.Err()
 }
 
+// ListFeedbackBySession returns the feedback linked to one recording, oldest
+// first, for the replay page's activity feed.
+func (s *Store) ListFeedbackBySession(sessionID string) ([]Feedback, error) {
+	rows, err := s.DB.Query(`SELECT `+feedbackCols+` FROM feedback f
+		JOIN sites si ON si.id = f.site_id
+		LEFT JOIN sessions se ON se.id = f.session_id
+		WHERE f.session_id = ? ORDER BY f.created_at, f.id`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Feedback{}
+	for rows.Next() {
+		var fb Feedback
+		var answers string
+		if err := rows.Scan(&fb.ID, &fb.SiteID, &fb.SessionID, &fb.VisitorKey, &fb.UserID, &fb.SurveyID, &fb.Rating, &fb.Comment, &answers, &fb.CreatedAt,
+			&fb.SiteName, &fb.Browser, &fb.OS, &fb.Device); err != nil {
+			return nil, err
+		}
+		if answers != "" {
+			_ = json.Unmarshal([]byte(answers), &fb.Answers)
+		}
+		out = append(out, fb)
+	}
+	return out, rows.Err()
+}
+
 type FeedbackSurveySummary struct {
 	SurveyID string  `json:"survey_id"`
 	Count    int64   `json:"count"`

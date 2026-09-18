@@ -1,6 +1,8 @@
 package main
 
 import (
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -29,8 +31,17 @@ func (s *Server) handleCreateAnnouncement(w http.ResponseWriter, r *http.Request
 		writeErr(w, 400, "title and valid site_id are required")
 		return
 	}
+	internalHeaders := []byte("{}")
+	if a.InternalHeaders != nil {
+		var err error
+		internalHeaders, err = json.Marshal(a.InternalHeaders)
+		if err != nil {
+			writeErr(w, 400, "invalid announcement")
+			return
+		}
+	}
 	now := time.Now().Unix()
-	res, e := s.store.DB.Exec(`INSERT INTO announcements(site_id,title,summary,body,release_label,link_url,status,created_at,updated_at) VALUES(?,?,?,?,?,?,'draft',?,?)`, a.SiteID, strings.TrimSpace(a.Title), a.Summary, a.Body, a.ReleaseLabel, a.LinkURL, now, now)
+	res, e := s.store.DB.Exec(`INSERT INTO announcements(site_id,title,summary,body,release_label,link_url,internal_headers,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'draft',?,?)`, a.SiteID, strings.TrimSpace(a.Title), a.Summary, a.Body, a.ReleaseLabel, a.LinkURL, string(internalHeaders), now, now)
 	if e != nil {
 		writeErr(w, 400, e.Error())
 		return
@@ -51,7 +62,19 @@ func (s *Server) handleUpdateAnnouncement(w http.ResponseWriter, r *http.Request
 		writeErr(w, 400, "invalid announcement")
 		return
 	}
-	res, e := s.store.DB.Exec(`UPDATE announcements SET title=?,summary=?,body=?,release_label=?,link_url=?,updated_at=? WHERE id=?`, strings.TrimSpace(a.Title), a.Summary, a.Body, a.ReleaseLabel, a.LinkURL, time.Now().Unix(), id)
+	var res sql.Result
+	if a.InternalHeaders == nil {
+		// Keep metadata intact for older API clients that do not know about the
+		// optional field. Sending an empty object explicitly clears it.
+		res, e = s.store.DB.Exec(`UPDATE announcements SET title=?,summary=?,body=?,release_label=?,link_url=?,updated_at=? WHERE id=?`, strings.TrimSpace(a.Title), a.Summary, a.Body, a.ReleaseLabel, a.LinkURL, time.Now().Unix(), id)
+	} else {
+		internalHeaders, marshalErr := json.Marshal(a.InternalHeaders)
+		if marshalErr != nil {
+			writeErr(w, 400, "invalid announcement")
+			return
+		}
+		res, e = s.store.DB.Exec(`UPDATE announcements SET title=?,summary=?,body=?,release_label=?,link_url=?,internal_headers=?,updated_at=? WHERE id=?`, strings.TrimSpace(a.Title), a.Summary, a.Body, a.ReleaseLabel, a.LinkURL, string(internalHeaders), time.Now().Unix(), id)
+	}
 	if e != nil {
 		writeErr(w, 500, e.Error())
 		return

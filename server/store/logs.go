@@ -187,28 +187,42 @@ type LogStats struct {
 
 // SaveLogs stores logs for a session. client_seq makes tracker retries
 // idempotent without exposing the deduplication key in dashboard responses.
-func (s *Store) SaveLogs(siteID int64, sessionID string, logs []Log) error {
+// It returns the subset of logs that were newly inserted -- as opposed to
+// ignored duplicates from a retried ingest request -- so a caller dispatching
+// Slack notifications never sends the same log twice.
+func (s *Store) SaveLogs(siteID int64, sessionID string, logs []Log) ([]Log, error) {
 	now := time.Now().Unix()
 	if err := s.EnsureSessionForSite(siteID, sessionID, now); err != nil {
-		return err
+		return nil, err
 	}
 	tx, err := s.DB.Begin()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tx.Rollback()
+	inserted := make([]Log, 0, len(logs))
 	for _, item := range logs {
-		if _, err := tx.Exec(`INSERT OR IGNORE INTO logs
+		res, err := tx.Exec(`INSERT OR IGNORE INTO logs
 			(session_id, client_seq, timestamp_ms, severity, message, url, created_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			sessionID, item.ClientSeq, item.TimestampMs, item.Severity, item.Message, item.URL, now); err != nil {
-			return err
+			sessionID, item.ClientSeq, item.TimestampMs, item.Severity, item.Message, item.URL, now)
+		if err != nil {
+			return nil, err
+		}
+		if n, err := res.RowsAffected(); err == nil && n > 0 {
+			item.SessionID = sessionID
+			item.SiteID = siteID
+			item.CreatedAt = now
+			inserted = append(inserted, item)
 		}
 	}
 	if _, err := tx.Exec(`UPDATE sessions SET last_seen = ? WHERE id = ? AND site_id = ?`, now, sessionID, siteID); err != nil {
-		return err
+		return nil, err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return inserted, nil
 }
 
 // ListLogs returns newest logs first. Logs are joined to their session

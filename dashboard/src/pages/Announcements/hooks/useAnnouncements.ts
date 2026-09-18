@@ -1,7 +1,40 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Announcement, api, Site } from '../../../api';
 
-const blank = { title: '', summary: '', body: '', release_label: '', link_url: '' };
+type AnnouncementHeaderRow = { key: string; value: string };
+
+type AnnouncementForm = {
+  title: string;
+  summary: string;
+  body: string;
+  release_label: string;
+  link_url: string;
+  internal_headers: AnnouncementHeaderRow[];
+};
+
+const emptyHeader = (): AnnouncementHeaderRow => ({ key: '', value: '' });
+
+const blank: AnnouncementForm = {
+  title: '',
+  summary: '',
+  body: '',
+  release_label: '',
+  link_url: '',
+  internal_headers: [emptyHeader()],
+};
+
+function headerRows(headers?: Record<string, string>): AnnouncementHeaderRow[] {
+  const rows = Object.entries(headers || {}).map(([key, value]) => ({ key, value }));
+  return rows.length ? rows : [emptyHeader()];
+}
+
+function headerMap(rows: AnnouncementHeaderRow[]): Record<string, string> {
+  return rows.reduce<Record<string, string>>((out, row) => {
+    const key = row.key.trim();
+    if (key) out[key] = row.value;
+    return out;
+  }, {});
+}
 
 export function useAnnouncements() {
   const [sites, setSites] = useState<Site[]>([]);
@@ -33,8 +66,15 @@ export function useAnnouncements() {
     setEditing(item || 'new');
     setForm(
       item
-        ? { title: item.title, summary: item.summary, body: item.body, release_label: item.release_label, link_url: item.link_url }
-        : blank,
+        ? {
+            title: item.title,
+            summary: item.summary,
+            body: item.body,
+            release_label: item.release_label,
+            link_url: item.link_url,
+            internal_headers: headerRows(item.internal_headers),
+          }
+        : { ...blank, internal_headers: [emptyHeader()] },
     );
   }
 
@@ -43,8 +83,9 @@ export function useAnnouncements() {
     setBusy(true);
     setError('');
     try {
-      if (editing === 'new') await api.createAnnouncement({ site_id: siteId, ...form });
-      else if (editing) await api.updateAnnouncement(editing.id, form);
+      const payload = { ...form, internal_headers: headerMap(form.internal_headers) };
+      if (editing === 'new') await api.createAnnouncement({ site_id: siteId, ...payload });
+      else if (editing) await api.updateAnnouncement(editing.id, payload);
       setEditing(null);
       await load();
     } catch {
@@ -68,5 +109,43 @@ export function useAnnouncements() {
     }
   }
 
-  return { sites, siteId, setSiteId, items, filter, setFilter, editing, setEditing, form, setForm, error, busy, shown, open, save, action };
+  function patchHeader(index: number, patch: Partial<AnnouncementHeaderRow>) {
+    setForm((current) => ({
+      ...current,
+      internal_headers: current.internal_headers.map((header, i) => (i === index ? { ...header, ...patch } : header)),
+    }));
+  }
+
+  function addHeader() {
+    setForm((current) => ({ ...current, internal_headers: [...current.internal_headers, emptyHeader()] }));
+  }
+
+  function removeHeader(index: number) {
+    setForm((current) => {
+      const next = current.internal_headers.filter((_, i) => i !== index);
+      return { ...current, internal_headers: next.length ? next : [emptyHeader()] };
+    });
+  }
+
+  return {
+    sites,
+    siteId,
+    setSiteId,
+    items,
+    filter,
+    setFilter,
+    editing,
+    setEditing,
+    form,
+    setForm,
+    error,
+    busy,
+    shown,
+    open,
+    save,
+    action,
+    patchHeader,
+    addHeader,
+    removeHeader,
+  };
 }

@@ -224,6 +224,26 @@ func (s *Store) ListVisitorTickets(siteID int64, visitorKey string) ([]Ticket, e
 	return out, rows.Err()
 }
 
+// ListTicketsBySession returns the tickets opened from one recording, oldest
+// first, for the replay page's activity feed.
+func (s *Store) ListTicketsBySession(sessionID string) ([]Ticket, error) {
+	rows, err := s.DB.Query(`SELECT `+ticketColumns+` FROM tickets t
+		WHERE t.session_id = ? ORDER BY t.created_at, t.id`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Ticket{}
+	for rows.Next() {
+		t, err := scanTicket(rows, false)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) GetTicket(id int64) (Ticket, error) {
 	t, err := scanTicket(s.DB.QueryRow(`SELECT `+ticketColumns+`,s.name FROM tickets t JOIN sites s ON s.id=t.site_id WHERE t.id=?`, id), true)
 	if errors.Is(err, sql.ErrNoRows) {

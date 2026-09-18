@@ -1,10 +1,12 @@
-import { CustomEvent, Log, Session, SessionPage } from '../../../api';
+import { CustomEvent, Feedback, Log, Session, SessionPage, Ticket } from '../../../api';
 
 export type PagesPanelProps = {
   session: Pick<Session, 'started_at' | 'duration_ms'>;
   activity: CustomEvent[];
   logs: ReplayLog[];
   pages: SessionPage[];
+  tickets: Ticket[];
+  feedback: Feedback[];
   eventsReady: boolean;
   firstTs: number;
   currentTimeMs: number;
@@ -39,5 +41,23 @@ export type Action =
       url: string;
       title: string;
       first: boolean;
+      order: number;
+    }
+  | {
+      kind: 'ticket';
+      key: string;
+      ts: number;
+      ticketId: number;
+      subject: string;
+      status: Ticket['status'];
+      order: number;
+    }
+  | {
+      kind: 'feedback';
+      key: string;
+      ts: number;
+      feedbackId: number;
+      rating: number;
+      comment: string;
       order: number;
     };

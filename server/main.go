@@ -128,6 +128,11 @@ func main() {
 		}
 	}()
 
+	// Polls CPU/RAM/disk for the Slack system-health alert independently of
+	// the dashboard's own health endpoint, which is only fetched while an
+	// admin has the page open.
+	go srv.runSlackHealthMonitor()
+
 	httpSrv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           srv.routes(),

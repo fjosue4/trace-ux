@@ -46,6 +46,17 @@ type storeCounts struct {
 	Feedback int64 `json:"feedback"`
 }
 
+// systemHealthSnapshot is the single source of truth for the values shown in
+// the dashboard and included in a Slack system-health notification. Keeping
+// collection here prevents the two surfaces from developing different
+// percentages, labels, or byte calculations.
+type systemHealthSnapshot struct {
+	Ram   ramHealth
+	Cpu   cpuHealth
+	Disk  diskHealth
+	Store storeCounts
+}
+
 var procStart = time.Now()
 
 // TraceUX CPU% is measured between consecutive polls so the dashboard's
@@ -91,7 +102,7 @@ func dirSize(path string) int64 {
 	return total
 }
 
-func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
+func (s *Server) collectSystemHealth() (systemHealthSnapshot, error) {
 	total, available := readMemInfo()
 	rss, cpuSecs := procRuntime()
 	ram := ramHealth{
@@ -113,23 +124,35 @@ func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
 	}
 	cpu.Load1, cpu.Load5, cpu.Load15 = readLoadAvg()
 
-	disk := diskHealth{
-		TraceUXBytes: uint64(dirSize(s.cfg.DataDir)),
-		DataDir:      s.cfg.DataDir,
+	dataDir := "./data"
+	if s.cfg != nil && s.cfg.DataDir != "" {
+		dataDir = s.cfg.DataDir
 	}
-	disk.TotalBytes, disk.FreeBytes = diskUsage(s.cfg.DataDir)
+	disk := diskHealth{TraceUXBytes: uint64(dirSize(dataDir)), DataDir: dataDir}
+	disk.TotalBytes, disk.FreeBytes = diskUsage(dataDir)
 
 	sites, sessions, feedback, err := s.store.Counts()
+	if err != nil {
+		return systemHealthSnapshot{}, err
+	}
+	return systemHealthSnapshot{
+		Ram:   ram,
+		Cpu:   cpu,
+		Disk:  disk,
+		Store: storeCounts{Sites: sites, Sessions: sessions, Feedback: feedback},
+	}, nil
+}
+
+func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
+	snapshot, err := s.collectSystemHealth()
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	counts := storeCounts{Sites: sites, Sessions: sessions, Feedback: feedback}
-
 	writeJSON(w, http.StatusOK, map[string]any{
-		"ram":   ram,
-		"cpu":   cpu,
-		"disk":  disk,
-		"store": counts,
+		"ram":   snapshot.Ram,
+		"cpu":   snapshot.Cpu,
+		"disk":  snapshot.Disk,
+		"store": snapshot.Store,
 	})
 }

@@ -40,7 +40,7 @@ func TestListSessionsFilterByActionAndURL(t *testing.T) {
 	if r := postJSON(t, ingestURL, `{"type":"custom","session_id":"sess-with-action","events":[{"ts":1,"name":"signup_click","track_id":""},{"ts":2,"name":"click","track_id":"checkout-button"}]}`, false); r.StatusCode != 200 {
 		t.Fatalf("custom: %d", r.StatusCode)
 	}
-	if err := srv.store.SaveLogs(site.ID, "sess-no-action", []store.Log{{
+	if _, err := srv.store.SaveLogs(site.ID, "sess-no-action", []store.Log{{
 		ClientSeq:   1,
 		TimestampMs: 3000,
 		Severity:    "error",

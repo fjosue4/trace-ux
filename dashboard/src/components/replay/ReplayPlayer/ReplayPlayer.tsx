@@ -2,6 +2,7 @@ import { forwardRef } from 'react';
 import 'rrweb-player/dist/style.css';
 import Loading from '../../ui/Loading';
 import EmptyState from '../../ui/EmptyState';
+import Notice from '../../ui/Notice';
 import { Icon } from '../../ui/Icon';
 import ReplayControls from '../ReplayControls';
 import { useReplayPlayer } from './hooks/useReplayPlayer';
@@ -41,6 +42,7 @@ const ReplayPlayer = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(function 
 
   return (
     <div ref={playerFrame} className="player-frame">
+      {playerError && <Notice tone="error">{playerError}</Notice>}
       <div ref={playerStage} className="player-stage">
         {playerReady && <div ref={playerHost} className="player-host" />}
         {playerReady && started && (
@@ -57,7 +59,7 @@ const ReplayPlayer = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(function 
         ) : replayUnavailable ? (
           <EmptyState
             title="Replay unavailable"
-            description={playerError || 'This recording has fewer than two replay events, so there is nothing to play yet.'}
+            description="This recording has fewer than two replay events, so there is nothing to play yet."
             icon={<Icon name="film" size={20} />}
           />
         ) : (
