@@ -54,6 +54,13 @@ type Server struct {
 	widgetSocketOnce        sync.Once
 	widgetSockets           *widgetSocketHub
 
+	notificationOnce       sync.Once
+	notificationQueue      chan notificationJob
+	notificationHTTPClient *http.Client
+	notificationProviders  map[string]notificationProviderDefinition
+	slackHealthMu          sync.Mutex
+	slackHealthAbove       map[string]bool
+
 	cspOnce sync.Once
 	csp     string
 }
@@ -75,6 +82,7 @@ type Config struct {
 	CheckoutIntervalMS int    // TRACE_UX_CHECKOUT_INTERVAL_MS; rrweb re-snapshot cadence
 	InlineStylesheet   bool   // TRACE_UX_INLINE_STYLESHEET; copy CSS into every snapshot
 	SlimDOM            bool   // TRACE_UX_SLIM_DOM; drop comments/scripts/meta from snapshots
+	PublicURL          string // TRACE_UX_PUBLIC_URL; absolute origin used for links in Slack notifications
 }
 
 const (
@@ -193,6 +201,17 @@ func loadConfig() Config {
 	}
 	cfg.DevStaticDir = os.Getenv("TRACE_UX_DEV_STATIC")
 	cfg.TrustedProxyCIDRs = parseTrustedProxyCIDRs(os.Getenv("TRACE_UX_TRUSTED_PROXIES"))
+	// Optional absolute origin for links in outgoing notifications (currently
+	// just Slack). Without it, links are derived from the incoming request,
+	// which is right for a direct deployment but wrong behind a reverse proxy
+	// that doesn't forward the original host.
+	if v := strings.TrimSpace(os.Getenv("TRACE_UX_PUBLIC_URL")); v != "" {
+		if u, err := parseHTTPURL(v); err == nil {
+			cfg.PublicURL = strings.TrimRight(u.Scheme+"://"+u.Host, "/")
+		} else {
+			log.Printf("WARNING: TRACE_UX_PUBLIC_URL=%q is not a valid http(s) URL; deriving links from each request instead", v)
+		}
+	}
 	if cfg.Password == "" {
 		log.Println("WARNING: TRACE_UX_PASSWORD is not set; a fresh database will refuse to start until it is configured")
 	}
@@ -292,6 +311,12 @@ func (s *Server) routes() http.Handler {
 
 	// Server resource usage (admin only).
 	mux.HandleFunc("GET /api/system/health", s.auth(s.requireAdmin(s.handleSystemHealth)))
+
+	// Instance-wide Slack integration: tickets, matched browser logs and
+	// system-health alerts. Admin only -- the settings hold webhook secrets.
+	mux.HandleFunc("GET /api/integrations/slack", s.auth(s.requireAdmin(s.handleGetSlackIntegration)))
+	mux.HandleFunc("PUT /api/integrations/slack", s.auth(s.requireAdmin(s.handlePutSlackIntegration)))
+	mux.HandleFunc("POST /api/integrations/slack/test", s.auth(s.requireAdmin(s.handleTestSlackWebhook)))
 
 	mux.HandleFunc("GET /api/sites", s.auth(s.handleListSites))
 	mux.HandleFunc("POST /api/sites", s.auth(s.requireAdmin(s.handleCreateSite)))

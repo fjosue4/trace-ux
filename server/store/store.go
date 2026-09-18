@@ -382,6 +382,36 @@ var migrations = []string{
 	ALTER TABLE tickets ADD COLUMN archived_at INTEGER NOT NULL DEFAULT 0;
 	CREATE INDEX IF NOT EXISTS idx_tickets_site_archived ON tickets(site_id, archived_at, last_message_at DESC);
 	`,
+	// v18: instance-wide Slack integration. A single row (id=1) holds routing
+	// mode, per-notification enabled flags and the log matcher; webhook URLs
+	// are stored as opaque ciphertext blobs the store never decrypts (see
+	// slack_crypto.go). Disabled and empty by default, so existing installs
+	// are unaffected until an admin configures it from the dashboard.
+	`
+	CREATE TABLE IF NOT EXISTS slack_integration (
+		id                   INTEGER PRIMARY KEY CHECK (id = 1),
+		routing_mode         TEXT    NOT NULL DEFAULT 'single' CHECK (routing_mode IN ('single','per_notification')),
+		common_ciphertext    BLOB    NOT NULL DEFAULT x'',
+		common_fingerprint   TEXT    NOT NULL DEFAULT '',
+		common_hint          TEXT    NOT NULL DEFAULT '',
+		tickets_enabled      INTEGER NOT NULL DEFAULT 0,
+		tickets_ciphertext   BLOB    NOT NULL DEFAULT x'',
+		tickets_fingerprint  TEXT    NOT NULL DEFAULT '',
+		tickets_hint         TEXT    NOT NULL DEFAULT '',
+		logs_enabled         INTEGER NOT NULL DEFAULT 0,
+		logs_ciphertext      BLOB    NOT NULL DEFAULT x'',
+		logs_fingerprint     TEXT    NOT NULL DEFAULT '',
+		logs_hint            TEXT    NOT NULL DEFAULT '',
+		logs_match_mode      TEXT    NOT NULL DEFAULT 'contains' CHECK (logs_match_mode IN ('contains','exact')),
+		logs_match_value     TEXT    NOT NULL DEFAULT '',
+		system_enabled       INTEGER NOT NULL DEFAULT 0,
+		system_ciphertext    BLOB    NOT NULL DEFAULT x'',
+		system_fingerprint   TEXT    NOT NULL DEFAULT '',
+		system_hint          TEXT    NOT NULL DEFAULT '',
+		updated_at           INTEGER NOT NULL DEFAULT 0
+	);
+	INSERT OR IGNORE INTO slack_integration (id) VALUES (1);
+	`,
 }
 
 func (s *Store) migrate() error {

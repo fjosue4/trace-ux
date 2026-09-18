@@ -293,6 +293,10 @@ func (s *Server) handlePublicCreateTicket(w http.ResponseWriter, r *http.Request
 		Type:   "ticket.created",
 		Ticket: &ticket,
 	})
+	// CreateTicket doesn't join the site name; the site was already loaded
+	// above to authorize the request, so borrow it for the Slack message.
+	ticket.SiteName = site.Name
+	s.notifySlackTicket(ticket, input.Body, r)
 	writeJSON(w, http.StatusCreated, ticket)
 }
 
@@ -445,5 +449,9 @@ func (s *Server) handleCreateStaffTicket(w http.ResponseWriter, r *http.Request)
 		Type:   "ticket.created",
 		Ticket: &ticket,
 	})
+	if withSiteName, err := s.store.GetTicket(ticket.ID); err == nil {
+		ticket.SiteName = withSiteName.SiteName
+	}
+	s.notifySlackTicket(ticket, input.Body, r)
 	writeJSON(w, http.StatusCreated, ticket)
 }

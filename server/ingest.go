@@ -157,6 +157,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	var insertedLogs []store.Log
 	switch env.Type {
 	case "hello":
 		var m store.IngestHello
@@ -293,7 +294,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 			return
 		}
-		err = s.store.SaveLogs(site.ID, env.SessionID, logs)
+		insertedLogs, err = s.store.SaveLogs(site.ID, env.SessionID, logs)
 	case "feedback":
 		var m ingestFeedback
 		if err := json.Unmarshal(body, &m); err != nil {
@@ -366,6 +367,9 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		log.Printf("ingest %s: %v", env.Type, err)
 		writeErr(w, http.StatusInternalServerError, "storage error")
 		return
+	}
+	if len(insertedLogs) > 0 {
+		s.notifySlackLogs(site, insertedLogs, r)
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
