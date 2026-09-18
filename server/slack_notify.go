@@ -55,18 +55,40 @@ func truncateForSlack(text string, max int) string {
 	return string(runes[:max-1]) + "…"
 }
 
+// ticketRequester prefers the human-readable identity from the session, then
+// keeps the contact email alongside it when the two values are different.
+// The email is useful when a host supplied an opaque user_id, while avoiding
+// duplicate output when the host uses the email as its user_id.
+func ticketRequester(t store.Ticket) string {
+	name := strings.TrimSpace(t.Name)
+	email := strings.TrimSpace(t.Email)
+	userID := strings.TrimSpace(t.UserID)
+
+	identity := name
+	if identity == "" {
+		identity = userID
+	}
+	if identity == "" {
+		identity = email
+	}
+	if identity == "" {
+		return "Anonymous visitor"
+	}
+	if email != "" && !strings.EqualFold(identity, email) {
+		return fmt.Sprintf("%s <%s>", identity, email)
+	}
+	return identity
+}
+
+func ticketClientLabel(t store.Ticket) string {
+	return ticketRequester(t) + " (Client)"
+}
+
 func buildTicketSlackText(t store.Ticket, body, origin string) string {
-	who := strings.TrimSpace(t.Name)
-	if who == "" {
-		who = strings.TrimSpace(t.Email)
-	}
-	if who == "" {
-		who = "a visitor"
-	}
 	lines := []string{
 		fmt.Sprintf("*New support ticket* on %s", t.SiteName),
 		fmt.Sprintf("#%d — %s", t.ID, truncateForSlack(t.Subject, slackMaxSubjectLen)),
-		"From: " + truncateForSlack(who, 120),
+		"From: " + truncateForSlack(ticketClientLabel(t), 180),
 	}
 	if body = strings.TrimSpace(body); body != "" {
 		lines = append(lines, truncateForSlack(body, slackMaxFieldLen))
@@ -123,16 +145,9 @@ func slackMrkdwn(value string) string {
 }
 
 func buildTicketSlackMessage(t store.Ticket, body, origin string) NotificationMessage {
-	who := strings.TrimSpace(t.Name)
-	if who == "" {
-		who = strings.TrimSpace(t.Email)
-	}
-	if who == "" {
-		who = "a visitor"
-	}
 	details := []string{
 		fmt.Sprintf("*#%d — %s*", t.ID, slackMrkdwn(truncateForSlack(t.Subject, slackMaxSubjectLen))),
-		"From: " + slackMrkdwn(truncateForSlack(who, 120)),
+		"From: " + slackMrkdwn(truncateForSlack(ticketClientLabel(t), 180)),
 	}
 	if trimmed := strings.TrimSpace(body); trimmed != "" {
 		details = append(details, slackMrkdwn(truncateForSlack(trimmed, slackMaxFieldLen)))

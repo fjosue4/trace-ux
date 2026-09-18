@@ -7,7 +7,7 @@ import { Icon } from '../../../components/ui/Icon';
 import Notice from '../../../components/ui/Notice';
 import { Select } from '../../../components/ui/fields';
 import { statusOptions } from '../Tickets.constants';
-import { requester } from '../Tickets.helpers';
+import { requester, requesterLabel } from '../Tickets.helpers';
 
 type TicketThreadViewProps = {
   thread: TicketThread;
@@ -71,8 +71,7 @@ export function TicketThreadView({ thread, userRole, onStatus, onReply, onArchiv
           />
         </div>
         <div className="ticket-thread__meta">
-          <span>{requester(ticket)}</span>
-          {ticket.email && ticket.name && <span>{ticket.email}</span>}
+          <span>{requesterLabel(ticket)}</span>
           <span>Opened {fmtTime(ticket.created_at)}</span>
           {ticket.page_url && (
             <a href={ticket.page_url} target="_blank" rel="noreferrer" className="ticket-link">

@@ -1,6 +1,6 @@
 import { Ticket } from '../../../api';
 import Badge from '../../../components/ui/Badge';
-import { compactTime, requester, statusLabel, statusTone } from '../Tickets.helpers';
+import { compactTime, requesterLabel, statusLabel, statusTone } from '../Tickets.helpers';
 
 type TicketRowProps = {
   ticket: Ticket;
@@ -11,7 +11,7 @@ type TicketRowProps = {
 
 export function TicketRow({ ticket, isSelected, showSite, onOpen }: TicketRowProps) {
   const isWaiting = ticket.status !== 'closed' && ticket.status !== 'archived' && ticket.last_message_author === 'visitor';
-  const subtitle = [requester(ticket), showSite ? ticket.site_name : ''].filter(Boolean).join(' · ');
+  const subtitle = [requesterLabel(ticket), showSite ? ticket.site_name : ''].filter(Boolean).join(' · ');
 
   return (
     <button

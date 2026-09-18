@@ -90,9 +90,28 @@ func TestTruncateForSlack(t *testing.T) {
 func TestBuildTicketSlackText(t *testing.T) {
 	ticket := store.Ticket{ID: 42, SiteName: "Acme", Subject: "Checkout is broken", Name: "Jamie"}
 	text := buildTicketSlackText(ticket, "It just spins forever", "https://dash.example.com")
-	for _, want := range []string{"Acme", "#42", "Checkout is broken", "Jamie", "It just spins forever", "https://dash.example.com/tickets?ticket=42"} {
+	for _, want := range []string{"Acme", "#42", "Checkout is broken", "Jamie (Client)", "It just spins forever", "https://dash.example.com/tickets?ticket=42"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("ticket message missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestTicketSlackRequesterIncludesSessionIdentityAndEmail(t *testing.T) {
+	ticket := store.Ticket{
+		Name:    "Betiana Lopez",
+		UserID:  "account-42",
+		Email:   "betiana.lopez@replypro.io",
+		Subject: "Checkout is broken",
+	}
+
+	if got, want := ticketRequester(ticket), "Betiana Lopez <betiana.lopez@replypro.io>"; got != want {
+		t.Fatalf("ticketRequester = %q, want %q", got, want)
+	}
+	message := buildTicketSlackMessage(ticket, "It just spins forever", "https://dash.example.com")
+	for _, want := range []string{"From:", "Betiana Lopez", "betiana.lopez@replypro.io", "(Client)"} {
+		if !strings.Contains(message.Message, want) {
+			t.Errorf("Block Kit ticket message missing %q: %s", want, message.Message)
 		}
 	}
 }

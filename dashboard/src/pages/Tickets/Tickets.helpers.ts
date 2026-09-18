@@ -30,7 +30,17 @@ export function compactTime(unix: number): string {
 }
 
 export function requester(ticket: Ticket) {
-  return ticket.name || ticket.email || ticket.user_id || 'Anonymous visitor';
+  const name = ticket.name?.trim() ?? '';
+  const email = ticket.email?.trim() ?? '';
+  const userId = ticket.user_id?.trim() ?? '';
+  const identity = name || userId || email;
+  if (!identity) return 'Anonymous visitor';
+  if (email && identity.toLowerCase() !== email.toLowerCase()) return `${identity} <${email}>`;
+  return identity;
+}
+
+export function requesterLabel(ticket: Ticket) {
+  return `${requester(ticket)} (Client)`;
 }
 
 export function ticketMatchesFilters(ticket: Ticket, siteSel: SiteSelection, statusSel: StatusSelection) {
