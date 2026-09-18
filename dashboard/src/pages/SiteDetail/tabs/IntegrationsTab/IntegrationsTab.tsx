@@ -6,6 +6,7 @@ import Switch from '../../../../components/ui/Switch';
 import { Icon } from '../../../../components/ui/Icon';
 import { Field, Input, Select } from '../../../../components/ui/fields';
 import { WebhookField } from '../../../../components/integrations/WebhookField';
+import { SlackRequestUrl } from '../../../../components/integrations/SlackRequestUrl';
 import { SlackLogMatchMode, SlackRoutingMode } from '../../../../api';
 import { useSiteSlackIntegration } from './hooks/useSiteSlackIntegration';
 import { IntegrationsTabProps } from './IntegrationsTab.types';
@@ -99,6 +100,7 @@ export function IntegrationsTab({ siteId, isAdmin }: IntegrationsTabProps) {
             onChange={setCommon}
           />
         )}
+        <SlackRequestUrl />
       </Card>
 
       <Card className="site-integrations__card">

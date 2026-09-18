@@ -429,10 +429,15 @@ func TestNotifySlackLogsNoMatchSendsNothing(t *testing.T) {
 
 func TestBuildCustomEventSlackMessage(t *testing.T) {
 	events := []store.CustomEvent{
-		{Name: "checkout_error", TrackID: "checkout-button", SessionID: "sess-1"},
+		{
+			Name:      "user_automatic_error_report",
+			TrackID:   "franklin.mendez@replypro.io",
+			Details:   json.RawMessage(`{"errorInfo":"TypeError: Cannot read properties of undefined (reading 'id')","pathname":"/inbox/interaction/abc123"}`),
+			SessionID: "sess-1",
+		},
 	}
 	message := buildCustomEventSlackMessage("Acme", events, "https://dash.example.com")
-	for _, want := range []string{"checkout_error", "checkout-button", "Acme"} {
+	for _, want := range []string{"user_automatic_error_report", "franklin.mendez@replypro.io", "TypeError: Cannot read properties of undefined (reading 'id')", "/inbox/interaction/abc123", "Acme"} {
 		if !strings.Contains(message.Message, want) && !strings.Contains(message.Footer, want) {
 			t.Errorf("custom event message missing %q:\nmessage=%s\nfooter=%s", want, message.Message, message.Footer)
 		}
@@ -505,6 +510,53 @@ func TestNotifySlackCustomEventsNoFlaggedEventsSendsNothing(t *testing.T) {
 	}
 }
 
+func TestNotifySlackCustomEventsCooldownIsPerUserAndError(t *testing.T) {
+	srv, _ := newTestServer(t)
+	site := mustCreateNotifyTestSite(t, srv)
+	receiver := newSlackReceiver(t, 0)
+	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
+		RoutingMode:   store.SlackRoutingSingle,
+		LogMatchMode:  store.SlackLogMatchContains,
+		CustomEnabled: true,
+	})
+	req := httptest.NewRequest(http.MethodGet, "https://dash.example.com/api/ingest/x", nil)
+	errorDetails := json.RawMessage(`{"errorInfo":"TypeError: Cannot read properties of undefined (reading 'id')","pathname":"/inbox/interaction/abc123"}`)
+	event := store.CustomEvent{
+		Name:      "user_automatic_error_report",
+		TrackID:   "franklin.mendez@replypro.io",
+		Details:   errorDetails,
+		Notify:    true,
+		SessionID: "session-1",
+	}
+
+	srv.notifySlackCustomEvents(site, []store.CustomEvent{event}, req)
+	_ = waitForSlackDelivery(t, receiver)
+
+	// The same user/error within ten seconds is suppressed.
+	srv.notifySlackCustomEvents(site, []store.CustomEvent{event}, req)
+	select {
+	case body := <-receiver.bodies:
+		t.Fatalf("expected the duplicate user/error to be suppressed, got %s", body)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	// A different error for the same user is still delivered.
+	differentError := event
+	differentError.Details = json.RawMessage(`{"errorInfo":"ReferenceError: missingData is not defined","pathname":"/inbox/interaction/abc123"}`)
+	srv.notifySlackCustomEvents(site, []store.CustomEvent{differentError}, req)
+	if body := waitForSlackDelivery(t, receiver); !strings.Contains(body, "ReferenceError: missingData is not defined") {
+		t.Fatalf("expected the different error in the Slack payload: %s", body)
+	}
+
+	// The original error for a different user is independent.
+	differentUser := event
+	differentUser.TrackID = "another.user@replypro.io"
+	srv.notifySlackCustomEvents(site, []store.CustomEvent{differentUser}, req)
+	if body := waitForSlackDelivery(t, receiver); !strings.Contains(body, "another.user@replypro.io") {
+		t.Fatalf("expected the different user's event in the Slack payload: %s", body)
+	}
+}
+
 func TestIngestCustomNotifySendsSessionLinkToSlack(t *testing.T) {
 	srv, ts := newTestServer(t)
 	receiver := newSlackReceiver(t, 0)
@@ -528,13 +580,16 @@ func TestIngestCustomNotifySendsSessionLinkToSlack(t *testing.T) {
 		CustomEnabled: true,
 	})
 	if resp := postJSON(t, ts.URL+"/api/ingest/"+site.SiteKey,
-		`{"type":"custom","session_id":"session-notify-1","events":[{"ts":1730000000000,"name":"checkout_error","track_id":"checkout-button","notify":true}]}`,
+		`{"type":"custom","session_id":"session-notify-1","events":[{"ts":1730000000000,"name":"user_automatic_error_report","track_id":"franklin.mendez@replypro.io","details":{"errorInfo":"TypeError: Cannot read properties of undefined (reading 'id')","pathname":"/inbox/interaction/abc123"},"notify":true}]}`,
 		false); resp.StatusCode != http.StatusOK {
 		t.Fatalf("custom ingest: got %d", resp.StatusCode)
 	}
 
 	body := waitForSlackDelivery(t, receiver)
-	if !strings.Contains(body, "checkout_error") || !strings.Contains(body, ts.URL+"/replay/session-notify-1") {
+	if !strings.Contains(body, "user_automatic_error_report") ||
+		!strings.Contains(body, "TypeError: Cannot read properties of undefined (reading 'id')") ||
+		!strings.Contains(body, "/inbox/interaction/abc123") ||
+		!strings.Contains(body, ts.URL+"/replay/session-notify-1") {
 		t.Fatalf("Slack payload missing custom event session link: %s", body)
 	}
 }

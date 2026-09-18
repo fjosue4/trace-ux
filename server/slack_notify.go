@@ -1,10 +1,13 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -25,8 +28,10 @@ const (
 
 	// Slack's own payload ceiling is far larger than this; these caps exist so
 	// one oversized log message or ticket body cannot dominate a notification.
-	slackMaxFieldLen   = 300
-	slackMaxSubjectLen = 200
+	slackMaxFieldLen    = 300
+	slackMaxSubjectLen  = 200
+	slackMaxDetailsLen  = 1_000
+	slackCustomCooldown = 10 * time.Second
 )
 
 type slackMessage struct {
@@ -141,6 +146,112 @@ func buildTicketSlackMessage(t store.Ticket, body, origin string) NotificationMe
 
 const maxSlackCustomEventLines = 20
 
+func canonicalCustomDetails(details json.RawMessage) string {
+	if len(details) == 0 || strings.TrimSpace(string(details)) == "null" {
+		return ""
+	}
+	var value any
+	if err := json.Unmarshal(details, &value); err != nil {
+		return ""
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil || string(encoded) == "null" || string(encoded) == "{}" {
+		return ""
+	}
+	return string(encoded)
+}
+
+func formatCustomEventDetails(details json.RawMessage) string {
+	canonical := canonicalCustomDetails(details)
+	if canonical == "" {
+		return ""
+	}
+
+	// Keep object details readable in Slack while preserving nested values as
+	// compact JSON. Sorting makes the rendered message and cooldown fingerprint
+	// stable even when the browser sends keys in a different order.
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(details, &fields); err == nil && len(fields) > 0 {
+		keys := make([]string, 0, len(fields))
+		for key := range fields {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		lines := []string{"*Details:*"}
+		for _, key := range keys {
+			value := canonicalCustomDetails(fields[key])
+			if value == "" {
+				value = "null"
+			}
+			var stringValue string
+			var decoded string
+			if err := json.Unmarshal(fields[key], &decoded); err == nil {
+				stringValue = decoded
+			} else {
+				stringValue = value
+			}
+			lines = append(lines, fmt.Sprintf("• %s: %s", slackMrkdwn(key), slackMrkdwn(truncateForSlack(stringValue, slackMaxDetailsLen))))
+		}
+		return strings.Join(lines, "\n")
+	}
+	return "*Details:* " + slackMrkdwn(truncateForSlack(canonical, slackMaxDetailsLen))
+}
+
+func customEventCooldownKey(siteID int64, event store.CustomEvent) string {
+	identity := strings.TrimSpace(event.TrackID)
+	if identity == "" {
+		identity = strings.TrimSpace(event.SessionID)
+	}
+	if identity == "" {
+		return ""
+	}
+	errorFingerprint := event.Name + "\x00"
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(event.Details, &fields); err == nil {
+		if errorInfo, ok := fields["errorInfo"]; ok {
+			errorFingerprint += canonicalCustomDetails(errorInfo)
+		} else {
+			errorFingerprint += canonicalCustomDetails(event.Details)
+		}
+	} else {
+		errorFingerprint += canonicalCustomDetails(event.Details)
+	}
+	key := fmt.Sprintf("%d\x00%s\x00%s", siteID, identity, errorFingerprint)
+	digest := sha256.Sum256([]byte(key))
+	return fmt.Sprintf("%x", digest[:])
+}
+
+// filterSlackCustomEvents prevents repeated reports for the same user and
+// error from flooding Slack. A missing trackId falls back to the session ID,
+// so anonymous events are still deduplicated within their own session without
+// suppressing the same error for every anonymous visitor.
+func (s *Server) filterSlackCustomEvents(siteID int64, events []store.CustomEvent) []store.CustomEvent {
+	now := time.Now()
+	s.slackCustomCooldownMu.Lock()
+	defer s.slackCustomCooldownMu.Unlock()
+	if s.slackCustomCooldown == nil {
+		s.slackCustomCooldown = make(map[string]time.Time)
+	}
+	for key, expiresAt := range s.slackCustomCooldown {
+		if !expiresAt.After(now) {
+			delete(s.slackCustomCooldown, key)
+		}
+	}
+
+	filtered := make([]store.CustomEvent, 0, len(events))
+	for _, event := range events {
+		key := customEventCooldownKey(siteID, event)
+		if key != "" {
+			if expiresAt, ok := s.slackCustomCooldown[key]; ok && expiresAt.After(now) {
+				continue
+			}
+			s.slackCustomCooldown[key] = now.Add(slackCustomCooldown)
+		}
+		filtered = append(filtered, event)
+	}
+	return filtered
+}
+
 // buildCustomEventSlackMessage covers custom events the host page explicitly
 // flagged with notify: true (window.TraceUX.track(name, trackId, {notify:
 // true}) or a trace-ux-track-notify click) -- independent of the browser-log
@@ -156,6 +267,9 @@ func buildCustomEventSlackMessage(siteName string, events []store.CustomEvent, o
 		line := "• *" + slackMrkdwn(truncateForSlack(e.Name, slackMaxFieldLen)) + "*"
 		if e.TrackID != "" {
 			line += " — " + slackMrkdwn(truncateForSlack(e.TrackID, 150))
+		}
+		if details := formatCustomEventDetails(e.Details); details != "" {
+			line += "\n" + details
 		}
 		if sessionID == "" && e.SessionID != "" {
 			sessionID = e.SessionID
@@ -426,6 +540,10 @@ func (s *Server) notifySlackCustomEvents(site store.Site, events []store.CustomE
 			flagged = append(flagged, e)
 		}
 	}
+	if len(flagged) == 0 {
+		return
+	}
+	flagged = s.filterSlackCustomEvents(site.ID, flagged)
 	if len(flagged) == 0 {
 		return
 	}

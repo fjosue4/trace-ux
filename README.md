@@ -301,6 +301,8 @@ No external database, no queue, no other services — SQLite lives in `/var/lib/
 | `TRACE_UX_DEMO_REPLAY`  | `0`       | Enable short-lived public demo replay links            |
 | `TRACE_UX_DEMO_REPLAY_TTL` | `900`  | Demo replay lifetime in seconds (60–3600)             |
 | `TRACE_UX_DEV_STATIC`    | —         | Dev only: serve frontend builds from disk             |
+| `TRACE_UX_PUBLIC_URL`    | —         | Public `http(s)` origin used in Slack links            |
+| `TRACE_UX_SLACK_SIGNING_SECRET` | — | Slack app signing secret for button acknowledgements |
 
 ### Snapshot size and cadence
 
@@ -463,6 +465,19 @@ traceux.track('checkout_error', 'checkout-button', { notify: true });
 ```
 
 This is independent of the browser-log matcher: it fires whenever the call or click sets `notify`, with no pattern to configure. An admin still has to enable **Custom events** and configure its webhook from that site's **Integrations** tab for anything to be sent. Server CPU, RAM, and disk alerts are configured under **System health**.
+
+Slack buttons also send an interaction callback even when they open a URL. Set
+the Slack app's **Interactivity & Shortcuts → Request URL** to:
+
+```text
+https://YOUR_TRACEUX_HOST/api/integrations/slack/interactions
+```
+
+Set `TRACE_UX_SLACK_SIGNING_SECRET` to the **Signing Secret** shown under the
+same Slack app's **Basic Information** page, then restart TraceUX. The endpoint
+verifies Slack's signature and immediately returns HTTP 200; the button's URL
+continues opening the linked ticket or replay. Do not use the incoming webhook
+URL as the Request URL.
 
 Masking: all form inputs are masked by default; any element carrying `trace-ux-mask` — as a class or as a bare attribute — has its text masked, and `trace-ux-block` (class) removes the element from the recording entirely.
 

@@ -1,0 +1,28 @@
+@use 'abstracts' as *;
+
+.slack-request-url {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &__value {
+    min-width: 0;
+    flex: 1;
+    padding: 0.55rem 0.7rem;
+    overflow-wrap: anywhere;
+    border: 1px solid $line;
+    border-radius: $radius;
+    background: $surface-2;
+    color: $ink;
+    font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 700px) {
+  .slack-request-url {
+    align-items: stretch;
+    flex-direction: column;
+
+    .btn { align-self: flex-start; }
+  }
+}

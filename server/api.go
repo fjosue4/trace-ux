@@ -60,6 +60,8 @@ type Server struct {
 	notificationProviders  map[string]notificationProviderDefinition
 	slackHealthMu          sync.Mutex
 	slackHealthAbove       map[string]bool
+	slackCustomCooldownMu  sync.Mutex
+	slackCustomCooldown    map[string]time.Time
 
 	cspOnce sync.Once
 	csp     string
@@ -83,6 +85,7 @@ type Config struct {
 	InlineStylesheet   bool   // TRACE_UX_INLINE_STYLESHEET; copy CSS into every snapshot
 	SlimDOM            bool   // TRACE_UX_SLIM_DOM; drop comments/scripts/meta from snapshots
 	PublicURL          string // TRACE_UX_PUBLIC_URL; absolute origin used for links in Slack notifications
+	SlackSigningSecret string // TRACE_UX_SLACK_SIGNING_SECRET; verifies Slack button callbacks
 }
 
 const (
@@ -201,6 +204,7 @@ func loadConfig() Config {
 	}
 	cfg.DevStaticDir = os.Getenv("TRACE_UX_DEV_STATIC")
 	cfg.TrustedProxyCIDRs = parseTrustedProxyCIDRs(os.Getenv("TRACE_UX_TRUSTED_PROXIES"))
+	cfg.SlackSigningSecret = strings.TrimSpace(os.Getenv("TRACE_UX_SLACK_SIGNING_SECRET"))
 	// Optional absolute origin for links in outgoing notifications (currently
 	// just Slack). Without it, links are derived from the incoming request,
 	// which is right for a direct deployment but wrong behind a reverse proxy
@@ -318,6 +322,10 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/integrations/slack", s.auth(s.requireAdmin(s.handleGetSlackIntegration)))
 	mux.HandleFunc("PUT /api/integrations/slack", s.auth(s.requireAdmin(s.handlePutSlackIntegration)))
 	mux.HandleFunc("POST /api/integrations/slack/test", s.auth(s.requireAdmin(s.handleTestSlackWebhook)))
+	// Slack calls this unauthenticated endpoint when someone clicks a Block Kit
+	// button. It authenticates the request with Slack's signing secret instead
+	// of a TraceUX dashboard session.
+	mux.HandleFunc("POST /api/integrations/slack/interactions", s.handleSlackInteraction)
 
 	mux.HandleFunc("GET /api/sites", s.auth(s.handleListSites))
 	mux.HandleFunc("POST /api/sites", s.auth(s.requireAdmin(s.handleCreateSite)))

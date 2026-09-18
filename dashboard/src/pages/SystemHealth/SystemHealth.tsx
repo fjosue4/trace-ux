@@ -7,6 +7,7 @@ import Badge from '../../components/ui/Badge';
 import Switch from '../../components/ui/Switch';
 import { Icon } from '../../components/ui/Icon';
 import { WebhookField } from '../../components/integrations/WebhookField';
+import { SlackRequestUrl } from '../../components/integrations/SlackRequestUrl';
 import { fmtBytes, fmtClock, fmtDuration } from '../../lib/format';
 import { useSystemHealth } from './hooks/useSystemHealth';
 import { useSlackSystemIntegration } from './hooks/useSlackSystemIntegration';
@@ -177,6 +178,7 @@ export default function SystemHealth() {
                 draft={slackWebhook}
                 onChange={setSlackWebhook}
               />
+              <SlackRequestUrl />
               {slackEnabled && (
                 <div className="health-alerts__actions">
                   <Button type="button" variant="secondary" size="sm" disabled={slackTesting} onClick={testSlack}>

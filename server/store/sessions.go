@@ -311,12 +311,13 @@ type CustomEvent struct {
 	TS      int64  `json:"ts"` // unix millis, visitor's clock
 	Name    string `json:"name"`
 	TrackID string `json:"track_id"`
-	// Notify and SessionID are never persisted (there is no column for
-	// them): Notify carries the tracker's opt-in through to the Slack
-	// dispatch hook, and SessionID is filled in here for that same hook's
-	// replay link, since a caller only ever provides one session at a time.
-	Notify    bool   `json:"-"`
-	SessionID string `json:"-"`
+	// Details, Notify, and SessionID are never persisted (there is no column
+	// for them): Details and Notify carry the tracker's notification context
+	// through ingest, and SessionID is filled in here for the replay link,
+	// since a caller only ever provides one session at a time.
+	Details   json.RawMessage `json:"details,omitempty"`
+	Notify    bool            `json:"-"`
+	SessionID string          `json:"-"`
 }
 
 // SaveCustomEvents stores tracked events for a session; duplicates (retries)

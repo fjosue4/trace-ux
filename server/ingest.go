@@ -18,18 +18,19 @@ import (
 )
 
 const (
-	maxSessionIDLength = 64
-	maxEventCount      = 5_000
-	maxURLLength       = 2_048
-	maxReferrerLength  = 2_048
-	maxTitleLength     = 512
-	maxUTMLength       = 256
-	maxIdentityLength  = 256
-	maxUserAgentLength = 1_024
-	maxPageIndex       = 10_000
-	maxLogCount        = 100
-	maxLogMessageBytes = 8 << 10
-	maxLogClientSeq    = 1_000_000_000
+	maxSessionIDLength    = 64
+	maxEventCount         = 5_000
+	maxURLLength          = 2_048
+	maxReferrerLength     = 2_048
+	maxTitleLength        = 512
+	maxUTMLength          = 256
+	maxIdentityLength     = 256
+	maxUserAgentLength    = 1_024
+	maxPageIndex          = 10_000
+	maxLogCount           = 100
+	maxLogMessageBytes    = 8 << 10
+	maxLogClientSeq       = 1_000_000_000
+	maxCustomDetailsBytes = 16 << 10
 )
 
 var errRequestBodyTooLarge = errors.New("request body too large")
@@ -40,9 +41,10 @@ type ingestEnvelope struct {
 }
 
 type ingestCustomEvent struct {
-	TS      int64  `json:"ts"`
-	Name    string `json:"name"`
-	TrackID string `json:"track_id"`
+	TS      int64           `json:"ts"`
+	Name    string          `json:"name"`
+	TrackID string          `json:"track_id"`
+	Details json.RawMessage `json:"details,omitempty"`
 	// Notify asks for a Slack notification alongside storing the event (see
 	// the "custom" Slack notification kind). It is never persisted.
 	Notify bool `json:"notify,omitempty"`
@@ -253,11 +255,17 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 		}
 		events := make([]store.CustomEvent, 0, len(m.Events))
 		for _, e := range m.Events {
-			if e.TS <= 0 || len(e.Name) == 0 || len(e.Name) > 100 || len(e.TrackID) > 100 {
+			if e.TS <= 0 || len(e.Name) == 0 || len(e.Name) > 100 || len(e.TrackID) > 100 || len(e.Details) > maxCustomDetailsBytes {
 				writeErr(w, http.StatusBadRequest, "invalid custom event")
 				return
 			}
-			events = append(events, store.CustomEvent{TS: e.TS, Name: e.Name, TrackID: e.TrackID, Notify: e.Notify})
+			events = append(events, store.CustomEvent{
+				TS:      e.TS,
+				Name:    e.Name,
+				TrackID: e.TrackID,
+				Details: append(json.RawMessage(nil), e.Details...),
+				Notify:  e.Notify,
+			})
 		}
 		insertedCustom, err = s.store.SaveCustomEvents(site.ID, env.SessionID, events)
 	case "logs":
