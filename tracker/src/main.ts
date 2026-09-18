@@ -108,8 +108,16 @@ export interface TraceUXTrackOptions {
    * Ask the TraceUX server to also fire a Slack notification for this event
    * (the "Custom events" integration, if an admin has enabled it), alongside
    * storing it as normal seekable replay activity.
-   */
+  */
   notify?: boolean;
+  /**
+   * Structured context attached to the custom event. It is stored with the
+   * event and included in Slack notifications when notify is true.
+   *
+   * Keep this to non-sensitive, JSON-serializable values. The server applies
+   * a size limit before accepting it.
+   */
+  details?: Record<string, unknown>;
 }
 
 export interface TraceUXHandle {
@@ -630,7 +638,12 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
     );
   }
 
-  function sendCustom(name: string, trackId: string, notify = false) {
+  function sendCustom(
+    name: string,
+    trackId: string,
+    notify = false,
+    details?: Record<string, unknown>,
+  ) {
     if (stopped || disposed) return;
     send(
       {
@@ -642,6 +655,7 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
             name: String(name || 'event').slice(0, 100),
             track_id: String(trackId || '').slice(0, 100),
             notify: !!notify,
+            ...(details !== undefined ? { details } : {}),
           },
         ],
       },
@@ -985,7 +999,12 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
     identify: (fields) => applyIdentity(fields),
     track: (name, trackId, options) => {
       const normalizedName = String(name || 'event').slice(0, 100);
-      sendCustom(normalizedName, String(trackId || '').slice(0, 100), !!options?.notify);
+      sendCustom(
+        normalizedName,
+        String(trackId || '').slice(0, 100),
+        !!options?.notify,
+        options?.details,
+      );
       mountWidgetIfConfigured(normalizedName);
     },
     setUserStatus: (status) => sendCustom('user_status', String(status || '').slice(0, 100)),

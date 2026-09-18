@@ -356,7 +356,7 @@ func TestVisitorIdentityAndCustomEvents(t *testing.T) {
 	// tracked clicks land in custom_events and come back through the API
 	postJSON(t, u, `{"type":"custom","session_id":"vis1","events":[
 		{"ts":1000,"name":"click","track_id":"my-modal"},
-		{"ts":2000,"name":"click","track_id":"checkout"},
+		{"ts":2000,"name":"click","track_id":"checkout","details":{"pathname":"/checkout","attempt":2}},
 		{"ts":1000,"name":"click","track_id":"my-modal"}]}`, false)
 
 	detail := doReq(t, http.MethodGet, ts.URL+"/api/sessions/vis1", admin, "")
@@ -371,6 +371,13 @@ func TestVisitorIdentityAndCustomEvents(t *testing.T) {
 	}
 	if body.CustomEvents[0].TrackID != "my-modal" || body.CustomEvents[1].TrackID != "checkout" {
 		t.Fatalf("custom events wrong order/content: %+v", body.CustomEvents)
+	}
+	var details map[string]any
+	if err := json.Unmarshal(body.CustomEvents[1].Details, &details); err != nil {
+		t.Fatalf("custom event details were not returned as JSON: %v", err)
+	}
+	if details["pathname"] != "/checkout" || details["attempt"] != float64(2) {
+		t.Fatalf("custom event details = %#v, want pathname and attempt", details)
 	}
 
 	// visitor filter matches any of the three ids

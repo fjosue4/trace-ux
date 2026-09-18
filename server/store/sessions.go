@@ -311,10 +311,9 @@ type CustomEvent struct {
 	TS      int64  `json:"ts"` // unix millis, visitor's clock
 	Name    string `json:"name"`
 	TrackID string `json:"track_id"`
-	// Details, Notify, and SessionID are never persisted (there is no column
-	// for them): Details and Notify carry the tracker's notification context
-	// through ingest, and SessionID is filled in here for the replay link,
-	// since a caller only ever provides one session at a time.
+	// Details is structured context supplied by the host page. Notify is an
+	// ingest-only delivery flag, and SessionID is filled in here for the replay
+	// link since a caller only ever provides one session at a time.
 	Details   json.RawMessage `json:"details,omitempty"`
 	Notify    bool            `json:"-"`
 	SessionID string          `json:"-"`
@@ -331,8 +330,8 @@ func (s *Store) SaveCustomEvents(siteID int64, sessionID string, events []Custom
 	}
 	inserted := make([]CustomEvent, 0, len(events))
 	for _, e := range events {
-		res, err := s.DB.Exec(`INSERT OR IGNORE INTO custom_events (session_id, ts, name, track_id) VALUES (?, ?, ?, ?)`,
-			sessionID, e.TS, e.Name, e.TrackID)
+		res, err := s.DB.Exec(`INSERT OR IGNORE INTO custom_events (session_id, ts, name, track_id, details) VALUES (?, ?, ?, ?, ?)`,
+			sessionID, e.TS, e.Name, e.TrackID, string(e.Details))
 		if err != nil {
 			return nil, err
 		}
@@ -348,7 +347,7 @@ func (s *Store) SaveCustomEvents(siteID int64, sessionID string, events []Custom
 }
 
 func (s *Store) GetCustomEvents(sessionID string) ([]CustomEvent, error) {
-	rows, err := s.DB.Query(`SELECT ts, name, track_id FROM custom_events WHERE session_id = ? ORDER BY ts`, sessionID)
+	rows, err := s.DB.Query(`SELECT ts, name, track_id, details FROM custom_events WHERE session_id = ? ORDER BY ts`, sessionID)
 	if err != nil {
 		return nil, err
 	}
@@ -356,8 +355,12 @@ func (s *Store) GetCustomEvents(sessionID string) ([]CustomEvent, error) {
 	out := []CustomEvent{}
 	for rows.Next() {
 		var e CustomEvent
-		if err := rows.Scan(&e.TS, &e.Name, &e.TrackID); err != nil {
+		var details string
+		if err := rows.Scan(&e.TS, &e.Name, &e.TrackID, &details); err != nil {
 			return nil, err
+		}
+		if details != "" {
+			e.Details = json.RawMessage(details)
 		}
 		out = append(out, e)
 	}

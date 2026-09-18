@@ -457,7 +457,19 @@ or programmatically: `window.TraceUX.track('checkout-click')`. Clicking an activ
 Ask for a Slack notification alongside the event (see the site's **Integrations** tab in the dashboard) by adding `notify: true`:
 
 ```ts
-traceux.track('checkout_error', 'checkout-button', { notify: true });
+traceux.track('checkout_error', 'checkout-button', {
+  notify: true,
+  details: { pathname: location.pathname, errorInfo: 'Payment failed' },
+});
+```
+
+`details` is stored with the custom event and included in the Slack message.
+`traceux.info(event, details)` is a separate browser log and does not attach
+details to the custom event. The wrapper should pass the details through the
+third argument:
+
+```ts
+tracker.track(event, trackId, { ...options, details });
 ```
 
 ```html

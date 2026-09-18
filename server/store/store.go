@@ -492,6 +492,12 @@ var migrations = []string{
 	`
 	ALTER TABLE announcements ADD COLUMN internal_headers TEXT NOT NULL DEFAULT '{}';
 	`,
+	// v22: persist structured details attached to tracked custom events. Notify
+	// remains an ingest-only delivery flag; details are part of the event shown
+	// by the session API and used when building Slack notifications.
+	`
+	ALTER TABLE custom_events ADD COLUMN details TEXT NOT NULL DEFAULT '';
+	`,
 }
 
 func (s *Store) migrate() error {

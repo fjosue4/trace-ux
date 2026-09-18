@@ -59,7 +59,10 @@ for parity with the script tag.
 ```ts
 traceux.identify({ userId, clientId, remoteId });  // attach identity mid-session
 traceux.track('checkout_started', 'cta-hero');     // seekable activity in the replay
-traceux.track('checkout_error', 'checkout-button', { notify: true }); // also notify Slack when enabled
+traceux.track('checkout_error', 'checkout-button', {
+  notify: true,
+  details: { pathname: location.pathname, errorInfo: 'Payment failed' },
+}); // also notify Slack when enabled
 traceux.setUserStatus('trialing');                 // lifecycle state as an activity
 traceux.updateUserStatus('active');                // alias, for update-style call sites
 
@@ -106,10 +109,27 @@ you can jump straight to the moment in the session. `setUserStatus` does not
 create a server-side user record — it is an activity, not a table.
 
 Pass `{ notify: true }` as the third argument to `track` when an event should
-also notify Slack. The TraceUX admin must enable **Custom events** and configure
-the Slack webhook under **Integrations**. The notification includes a button
+also notify Slack. Put structured context in the same options object under
+`details`; it is stored with the custom event and included in the Slack
+message. The TraceUX admin must enable **Custom events** and configure the
+Slack webhook under **Integrations**. The notification includes a button
 linking directly to the current session replay. Events without `notify: true`
-remain normal replay activity and do not notify.
+remain normal replay activity and do not notify. `traceux.info(...)` is a
+separate browser log; it does not add details to a custom event.
+
+```ts
+traceux.track(
+  'user_automatic_error_report',
+  'franklin.mendez@replypro.io',
+  {
+    notify: true,
+    details: {
+      errorInfo: 'TypeError: Cannot read properties of undefined (reading "id")',
+      pathname: '/inbox/interaction/abc123',
+    },
+  },
+);
+```
 
 ## React
 

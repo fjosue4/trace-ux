@@ -37,6 +37,7 @@ export type CustomEvent = {
   ts: number; // unix millis, visitor's clock
   name: string;
   track_id: string;
+  details?: Record<string, unknown>;
 };
 
 export type SessionPage = {

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { eventWithTime } from '@rrweb/types';
-import { api, Feedback, Log, Session, SessionPage, Ticket } from '../../../api';
+import { api, CustomEvent, Feedback, Log, Session, SessionPage, Ticket } from '../../../api';
 import { loadCSSAssets, rehydrateCSS } from '../../../lib/cssAssets';
 import { ReplayPlayerHandle } from '../../../components/replay/ReplayPlayer';
 
 type Meta = {
   session: Session;
   pages: SessionPage[];
-  custom_events: { ts: number; name: string; track_id: string }[];
+  custom_events: CustomEvent[];
   logs: Log[];
   tickets: Ticket[];
   feedback: Feedback[];
