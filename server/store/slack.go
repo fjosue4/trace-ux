@@ -71,22 +71,26 @@ func applySlackWebhookUpdate(set *[]string, args *[]any, prefix string, wu Slack
 // stays a single global toggle+webhook rather than living per site.
 
 type SlackSystemIntegration struct {
-	Enabled   bool
-	Webhook   SlackWebhookSecret
-	UpdatedAt int64
+	Enabled       bool
+	Webhook       SlackWebhookSecret
+	SigningSecret SlackWebhookSecret
+	UpdatedAt     int64
 }
 
 type SlackSystemIntegrationUpdate struct {
-	Enabled bool
-	Webhook SlackWebhookUpdate
+	Enabled       bool
+	Webhook       SlackWebhookUpdate
+	SigningSecret SlackWebhookUpdate
 }
 
 func (s *Store) GetSlackSystemIntegration() (SlackSystemIntegration, error) {
 	var si SlackSystemIntegration
-	var webhook []byte
-	row := s.DB.QueryRow(`SELECT system_enabled, system_ciphertext, system_fingerprint, system_hint, updated_at
+	var webhook, signing []byte
+	row := s.DB.QueryRow(`SELECT system_enabled, system_ciphertext, system_fingerprint, system_hint,
+		signing_ciphertext, signing_fingerprint, signing_hint, updated_at
 		FROM slack_integration WHERE id = 1`)
-	if err := row.Scan(&si.Enabled, &webhook, &si.Webhook.Fingerprint, &si.Webhook.Hint, &si.UpdatedAt); err != nil {
+	if err := row.Scan(&si.Enabled, &webhook, &si.Webhook.Fingerprint, &si.Webhook.Hint,
+		&signing, &si.SigningSecret.Fingerprint, &si.SigningSecret.Hint, &si.UpdatedAt); err != nil {
 		// The migration always inserts the id=1 row, but a fresh in-memory
 		// store used only for schema checks might not have run it -- fall
 		// back to disabled defaults rather than erroring.
@@ -96,6 +100,7 @@ func (s *Store) GetSlackSystemIntegration() (SlackSystemIntegration, error) {
 		return SlackSystemIntegration{}, err
 	}
 	si.Webhook.Ciphertext = webhook
+	si.SigningSecret.Ciphertext = signing
 	return si, nil
 }
 
@@ -104,6 +109,9 @@ func (s *Store) UpdateSlackSystemIntegration(u SlackSystemIntegrationUpdate) (Sl
 	set := []string{"system_enabled=?", "updated_at=?"}
 	args := []any{u.Enabled, now}
 	if err := applySlackWebhookUpdate(&set, &args, "system", u.Webhook); err != nil {
+		return SlackSystemIntegration{}, err
+	}
+	if err := applySlackWebhookUpdate(&set, &args, "signing", u.SigningSecret); err != nil {
 		return SlackSystemIntegration{}, err
 	}
 	if _, err := s.DB.Exec(`INSERT OR IGNORE INTO slack_integration (id) VALUES (1)`); err != nil {

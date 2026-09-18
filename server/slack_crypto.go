@@ -13,8 +13,10 @@ import (
 )
 
 const maxSlackWebhookURLLen = 512
+const maxSlackSigningSecretLen = 256
 
 var errInvalidSlackWebhook = errors.New("Slack webhooks must be an https://hooks.slack.com/services/... URL")
+var errInvalidSlackSigningSecret = errors.New("Slack signing secret is too long")
 
 // slackWebhookAESKey derives a distinct AES-256 key from the server's auth
 // secret (server/api.go's loadSecret) so encrypting webhook URLs never reuses
@@ -64,11 +66,60 @@ func decryptSlackWebhook(secret []byte, ciphertext []byte) (string, error) {
 	return string(plain), nil
 }
 
+// Signing secrets use a separate encryption context from incoming webhook
+// URLs. Both are reversible server-side credentials, but separating the key
+// derivation labels prevents the two secret types from sharing key material.
+func slackSigningSecretAESKey(secret []byte) []byte {
+	mac := hmac.New(sha256.New, secret)
+	mac.Write([]byte("trace-ux:slack-signing-secret-encryption:v1"))
+	return mac.Sum(nil)
+}
+
+func encryptSlackSigningSecret(secret []byte, plaintext string) ([]byte, error) {
+	block, err := aes.NewCipher(slackSigningSecretAESKey(secret))
+	if err != nil {
+		return nil, err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, err
+	}
+	return gcm.Seal(nonce, nonce, []byte(plaintext), nil), nil
+}
+
+func decryptSlackSigningSecret(secret []byte, ciphertext []byte) (string, error) {
+	block, err := aes.NewCipher(slackSigningSecretAESKey(secret))
+	if err != nil {
+		return "", err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	if len(ciphertext) < gcm.NonceSize() {
+		return "", errors.New("slack signing secret ciphertext is too short")
+	}
+	nonce, data := ciphertext[:gcm.NonceSize()], ciphertext[gcm.NonceSize():]
+	plain, err := gcm.Open(nil, nonce, data, nil)
+	if err != nil {
+		return "", err
+	}
+	return string(plain), nil
+}
+
 // slackWebhookFingerprint is a stable, non-reversible identifier for a
 // webhook URL, used so an admin can tell two saved secrets apart without
 // either being decrypted.
 func slackWebhookFingerprint(rawURL string) string {
-	sum := sha256.Sum256([]byte(rawURL))
+	return slackSecretFingerprint(rawURL)
+}
+
+func slackSecretFingerprint(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -77,7 +128,11 @@ func slackWebhookFingerprint(rawURL string) string {
 // URL's "http" prefix adds no useful recognition and makes the hint look like
 // a broken URL.
 func slackWebhookHint(rawURL string) string {
-	runes := []rune(rawURL)
+	return slackSecretHint(rawURL)
+}
+
+func slackSecretHint(rawSecret string) string {
+	runes := []rune(rawSecret)
 	if len(runes) == 0 {
 		return ""
 	}

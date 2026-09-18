@@ -85,7 +85,7 @@ type Config struct {
 	InlineStylesheet   bool   // TRACE_UX_INLINE_STYLESHEET; copy CSS into every snapshot
 	SlimDOM            bool   // TRACE_UX_SLIM_DOM; drop comments/scripts/meta from snapshots
 	PublicURL          string // TRACE_UX_PUBLIC_URL; absolute origin used for links in Slack notifications
-	SlackSigningSecret string // TRACE_UX_SLACK_SIGNING_SECRET; verifies Slack button callbacks
+	SlackSigningSecret string // TRACE_UX_SLACK_SIGNING_SECRET; fallback for Slack button callbacks
 }
 
 const (

@@ -442,6 +442,15 @@ func TestBuildCustomEventSlackMessage(t *testing.T) {
 			t.Errorf("custom event message missing %q:\nmessage=%s\nfooter=%s", want, message.Message, message.Footer)
 		}
 	}
+	if !strings.Contains(message.Message, "*Details:*\n```\n") || !strings.Contains(message.Message, "errorInfo: TypeError") {
+		t.Fatalf("custom event details should use a Slack code block:\n%s", message.Message)
+	}
+	if strings.Contains(message.Message, "• errorInfo:") {
+		t.Fatalf("custom event details should not render as a nested bullet list:\n%s", message.Message)
+	}
+	if strings.Contains(message.Message, "• *user_automatic_error_report*") {
+		t.Fatalf("custom event summary should not start with a bullet:\n%s", message.Message)
+	}
 	if message.Button == nil || message.Button.Text != "Open session" || message.Button.URL != "https://dash.example.com/replay/sess-1" {
 		t.Fatalf("custom event message missing session button: %+v", message.Button)
 	}

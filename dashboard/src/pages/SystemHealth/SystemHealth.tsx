@@ -30,6 +30,8 @@ export default function SystemHealth() {
     setEnabled: setSlackEnabled,
     webhook: slackWebhook,
     setWebhook: setSlackWebhook,
+    signingSecret: slackSigningSecret,
+    setSigningSecret: setSlackSigningSecret,
     save: saveSlack,
     test: testSlack,
   } = useSlackSystemIntegration();
@@ -179,6 +181,15 @@ export default function SystemHealth() {
                 onChange={setSlackWebhook}
               />
               <SlackRequestUrl />
+              <WebhookField
+                label="Slack signing secret"
+                hint="Used to verify Slack button clicks. Find it in Slack → Basic Information → App Credentials → Signing Secret. It is encrypted and only the last four characters are shown."
+                placeholder="Paste Slack signing secret"
+                removedLabel="Signing secret"
+                view={slackIntegration?.signing_secret ?? { configured: false }}
+                draft={slackSigningSecret}
+                onChange={setSlackSigningSecret}
+              />
               {slackEnabled && (
                 <div className="health-alerts__actions">
                   <Button type="button" variant="secondary" size="sm" disabled={slackTesting} onClick={testSlack}>

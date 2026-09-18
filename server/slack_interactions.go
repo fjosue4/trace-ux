@@ -23,7 +23,12 @@ const (
 // clicks a Block Kit button, including buttons that also have a URL. The URL
 // opens in Slack while this endpoint acknowledges the interaction.
 func (s *Server) handleSlackInteraction(w http.ResponseWriter, r *http.Request) {
-	if s.cfg == nil || strings.TrimSpace(s.cfg.SlackSigningSecret) == "" {
+	signingSecret, err := s.slackInteractionSigningSecret()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "could not decrypt Slack signing secret")
+		return
+	}
+	if strings.TrimSpace(signingSecret) == "" {
 		writeErr(w, http.StatusServiceUnavailable, "Slack interactivity is not configured")
 		return
 	}
@@ -37,7 +42,7 @@ func (s *Server) handleSlackInteraction(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, http.StatusRequestEntityTooLarge, "Slack interaction is too large")
 		return
 	}
-	if !verifySlackInteractionSignature(s.cfg.SlackSigningSecret, r, body) {
+	if !verifySlackInteractionSignature(signingSecret, r, body) {
 		writeErr(w, http.StatusUnauthorized, "invalid Slack signature")
 		return
 	}
@@ -64,6 +69,25 @@ func (s *Server) handleSlackInteraction(w http.ResponseWriter, r *http.Request) 
 	// needed; the important part is acknowledging within Slack's three-second
 	// deadline so it does not show an interaction error to the user.
 	w.WriteHeader(http.StatusOK)
+}
+
+// The dashboard-managed secret takes precedence. The environment variable is
+// retained as a migration path for deployments that configured Slack before
+// the signing-secret field was added to the UI.
+func (s *Server) slackInteractionSigningSecret() (string, error) {
+	if s.store != nil {
+		integration, err := s.store.GetSlackSystemIntegration()
+		if err != nil {
+			return "", err
+		}
+		if integration.SigningSecret.Configured() {
+			return decryptSlackSigningSecret(s.secret, integration.SigningSecret.Ciphertext)
+		}
+	}
+	if s.cfg == nil {
+		return "", nil
+	}
+	return strings.TrimSpace(s.cfg.SlackSigningSecret), nil
 }
 
 func verifySlackInteractionSignature(signingSecret string, r *http.Request, body []byte) bool {

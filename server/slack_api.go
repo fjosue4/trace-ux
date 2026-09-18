@@ -14,9 +14,9 @@ import (
 // browser logs, custom events) live in site_slack_api.go instead, since each
 // of those events already belongs to one site.
 //
-// GET/PUT never see or return a decryptable webhook: the dashboard gets a
-// masked hint, and a blank field on PUT means "keep the current secret" so
-// re-saving the form (e.g. to flip a switch) can't accidentally wipe it.
+// GET/PUT never see or return decryptable Slack secrets: the dashboard gets
+// masked hints, and blank fields on PUT mean "keep the current secret" so
+// re-saving the form (e.g. to flip a switch) can't accidentally wipe them.
 
 type slackWebhookView struct {
 	Configured bool   `json:"configured"`
@@ -28,16 +28,18 @@ func slackWebhookViewFrom(w store.SlackWebhookSecret) slackWebhookView {
 }
 
 type slackSystemIntegrationView struct {
-	Enabled   bool             `json:"enabled"`
-	Webhook   slackWebhookView `json:"webhook"`
-	UpdatedAt int64            `json:"updated_at"`
+	Enabled       bool             `json:"enabled"`
+	Webhook       slackWebhookView `json:"webhook"`
+	SigningSecret slackWebhookView `json:"signing_secret"`
+	UpdatedAt     int64            `json:"updated_at"`
 }
 
 func slackSystemIntegrationViewFrom(si store.SlackSystemIntegration) slackSystemIntegrationView {
 	return slackSystemIntegrationView{
-		Enabled:   si.Enabled,
-		Webhook:   slackWebhookViewFrom(si.Webhook),
-		UpdatedAt: si.UpdatedAt,
+		Enabled:       si.Enabled,
+		Webhook:       slackWebhookViewFrom(si.Webhook),
+		SigningSecret: slackWebhookViewFrom(si.SigningSecret),
+		UpdatedAt:     si.UpdatedAt,
 	}
 }
 
@@ -57,6 +59,9 @@ type slackSystemIntegrationPutRequest struct {
 	// to remove one.
 	Webhook      string `json:"webhook,omitempty"`
 	ClearWebhook bool   `json:"clear_webhook,omitempty"`
+
+	SigningSecret      string `json:"signing_secret,omitempty"`
+	ClearSigningSecret bool   `json:"clear_signing_secret,omitempty"`
 }
 
 // resolveSlackWebhookField is what one PUT field decided to do, expressed
@@ -87,6 +92,30 @@ func (s *Server) resolveSlackWebhookField(clear bool, raw string, existing store
 	}
 }
 
+func (s *Server) resolveSlackSigningSecretField(clear bool, raw string, existing store.SlackWebhookSecret) (store.SlackWebhookUpdate, store.SlackWebhookSecret, error) {
+	raw = strings.TrimSpace(raw)
+	switch {
+	case clear:
+		return store.SlackWebhookUpdate{Clear: true}, store.SlackWebhookSecret{}, nil
+	case raw != "":
+		if len(raw) > maxSlackSigningSecretLen {
+			return store.SlackWebhookUpdate{}, store.SlackWebhookSecret{}, errInvalidSlackSigningSecret
+		}
+		ciphertext, err := encryptSlackSigningSecret(s.secret, raw)
+		if err != nil {
+			return store.SlackWebhookUpdate{}, store.SlackWebhookSecret{}, err
+		}
+		secret := store.SlackWebhookSecret{
+			Ciphertext:  ciphertext,
+			Fingerprint: slackSecretFingerprint(raw),
+			Hint:        slackSecretHint(raw),
+		}
+		return store.SlackWebhookUpdate{Set: true, Secret: secret}, secret, nil
+	default:
+		return store.SlackWebhookUpdate{}, existing, nil
+	}
+}
+
 func (s *Server) handlePutSlackIntegration(w http.ResponseWriter, r *http.Request) {
 	var body slackSystemIntegrationPutRequest
 	if err := readJSON(w, r, &body); err != nil {
@@ -104,14 +133,20 @@ func (s *Server) handlePutSlackIntegration(w http.ResponseWriter, r *http.Reques
 		writeErr(w, http.StatusBadRequest, "invalid webhook: "+err.Error())
 		return
 	}
+	signingUpdate, _, err := s.resolveSlackSigningSecretField(body.ClearSigningSecret, body.SigningSecret, current.SigningSecret)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid signing secret: "+err.Error())
+		return
+	}
 	if body.Enabled && !webhookFinal.Configured() {
 		writeErr(w, http.StatusBadRequest, "system health notifications need a configured webhook")
 		return
 	}
 
 	updated, err := s.store.UpdateSlackSystemIntegration(store.SlackSystemIntegrationUpdate{
-		Enabled: body.Enabled,
-		Webhook: webhookUpdate,
+		Enabled:       body.Enabled,
+		Webhook:       webhookUpdate,
+		SigningSecret: signingUpdate,
 	})
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, "could not save slack settings")

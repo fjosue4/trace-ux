@@ -12,11 +12,13 @@ export function useSlackSystemIntegration() {
 
   const [enabled, setEnabled] = useState(false);
   const [webhook, setWebhook] = useState<WebhookDraft>(emptyWebhookDraft);
+  const [signingSecret, setSigningSecret] = useState<WebhookDraft>(emptyWebhookDraft);
 
   function applyIntegration(v: SlackSystemIntegration) {
     setIntegration(v);
     setEnabled(v.enabled);
     setWebhook(emptyWebhookDraft);
+    setSigningSecret(emptyWebhookDraft);
   }
 
   useEffect(() => {
@@ -47,6 +49,8 @@ export function useSlackSystemIntegration() {
         enabled,
         webhook: webhook.value.trim() || undefined,
         clear_webhook: webhook.clear || undefined,
+        signing_secret: signingSecret.value.trim() || undefined,
+        clear_signing_secret: signingSecret.clear || undefined,
       };
       const saved = await api.updateSlackSystemIntegration(update);
       applyIntegration(saved);
@@ -72,7 +76,28 @@ export function useSlackSystemIntegration() {
     }
   }
 
-  const dirty = integration !== null && (enabled !== integration.enabled || webhook.clear || webhook.value.trim() !== '');
+  const dirty = integration !== null &&
+    (enabled !== integration.enabled ||
+      webhook.clear ||
+      webhook.value.trim() !== '' ||
+      signingSecret.clear ||
+      signingSecret.value.trim() !== '');
 
-  return { integration, loading, error, notice, busy, dirty, testing, enabled, setEnabled, webhook, setWebhook, save, test };
+  return {
+    integration,
+    loading,
+    error,
+    notice,
+    busy,
+    dirty,
+    testing,
+    enabled,
+    setEnabled,
+    webhook,
+    setWebhook,
+    signingSecret,
+    setSigningSecret,
+    save,
+    test,
+  };
 }

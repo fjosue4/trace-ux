@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"trace-ux/server/store"
 )
 
 func signedSlackInteractionRequest(t *testing.T, secret, body string) *http.Request {
@@ -29,6 +31,29 @@ func TestHandleSlackInteractionAcknowledgesSignedButton(t *testing.T) {
 	req := signedSlackInteractionRequest(t, secret, `payload=%7B%22type%22%3A%22block_actions%22%7D`)
 	res := httptest.NewRecorder()
 
+	srv.handleSlackInteraction(res, req)
+
+	if res.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", res.Code, res.Body.String())
+	}
+}
+
+func TestHandleSlackInteractionUsesDashboardSigningSecret(t *testing.T) {
+	srv, _ := newTestServer(t)
+	const secret = "dashboard-signing-secret"
+	ciphertext, err := encryptSlackSigningSecret(srv.secret, secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = srv.store.UpdateSlackSystemIntegration(store.SlackSystemIntegrationUpdate{
+		SigningSecret: store.SlackWebhookUpdate{Set: true, Secret: store.SlackWebhookSecret{Ciphertext: ciphertext}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := signedSlackInteractionRequest(t, secret, `payload=%7B%22type%22%3A%22block_actions%22%7D`)
+	res := httptest.NewRecorder()
 	srv.handleSlackInteraction(res, req)
 
 	if res.Code != http.StatusOK {

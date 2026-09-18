@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -59,7 +60,7 @@ func TestSlackSystemIntegrationGetDefaults(t *testing.T) {
 	if v.Enabled {
 		t.Fatalf("expected system health notifications disabled by default: %+v", v)
 	}
-	if v.Webhook.Configured || v.Webhook.Hint != "" {
+	if v.Webhook.Configured || v.Webhook.Hint != "" || v.SigningSecret.Configured || v.SigningSecret.Hint != "" {
 		t.Fatalf("expected no webhook configured by default: %+v", v.Webhook)
 	}
 }
@@ -92,7 +93,8 @@ func TestSlackSystemIntegrationPutMaskKeepAndClear(t *testing.T) {
 	}
 
 	webhook := "https://hooks.slack.com/services/T000/B000/abcdefghijklmnop"
-	resp := put(`{"enabled":true,"webhook":"` + webhook + `"}`)
+	signingSecret := "slack-signing-secret-1234"
+	resp := put(`{"enabled":true,"webhook":"` + webhook + `","signing_secret":"` + signingSecret + `"}`)
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
 		t.Fatalf("initial save: got %d (%s)", resp.StatusCode, b)
@@ -104,6 +106,12 @@ func TestSlackSystemIntegrationPutMaskKeepAndClear(t *testing.T) {
 	if v.Webhook.Hint == webhook {
 		t.Fatal("the response must never contain the raw webhook")
 	}
+	if !v.SigningSecret.Configured || v.SigningSecret.Hint != "***1234" {
+		t.Fatalf("unexpected masked signing secret after save: %+v", v.SigningSecret)
+	}
+	if strings.Contains(v.SigningSecret.Hint, signingSecret) {
+		t.Fatal("the response must never contain the raw signing secret")
+	}
 
 	// A blank webhook field on an unrelated update must keep the secret.
 	resp = put(`{"enabled":true}`)
@@ -111,11 +119,17 @@ func TestSlackSystemIntegrationPutMaskKeepAndClear(t *testing.T) {
 	if !v.Webhook.Configured {
 		t.Fatal("blank field on update must keep the existing secret")
 	}
+	if !v.SigningSecret.Configured {
+		t.Fatal("blank signing-secret field on update must keep the existing secret")
+	}
 
 	// GET independently confirms it persisted, not just the PUT response.
 	v = decodeSlackSystemView(t, doReq(t, http.MethodGet, ts.URL+"/api/integrations/slack", admin, ""))
 	if !v.Webhook.Configured {
 		t.Fatal("secret did not persist across a fresh GET")
+	}
+	if !v.SigningSecret.Configured {
+		t.Fatal("signing secret did not persist across a fresh GET")
 	}
 
 	// Explicit clear removes it, which also means it can no longer stay enabled.
@@ -123,7 +137,7 @@ func TestSlackSystemIntegrationPutMaskKeepAndClear(t *testing.T) {
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("clearing the only webhook while still enabled: got %d, want 400", resp.StatusCode)
 	}
-	resp = put(`{"enabled":false,"clear_webhook":true}`)
+	resp = put(`{"enabled":false,"clear_webhook":true,"clear_signing_secret":true}`)
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(resp.Body)
 		t.Fatalf("clear: got %d (%s)", resp.StatusCode, b)
@@ -131,6 +145,9 @@ func TestSlackSystemIntegrationPutMaskKeepAndClear(t *testing.T) {
 	v = decodeSlackSystemView(t, resp)
 	if v.Webhook.Configured {
 		t.Fatal("expected the webhook to be cleared")
+	}
+	if v.SigningSecret.Configured {
+		t.Fatal("expected the signing secret to be cleared")
 	}
 }
 

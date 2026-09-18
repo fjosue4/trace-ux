@@ -498,6 +498,14 @@ var migrations = []string{
 	`
 	ALTER TABLE custom_events ADD COLUMN details TEXT NOT NULL DEFAULT '';
 	`,
+	// v23: store the Slack app signing secret alongside the instance-wide
+	// system-health integration. It is encrypted like webhook secrets and only
+	// its masked hint is returned to the dashboard.
+	`
+	ALTER TABLE slack_integration ADD COLUMN signing_ciphertext BLOB NOT NULL DEFAULT x'';
+	ALTER TABLE slack_integration ADD COLUMN signing_fingerprint TEXT NOT NULL DEFAULT '';
+	ALTER TABLE slack_integration ADD COLUMN signing_hint TEXT NOT NULL DEFAULT '';
+	`,
 }
 
 func (s *Store) migrate() error {

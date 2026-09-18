@@ -11,6 +11,7 @@ export type SlackWebhookView = {
 export type SlackSystemIntegration = {
   enabled: boolean;
   webhook: SlackWebhookView;
+  signing_secret: SlackWebhookView;
   updated_at: number;
 };
 
@@ -20,6 +21,8 @@ export type SlackSystemIntegrationUpdate = {
   // remove one.
   webhook?: string;
   clear_webhook?: boolean;
+  signing_secret?: string;
+  clear_signing_secret?: boolean;
 };
 
 // Per-site: tickets, browser logs, and flagged custom events all belong to

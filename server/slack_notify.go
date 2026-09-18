@@ -28,10 +28,11 @@ const (
 
 	// Slack's own payload ceiling is far larger than this; these caps exist so
 	// one oversized log message or ticket body cannot dominate a notification.
-	slackMaxFieldLen    = 300
-	slackMaxSubjectLen  = 200
-	slackMaxDetailsLen  = 1_000
-	slackCustomCooldown = 10 * time.Second
+	slackMaxFieldLen     = 300
+	slackMaxSubjectLen   = 200
+	slackMaxDetailsLen   = 1_000
+	slackMaxDetailsBlock = 2_800 // Slack section text is limited to 3,000 chars.
+	slackCustomCooldown  = 10 * time.Second
 )
 
 type slackMessage struct {
@@ -177,7 +178,7 @@ func formatCustomEventDetails(details json.RawMessage) string {
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
-		lines := []string{"*Details:*"}
+		lines := make([]string, 0, len(keys))
 		for _, key := range keys {
 			value := canonicalCustomDetails(fields[key])
 			if value == "" {
@@ -186,15 +187,20 @@ func formatCustomEventDetails(details json.RawMessage) string {
 			var stringValue string
 			var decoded string
 			if err := json.Unmarshal(fields[key], &decoded); err == nil {
-				stringValue = decoded
+				// Some error serializers send the two characters "\\n" instead
+				// of a real newline. Turn those into line breaks so stack traces
+				// are readable inside the code block.
+				stringValue = strings.ReplaceAll(decoded, "\\r\\n", "\n")
+				stringValue = strings.ReplaceAll(stringValue, "\\n", "\n")
+				stringValue = strings.ReplaceAll(stringValue, "\\r", "\r")
 			} else {
 				stringValue = value
 			}
-			lines = append(lines, fmt.Sprintf("• %s: %s", slackMrkdwn(key), slackMrkdwn(truncateForSlack(stringValue, slackMaxDetailsLen))))
+			lines = append(lines, fmt.Sprintf("%s: %s", slackMrkdwn(key), slackMrkdwn(truncateForSlack(stringValue, slackMaxDetailsLen))))
 		}
-		return strings.Join(lines, "\n")
+		return "*Details:*\n```\n" + truncateForSlack(strings.Join(lines, "\n"), slackMaxDetailsBlock) + "\n```"
 	}
-	return "*Details:* " + slackMrkdwn(truncateForSlack(canonical, slackMaxDetailsLen))
+	return "*Details:*\n```\n" + slackMrkdwn(truncateForSlack(canonical, slackMaxDetailsBlock)) + "\n```"
 }
 
 func customEventCooldownKey(siteID int64, event store.CustomEvent) string {
@@ -264,7 +270,7 @@ func buildCustomEventSlackMessage(siteName string, events []store.CustomEvent, o
 	lines := make([]string, 0, len(shown))
 	sessionID := ""
 	for _, e := range shown {
-		line := "• *" + slackMrkdwn(truncateForSlack(e.Name, slackMaxFieldLen)) + "*"
+		line := "*" + slackMrkdwn(truncateForSlack(e.Name, slackMaxFieldLen)) + "*"
 		if e.TrackID != "" {
 			line += " — " + slackMrkdwn(truncateForSlack(e.TrackID, 150))
 		}

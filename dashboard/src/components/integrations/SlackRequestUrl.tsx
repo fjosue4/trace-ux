@@ -23,7 +23,7 @@ export function SlackRequestUrl() {
   return (
     <Field
       label="Slack Request URL"
-      hint="Paste this into Slack → Interactivity & Shortcuts. Use a public HTTPS origin when Slack cannot reach this browser address."
+      hint="Paste this into Slack → Interactivity & Shortcuts. The signing secret is configured in System health. Use a public HTTPS origin when Slack cannot reach this browser address."
     >
       <div className="slack-request-url">
         <code className="slack-request-url__value">{requestUrl}</code>
