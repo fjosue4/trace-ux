@@ -136,6 +136,8 @@ export type WidgetHost = {
   sessionId: () => string;
   /** The current tracker identity; a non-empty user id skips the email field. */
   identity: () => { userId: string };
+  /** Record a widget interaction as seekable activity in the current replay. */
+  track?: (name: string, trackId?: string, details?: Record<string, unknown>) => void;
   /** Called when a newly published or updated announcement reaches the widget. */
   onAnnouncement?: (announcement: Announcement) => void;
 };
@@ -247,6 +249,13 @@ function createNotificationSound(): () => void {
   };
 }
 
+const WIDGET_ACTION_ATTR = 'data-trace-ux-widget-action';
+
+function markWidgetAction<T extends HTMLElement>(node: T, action: string): T {
+  node.setAttribute(WIDGET_ACTION_ATTR, action);
+  return node;
+}
+
 // ---- widget ----------------------------------------------------------------
 
 export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
@@ -293,6 +302,27 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   style.textContent = widgetCSS();
   shadow.appendChild(style);
   shadow.appendChild(root);
+
+  const trackWidgetClick = (action: string) => {
+    if (destroyed || !action || !host.track) return;
+    try {
+      host.track('widget_click', action);
+    } catch {
+      // Widget analytics must never interfere with the widget interaction.
+    }
+  };
+
+  // Widget controls live inside a shadow root, so the page-level tracked-click
+  // listener cannot see their internal targets. A delegated listener keeps
+  // marked widget controls on the same custom-event path as trace-ux-track-id
+  // clicks and makes them appear in replay Actions.
+  root.addEventListener('click', (event) => {
+    const target = (event.composedPath() as EventTarget[]).find(
+      (entry): entry is HTMLElement => entry instanceof HTMLElement && entry.hasAttribute(WIDGET_ACTION_ATTR),
+    );
+    const action = target?.getAttribute(WIDGET_ACTION_ATTR);
+    if (action) trackWidgetClick(action);
+  });
 
   root.style.setProperty('--w-accent', accent);
   root.style.setProperty('--w-button-bg', ap.button_bg || accent);
@@ -464,7 +494,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 
   const head = el('div', 'panel__head');
   const title = el('h2', 'panel__title', cfg.title || 'Help & updates');
-  const closeBtn = el('button', 'icon-btn');
+  const closeBtn = markWidgetAction(el('button', 'icon-btn'), 'panel:close');
   closeBtn.type = 'button';
   closeBtn.setAttribute('aria-label', 'Close');
   closeBtn.appendChild(svg(ICONS.close));
@@ -487,6 +517,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     if (item.id === 'updates') tab.appendChild(updatesCount);
     if (item.id === 'tickets') tab.appendChild(ticketsCount);
     tabButtons.set(item.id, tab);
+    markWidgetAction(tab, `tab:${item.id}`);
     tab.addEventListener('click', () => {
       const currentIndex = sections.findIndex((candidate) => candidate.id === section);
       const nextIndex = sections.findIndex((candidate) => candidate.id === item.id);
@@ -618,7 +649,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     }
     const items: HTMLElement[] = [];
     announcements.forEach((a) => {
-      const item = el('button', 'item');
+      const item = markWidgetAction(el('button', 'item'), `announcement:${a.id}:open`);
       item.type = 'button';
 
       const top = el('div', 'item__top');
@@ -651,7 +682,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     const view = el('div', 'view');
     const detail = el('div', 'detail');
 
-    const back = el('button', 'back');
+    const back = markWidgetAction(el('button', 'back'), 'updates:back');
     back.type = 'button';
     back.append(svg(ICONS.back), document.createTextNode('All updates'));
     back.addEventListener('click', () => showSection('updates', -1));
@@ -664,7 +695,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 
     const href = a.link_url ? safeHref(a.link_url) : null;
     if (href) {
-      const link = el('a', 'detail__link', 'Learn more');
+      const link = markWidgetAction(el('a', 'detail__link', 'Learn more'), `announcement:${a.id}:link`);
       link.href = href;
       link.target = '_blank';
       link.rel = 'noopener noreferrer';
@@ -674,7 +705,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 
     // Reactions + comments stay the per-announcement engagement surface.
     const actions = el('div', 'detail__actions');
-    const like = el('button', 'like');
+    const like = markWidgetAction(el('button', 'like'), `announcement:${a.id}:like`);
     like.type = 'button';
     const heart = svg(ICONS.heart);
     heart.classList.add('like__heart');
@@ -712,7 +743,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     input.maxLength = 1000;
     input.placeholder = 'Leave a comment';
     input.setAttribute('aria-label', 'Comment');
-    const send = el('button', 'send', 'Send');
+    const send = markWidgetAction(el('button', 'send', 'Send'), `announcement:${a.id}:comment`);
     send.type = 'submit';
     composer.append(input, send);
     composer.addEventListener('submit', async (e) => {
@@ -831,7 +862,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       const empty = el('div', 'empty ticket-empty');
       const mark = el('div', 'empty__mark');
       mark.appendChild(svg(ICONS.lifebuoy));
-      const start = el('button', 'submit', 'Start a ticket');
+      const start = markWidgetAction(el('button', 'submit', 'Start a ticket'), 'ticket:new');
       start.type = 'button';
       start.addEventListener('click', () => {
         ticketError = '';
@@ -850,7 +881,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 
     const items: HTMLElement[] = [];
     tickets.forEach((ticket) => {
-      const item = el('button', 'item ticket-item');
+      const item = markWidgetAction(el('button', 'item ticket-item'), `ticket:${ticket.id}:open`);
       item.type = 'button';
       const top = el('div', 'item__top');
       top.append(
@@ -875,7 +906,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     });
 
     const footer = el('div', 'ticket-footer');
-    const newTicket = el('button', 'submit', 'New ticket');
+    const newTicket = markWidgetAction(el('button', 'submit', 'New ticket'), 'ticket:new');
     newTicket.type = 'button';
     newTicket.addEventListener('click', () => {
       ticketError = '';
@@ -902,7 +933,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   function buildTicketThread(): HTMLElement {
     const view = el('div', 'view ticket-view ticket-view--thread');
     const detail = el('div', 'ticket-thread');
-    const back = el('button', 'back');
+    const back = markWidgetAction(el('button', 'back'), 'tickets:back');
     back.type = 'button';
     back.append(svg(ICONS.back), document.createTextNode('All tickets'));
     back.addEventListener('click', () => {
@@ -956,7 +987,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       const actions = el('div', 'ticket-composer__actions');
       const error = el('div', 'ticket-error');
       error.hidden = true;
-      const send = el('button', 'submit', 'Send');
+      const send = markWidgetAction(el('button', 'submit', 'Send'), `ticket:${ticket.id}:reply`);
       send.type = 'submit';
       actions.append(error, send);
       composer.append(input, actions);
@@ -1004,7 +1035,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   function buildNewTicket(): HTMLElement {
     const view = el('div', 'view ticket-view');
     const form = el('form', 'ticket-new');
-    const back = el('button', 'back');
+    const back = markWidgetAction(el('button', 'back'), 'tickets:back');
     back.type = 'button';
     back.append(svg(ICONS.back), document.createTextNode('All tickets'));
     back.addEventListener('click', () => {
@@ -1055,7 +1086,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 
     const error = el('div', 'ticket-error');
     error.hidden = true;
-    const submit = el('button', 'submit', 'Send ticket');
+    const submit = markWidgetAction(el('button', 'submit', 'Send ticket'), 'ticket:new:submit');
     submit.type = 'submit';
     form.append(error, submit);
     form.addEventListener('submit', async (event) => {
@@ -1274,6 +1305,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
           b.type = 'button';
           b.textContent = max === 10 ? String(v) : '★';
           b.setAttribute('aria-label', `${v}`);
+          markWidgetAction(b, `feedback:${q.id}:${v}`);
           b.addEventListener('click', () => {
             answers.set(q.id, String(v));
             wrap.classList.remove('invalid');
@@ -1291,7 +1323,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       } else if (q.type === 'choice') {
         const row = el('div', 'choices');
         (q.options || []).forEach((opt) => {
-          const b = el('button', undefined, opt);
+          const b = markWidgetAction(el('button', undefined, opt), `feedback:${q.id}:${opt}`);
           b.type = 'button';
           b.addEventListener('click', () => {
             answers.set(q.id, opt);
@@ -1318,7 +1350,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       form.appendChild(wrap);
     });
 
-    const submit = el('button', 'submit', 'Send feedback');
+    const submit = markWidgetAction(el('button', 'submit', 'Send feedback'), 'feedback:submit');
     submit.type = 'button';
     submit.addEventListener('click', () => {
       const missing = questions.filter((q) => !q.optional && !answers.has(q.id));
@@ -1422,7 +1454,10 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     });
   }
 
-  launcher.addEventListener('click', () => (panelOpen ? closePanel() : openPanel()));
+  launcher.addEventListener('click', () => {
+    trackWidgetClick(panelOpen ? 'launcher:close' : 'launcher:open');
+    panelOpen ? closePanel() : openPanel();
+  });
   closeBtn.addEventListener('click', () => closePanel());
 
   const onDocClick = (e: MouseEvent) => {
@@ -1452,6 +1487,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     excerptText: string,
     actionText: string,
     onOpen: () => void,
+    openAction: string,
   ) {
     if (panelOpen || destroyed) return;
     const wrap = el('div', 'detail');
@@ -1459,7 +1495,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 
     const header = el('div', 'item__top');
     header.appendChild(el('span', 'eyebrow', labelText));
-    const dismiss = el('button', 'icon-btn');
+    const dismiss = markWidgetAction(el('button', 'icon-btn'), 'toast:dismiss');
     dismiss.type = 'button';
     dismiss.setAttribute('aria-label', 'Dismiss');
     dismiss.style.marginInlineStart = 'auto';
@@ -1472,7 +1508,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     header.style.alignItems = 'center';
     header.appendChild(dismiss);
 
-    const open = el('button', 'item');
+    const open = markWidgetAction(el('button', 'item'), openAction);
     open.type = 'button';
     open.style.padding = '0';
     open.style.borderBottom = '0';
@@ -1496,7 +1532,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       hideToast();
       openPanel('updates');
       openDetail(a);
-    });
+    }, `announcement:${a.id}:open`);
   }
 
   function notifyAnnouncement(a: Announcement) {
@@ -1521,6 +1557,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
         openPanel('tickets');
         openTicketThread(ticket.id);
       },
+      `ticket:${ticket.id}:open`,
     );
   }
 

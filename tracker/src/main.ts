@@ -952,6 +952,13 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
           newId,
           sessionId: () => sessionId,
           identity: () => ({ userId: identity.user_id }),
+          track: (name, trackId, details) =>
+            sendCustom(
+              String(name || 'event').slice(0, 100),
+              String(trackId || '').slice(0, 100),
+              false,
+              details,
+            ),
           onAnnouncement: options.onAnnouncement,
         });
         // An action-triggered survey opens immediately, as it did before the merge.

@@ -17,7 +17,7 @@ export function ActionRow({ action, isActive, firstTs, setRowRef, onSeek, onOpen
   const label = truncate(actionLabel(action), 92);
   const title =
     action.kind === 'custom'
-      ? `${action.name}${action.trackId ? ` · ${action.trackId}` : ''}`
+      ? actionLabel(action)
       : action.kind === 'page'
         ? `${action.title || 'Page'} — ${action.url}`
         : action.kind === 'ticket'

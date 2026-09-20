@@ -108,6 +108,12 @@ session recording.
 you can jump straight to the moment in the session. `setUserStatus` does not
 create a server-side user record — it is an activity, not a table.
 
+When the optional widget is enabled, meaningful widget clicks are recorded in
+the same Actions feed automatically: opening or closing the launcher, changing
+sections, opening an announcement or ticket, using announcement actions, and
+submitting feedback or ticket actions. They use the custom-event name
+`widget_click` and do not send Slack notifications.
+
 Pass `{ notify: true }` as the third argument to `track` when an event should
 also notify Slack. Put structured context in the same options object under
 `details`; it is stored with the custom event and included in the Slack

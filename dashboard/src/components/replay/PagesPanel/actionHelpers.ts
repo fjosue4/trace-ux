@@ -19,7 +19,32 @@ export function pagePath(url: string): string {
   }
 }
 
+function widgetClickLabel(trackId: string): string {
+  const [kind, subject, verb] = trackId.split(':');
+  if (kind === 'launcher') return subject === 'close' ? 'Widget closed' : 'Widget opened';
+  if (kind === 'panel') return 'Widget panel closed';
+  if (kind === 'tab') return `Opened widget ${subject || 'section'}`;
+  if (kind === 'updates') return 'Returned to widget updates';
+  if (kind === 'tickets') return 'Returned to widget tickets';
+  if (kind === 'announcement') {
+    if (verb === 'link') return `Opened announcement #${subject}`;
+    if (verb === 'like') return `Liked announcement #${subject}`;
+    if (verb === 'comment') return `Commented on announcement #${subject}`;
+    return `Opened announcement #${subject}`;
+  }
+  if (kind === 'ticket') {
+    if (subject === 'new') return verb === 'submit' ? 'Created a ticket' : 'Started a new ticket';
+    if (verb === 'reply') return `Replied to ticket #${subject}`;
+    return `Opened ticket #${subject}`;
+  }
+  if (kind === 'feedback') {
+    return subject === 'submit' ? 'Submitted feedback' : `Selected feedback ${subject}`;
+  }
+  return trackId ? `Widget · ${trackId}` : 'Widget click';
+}
+
 function customLabel(action: Extract<Action, { kind: 'custom' }>): string {
+  if (action.name === 'widget_click') return widgetClickLabel(action.trackId);
   const target = action.trackId || 'element';
   return action.name === 'click'
     ? `Clicked ${target}`
