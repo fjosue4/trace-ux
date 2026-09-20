@@ -7,6 +7,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Switch from '../../components/ui/Switch';
+import DebouncedTextInput from '../../components/ui/DebouncedTextInput';
 import { Icon } from '../../components/ui/Icon';
 import { Input, Select } from '../../components/ui/fields';
 import { fmtClock } from '../../lib/format';
@@ -31,6 +32,8 @@ export default function Logs() {
     setSiteSel,
     severitySel,
     setSeveritySel,
+    search,
+    setSearch,
     timeRange,
     changeTimeRange,
     customFrom,
@@ -57,9 +60,7 @@ export default function Logs() {
         }
       />
 
-      <div className={`logs-overview${summary.length > 0 ? '' : ' logs-overview--solo'}`}>
-        {summary.length > 0 && <LogsSummary summary={summary} timeRange={timeRange} />}
-
+      <div className="logs-overview">
         <Card className="logs-controls">
           <div className="logs-controls__head">
             <div>
@@ -71,33 +72,48 @@ export default function Logs() {
               {rangeLabels[timeRange]}
             </span>
           </div>
-          <div className="logs-filters">
-            <Select
-              className="logs-filter logs-filter--site"
-              ariaLabel="Site"
-              value={String(siteSel)}
-              onChange={(value) => setSiteSel(value === 'all' ? 'all' : Number(value))}
-              options={[
-                { value: 'all', label: 'All sites' },
-                ...(sites ?? []).map((site) => ({ value: String(site.id), label: site.name })),
-              ]}
-            />
-            <Select
-              className="logs-filter"
-              ariaLabel="Severity"
-              multiple
-              value={severitySel}
-              onChange={(value) => setSeveritySel(value as SeveritySelection)}
-              emptyLabel="All severities"
-              options={severityOptions}
-            />
-            <Select
-              className="logs-filter logs-filter--time"
-              ariaLabel="Time range"
-              value={timeRange}
-              onChange={changeTimeRange}
-              options={timeRangeOptions}
-            />
+          <div className="logs-query-row">
+            <label className="logs-search">
+              <span className="visually-hidden">Search logs</span>
+              <Icon name="search" size={16} />
+              <DebouncedTextInput
+                className="field-control logs-search__input"
+                type="search"
+                value={search}
+                onDebouncedChange={setSearch}
+                delayMs={320}
+                placeholder="Search messages, pages, sites, or session IDs"
+                autoComplete="off"
+              />
+            </label>
+            <div className="logs-filters">
+              <Select
+                className="logs-filter logs-filter--site"
+                ariaLabel="Site"
+                value={String(siteSel)}
+                onChange={(value) => setSiteSel(value === 'all' ? 'all' : Number(value))}
+                options={[
+                  { value: 'all', label: 'All sites' },
+                  ...(sites ?? []).map((site) => ({ value: String(site.id), label: site.name })),
+                ]}
+              />
+              <Select
+                className="logs-filter"
+                ariaLabel="Severity"
+                multiple
+                value={severitySel}
+                onChange={(value) => setSeveritySel(value as SeveritySelection)}
+                emptyLabel="All severities"
+                options={severityOptions}
+              />
+              <Select
+                className="logs-filter logs-filter--time"
+                ariaLabel="Time range"
+                value={timeRange}
+                onChange={changeTimeRange}
+                options={timeRangeOptions}
+              />
+            </div>
           </div>
           {timeRange === 'custom' && (
             <div className="logs-custom-range">
@@ -116,6 +132,7 @@ export default function Logs() {
               {logs ? `${logs.length.toLocaleString()} shown` : 'Loading'} · up to {MAX_VISIBLE_LOGS.toLocaleString()} rows
               {lastUpdated > 0 && ` · updated ${fmtClock(Math.floor(lastUpdated / 1000))}`}
             </span>
+            {summary.length > 0 && <LogsSummary summary={summary} />}
             <Button variant="ghost" size="sm" onClick={() => setRefreshNonce((value) => value + 1)}>
               Refresh
             </Button>
@@ -141,9 +158,11 @@ export default function Logs() {
         <Loading />
       ) : logs.length === 0 ? (
         <EmptyState
-          title={live && timeRange === '15m' ? 'Waiting for logs' : 'No logs match'}
+          title={search ? 'No logs found' : live && timeRange === '15m' ? 'Waiting for logs' : 'No logs match'}
           description={
-            live && timeRange === '15m'
+            search
+              ? `No logs match “${search}”. Try another term or broaden the filters.`
+              : live && timeRange === '15m'
               ? 'New logs from the last 15 minutes will appear here automatically.'
               : 'Try a wider time range, another severity combination, or enable Logs in a site configuration.'
           }

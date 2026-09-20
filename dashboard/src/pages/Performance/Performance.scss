@@ -58,7 +58,7 @@
   min-width: 0;
 
   &__label { color: $muted; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
-  &__value { font-size: clamp(1.35rem, 2vw, 1.75rem); letter-spacing: -0.035em; font-variant-numeric: tabular-nums; }
+  &__value { font-size: clamp(1.35rem, 2vw, 1.75rem); letter-spacing: 0; font-variant-numeric: tabular-nums; }
 
   &--warm &__value { color: $accent-strong; }
   &--hot &__value { color: $danger; }

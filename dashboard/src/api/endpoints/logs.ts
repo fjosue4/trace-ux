@@ -10,6 +10,7 @@ export const logsEndpoints = {
     } else if (query.severity) {
       q.set('severity', query.severity);
     }
+    if (query.search) q.set('search', query.search);
     if (query.sessionId) q.set('session_id', query.sessionId);
     if (query.beforeId) q.set('before_id', String(query.beforeId));
     if (query.fromMs) q.set('from_ms', String(query.fromMs));

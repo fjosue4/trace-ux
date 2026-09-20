@@ -15,7 +15,11 @@ func parseLogFilter(r *http.Request) (store.LogFilter, error) {
 	q := r.URL.Query()
 	f := store.LogFilter{
 		SessionID: strings.TrimSpace(q.Get("session_id")),
+		Search:    strings.TrimSpace(q.Get("search")),
 		Limit:     store.MaxLogListLimit,
+	}
+	if len(f.Search) > 256 {
+		return f, fmt.Errorf("search must be 256 characters or fewer")
 	}
 	var severities []string
 	seenSeverities := map[string]bool{}

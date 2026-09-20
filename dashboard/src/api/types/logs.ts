@@ -36,6 +36,7 @@ export type LogStats = {
 export type LogQuery = {
   siteId?: number | null;
   severity?: LogSeverity | LogSeverity[] | '';
+  search?: string;
   sessionId?: string;
   beforeId?: number;
   fromMs?: number;

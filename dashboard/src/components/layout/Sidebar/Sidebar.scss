@@ -1,38 +1,37 @@
-// Floating rounded panel, like the app-window dashboards.
+// Flat application rail: structure comes from a divider, not a floating card.
 @use 'abstracts' as *;
 
 .sidebar {
   width: 236px;
   flex: none;
   position: sticky;
-  top: 12px;
-  height: calc(100vh - 24px);
-  margin: 12px;
+  top: 0;
+  height: 100vh;
+  margin: 0;
   display: flex;
   flex-direction: column;
-  padding: 1.1rem 0.85rem;
-  background: color-mix(in srgb, #{$bg} 92%, transparent);
-  backdrop-filter: blur(18px);
-  border: 1px solid $line;
-  border-radius: $radius-lg;
-  box-shadow: $shadow-md;
+  padding: 1.25rem 0.75rem 1rem;
+  background: $bg;
+  border-right: 1px solid $line;
 
   &__brand {
     display: flex;
     align-items: center;
     color: $ink;
-    padding: 0.2rem 0.6rem var(--logo-clear-space, 0.85rem);
+    padding: 0.15rem 0.65rem 1.1rem;
   }
   &__logo { width: 112px; height: auto; }
 
-  &__nav { display: flex; flex-direction: column; gap: 0.25rem; }
+  &__nav { display: flex; flex-direction: column; gap: 0.12rem; }
 
   &__link {
     display: flex;
     align-items: center;
     gap: 0.6rem;
-    padding: 0.65rem 0.85rem;
-    border-radius: $radius;
+    position: relative;
+    min-height: 38px;
+    padding: 0.55rem 0.75rem;
+    border-radius: $radius-sm;
     color: $muted;
     font-weight: 600;
     font-size: 0.92rem;
@@ -40,8 +39,21 @@
       color $duration-fast $ease-out;
 
     &:hover { background: $surface-2; color: $ink; }
-    /* Inverted pill: light chip on dark, dark chip on light — like the reference. */
-    &.is-active { background: $accent; color: $on-accent; box-shadow: $shadow-accent; }
+    &.is-active {
+      background: $surface-2;
+      color: $ink;
+
+      &::before {
+        content: '';
+        position: absolute;
+        left: -0.75rem;
+        top: 8px;
+        bottom: 8px;
+        width: 2px;
+        border-radius: 0 2px 2px 0;
+        background: $accent;
+      }
+    }
   }
 
   &__footer {
@@ -64,7 +76,7 @@
     border: none;
     padding: 0.45rem 0.7rem;
     cursor: pointer;
-    border-radius: $radius-pill;
+    border-radius: $radius-sm;
     transition: background-color $duration-fast $ease-out, color $duration-fast $ease-out;
 
     &:hover { background: $surface-2; color: $ink; }
@@ -94,6 +106,8 @@
     gap: 0.5rem;
     padding: 0.7rem;
     margin: 8px 8px 0;
+    border: 1px solid $line;
+    border-radius: $radius;
 
     &__brand { padding: 0; }
     &__logo { width: 104px; }
@@ -115,7 +129,7 @@
   .sidebar {
     align-items: center;
     flex-wrap: wrap;
-    border-radius: 16px;
+    border-radius: $radius;
 
     &__brand { padding-left: 0.35rem; }
     &__nav {

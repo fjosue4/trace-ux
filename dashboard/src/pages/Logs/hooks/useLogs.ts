@@ -19,6 +19,7 @@ export function useLogs() {
     params.get('site') ? Number(params.get('site')) : 'all',
   );
   const [severitySel, setSeveritySel] = useState<SeveritySelection>([]);
+  const [search, setSearch] = useState('');
   const [timeRange, setTimeRange] = useState<TimeRange>('15m');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
@@ -53,6 +54,7 @@ export function useLogs() {
           api.listLogs({
             siteId,
             severity,
+            search: search.trim(),
             fromMs: window.fromMs,
             toMs: window.toMs,
             limit: MAX_VISIBLE_LOGS,
@@ -82,7 +84,7 @@ export function useLogs() {
       cancelled = true;
       if (timer) window.clearInterval(timer);
     };
-  }, [siteSel, severitySel, timeRange, customFrom, customTo, live, refreshNonce]);
+  }, [siteSel, severitySel, search, timeRange, customFrom, customTo, live, refreshNonce]);
 
   const timeWindow = resolveTimeWindow(timeRange, customFrom, customTo);
   const summary = stats
@@ -114,6 +116,8 @@ export function useLogs() {
     setSiteSel,
     severitySel,
     setSeveritySel,
+    search,
+    setSearch,
     timeRange,
     changeTimeRange,
     customFrom,

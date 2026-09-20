@@ -170,6 +170,7 @@ type LogFilter struct {
 	SiteID     int64
 	Severity   string
 	Severities []string
+	Search     string
 	SessionID  string
 	FromMs     int64
 	ToMs       int64
@@ -249,6 +250,13 @@ func (s *Store) ListLogs(f LogFilter) ([]Log, error) {
 		for _, severity := range severities {
 			args = append(args, severity)
 		}
+	}
+	if f.Search != "" {
+		query += ` AND (instr(lower(l.message), lower(?)) > 0
+			OR instr(lower(l.url), lower(?)) > 0
+			OR instr(lower(si.name), lower(?)) > 0
+			OR instr(lower(l.session_id), lower(?)) > 0)`
+		args = append(args, f.Search, f.Search, f.Search, f.Search)
 	}
 	if f.SessionID != "" {
 		query += ` AND l.session_id = ?`

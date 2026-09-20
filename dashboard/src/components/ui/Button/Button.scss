@@ -10,7 +10,7 @@
   gap: 0.45rem;
   font: inherit;
   font-weight: 600;
-  border-radius: $radius-pill;
+  border-radius: $radius-sm;
   border: 1px solid transparent;
   cursor: pointer;
   white-space: nowrap;
@@ -27,15 +27,13 @@
   &--primary {
     background: $accent;
     color: $on-accent;
-    box-shadow: $shadow-sm;
-    &:hover:not(:disabled) { background: $accent-strong; box-shadow: $shadow-accent; }
+    &:hover:not(:disabled) { background: $accent-strong; }
   }
 
   &--secondary {
     background: $surface;
     border-color: $line;
     color: $ink;
-    box-shadow: $shadow-sm;
     &:hover:not(:disabled) { background: $surface-2; border-color: $line-strong; }
   }
 
@@ -48,7 +46,6 @@
   &--danger {
     background: $danger;
     color: #fff;
-    box-shadow: $shadow-sm;
     &:hover:not(:disabled) { filter: brightness(0.94); }
   }
 

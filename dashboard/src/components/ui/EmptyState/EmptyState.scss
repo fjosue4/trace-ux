@@ -3,13 +3,22 @@
 @use 'abstracts' as *;
 
 .empty {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   padding: 3.2rem 1.5rem;
+  background: $surface;
+  border: 1px solid $line;
+  border-radius: $radius-lg;
 
   &__icon {
     width: 52px;
     height: 52px;
-    border-radius: 16px;
+    border-radius: $radius;
     background: $surface-2;
     display: grid;
     place-items: center;
@@ -19,4 +28,14 @@
 
   &__title { margin: 0 0 0.3rem; }
   &__desc { margin: 0 auto 1.1rem; color: $muted; max-width: 48ch; font-size: 0.9rem; }
+}
+
+/* Existing surface containers provide the white/graphite panel themselves.
+   Keep their empty content seamless instead of drawing a second card. */
+.card > .empty,
+.modal__body > .empty,
+.player-stage > .empty {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
 }

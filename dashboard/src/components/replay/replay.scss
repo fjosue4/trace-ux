@@ -213,7 +213,7 @@
   transition: transform $duration-fast $ease-out, box-shadow $duration-fast $ease-out;
 }
 .player-cover:hover .player-cover__btn { transform: scale(1.06); box-shadow: 0 14px 30px -8px $accent-glow, 0 0 0 12px $accent-soft; }
-.player-cover__label { font-size: 0.85rem; font-weight: 700; letter-spacing: -0.01em; }
+.player-cover__label { font-size: 0.85rem; font-weight: 700; letter-spacing: 0; }
 
 /* Custom chrome keeps the skip-inactive action interactive while rrweb is
    temporarily fast-forwarding through a gap. */

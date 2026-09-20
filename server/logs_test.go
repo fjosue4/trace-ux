@@ -90,6 +90,28 @@ func TestLogsAreFilteredAndLinkedToSessions(t *testing.T) {
 		t.Fatalf("filtered API response = %+v, status %d", filtered, resp.StatusCode)
 	}
 
+	resp = doReq(t, http.MethodGet, fmt.Sprintf("%s/api/logs?search=CHECKOUT", ts.URL), admin, "")
+	var searched []store.Log
+	if err := json.NewDecoder(resp.Body).Decode(&searched); err != nil {
+		resp.Body.Close()
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || len(searched) != 2 {
+		t.Fatalf("searched API response = %+v, status %d, want both checkout logs", searched, resp.StatusCode)
+	}
+
+	resp = doReq(t, http.MethodGet, fmt.Sprintf("%s/api/logs?search=%s", ts.URL, site.Name), admin, "")
+	searched = nil
+	if err := json.NewDecoder(resp.Body).Decode(&searched); err != nil {
+		resp.Body.Close()
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || len(searched) != 2 {
+		t.Fatalf("site-name search response = %+v, status %d, want both logs", searched, resp.StatusCode)
+	}
+
 	if err := srv.store.DeleteSession("log-session"); err != nil {
 		t.Fatal(err)
 	}

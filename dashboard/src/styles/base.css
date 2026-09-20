@@ -22,7 +22,12 @@ body {
 }
 
 h1, h2, h3, h4 { margin: 0; color: var(--ink); }
-h1 { font-size: clamp(1.55rem, 2.2vw, 2rem); line-height: 1.12; letter-spacing: -0.045em; }
+h1 {
+  font-size: clamp(1.55rem, 2.2vw, 2rem);
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: 0;
+}
 h2 { font-size: 1.08rem; }
 h3 { font-size: 1rem; }
 h4 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin: 1.2rem 0 0.5rem; }
@@ -73,7 +78,18 @@ pre {
 .icon-btn.is-success { color: var(--success); }
 
 /* ---- layout primitives ---- */
-.page { width: 100%; margin: 0; padding: 2rem clamp(1rem, 2.5vw, 2.5rem) 4rem; }
+.page {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 2rem clamp(1rem, 2.5vw, 2.5rem) 4rem;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Direct page-level empty states consume the remaining viewport after headers,
+   filters and notices. Nested empty states center within their own panel. */
+.page > .empty { flex: 1; min-height: 280px; }
 
 .center { min-height: 100vh; display: grid; place-items: center; padding: 1.5rem; }
 

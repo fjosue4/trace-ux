@@ -19,7 +19,7 @@
     color: $muted;
   }
   &__row { display: flex; align-items: baseline; gap: 0.4rem; }
-  &__num { font-size: 1.7rem; letter-spacing: -0.02em; }
+  &__num { font-size: 1.7rem; letter-spacing: 0; }
   &__avg { display: inline-flex; }
 }
 

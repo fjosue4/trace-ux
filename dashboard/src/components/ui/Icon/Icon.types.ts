@@ -26,6 +26,7 @@ export type IconName =
   | 'megaphone'
   | 'gear'
   | 'filter'
+  | 'search'
   | 'lifebuoy'
   | 'integrations'
   | 'slack';
