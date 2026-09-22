@@ -32,6 +32,7 @@ export function ServicesTab({ siteId, isAdmin, siteSeverities, legacyPerformance
   const [error, setError] = useState('');
   const [newKey, setNewKey] = useState<{ service: string; value: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedExample, setCopiedExample] = useState<'logs' | 'performance' | null>(null);
   const [legacyKeys, setLegacyKeys] = useState<PerformanceKey[]>(legacyPerformanceKeys);
 
   useEffect(() => {
@@ -75,6 +76,16 @@ export function ServicesTab({ siteId, isAdmin, siteSeverities, legacyPerformance
     await navigator.clipboard.writeText(newKey.value);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
+  }
+
+  async function copyExample(kind: 'logs' | 'performance', example: string) {
+    try {
+      await navigator.clipboard.writeText(example);
+      setCopiedExample(kind);
+      window.setTimeout(() => setCopiedExample((current) => (current === kind ? null : current)), 1600);
+    } catch {
+      setError('Could not copy the example.');
+    }
   }
 
   async function update(service: Service, update: Pick<Service, 'name' | 'inherit_severities' | 'severities'>) {
@@ -158,13 +169,23 @@ export function ServicesTab({ siteId, isAdmin, siteSeverities, legacyPerformance
         </div>
         <div className="services-examples">
           <div>
-            <strong>Send logs</strong>
+            <div className="services-examples__head">
+              <strong>Send logs</strong>
+              <Button variant="ghost" size="sm" onClick={() => copyExample('logs', logsExample)}>
+                <Icon name={copiedExample === 'logs' ? 'check' : 'copy'} size={13} /> {copiedExample === 'logs' ? 'Copied' : 'Copy'}
+              </Button>
+            </div>
             <pre>{logsExample}</pre>
           </div>
           <div>
             <div className="services-examples__head">
               <strong>Send performance</strong>
-              <Link to="/performance">Open Performance</Link>
+              <div className="services-examples__actions">
+                <Link to="/performance">Open Performance</Link>
+                <Button variant="ghost" size="sm" onClick={() => copyExample('performance', performanceExample)}>
+                  <Icon name={copiedExample === 'performance' ? 'check' : 'copy'} size={13} /> {copiedExample === 'performance' ? 'Copied' : 'Copy'}
+                </Button>
+              </div>
             </div>
             <pre>{performanceExample}</pre>
           </div>
@@ -328,7 +349,7 @@ function ServiceCard({
       {isAdmin && (
         <div className="service-card__actions">
           <div>
-            <Button variant="ghost" size="sm" disabled={!dirty || saving || !name.trim()} onClick={save}>
+            <Button variant="primary" size="sm" disabled={!dirty || saving || !name.trim()} onClick={save}>
               {saving ? 'Saving…' : 'Save'}
             </Button>
             <Button variant="secondary" size="sm" onClick={() => onRotate(service)}>

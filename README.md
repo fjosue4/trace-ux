@@ -514,7 +514,7 @@ curl -X POST "https://your-server/api/logs/ingest" \
   }]}'
 ```
 
-`Authorization: Bearer YOUR_SERVICE_KEY` is also accepted. The older `X-TraceUX-Log-Key` header remains available for compatibility. `extra` may be any valid JSON value up to 64 KiB and is displayed as expandable formatted JSON. A request may contain up to 1,000 log entries.
+`Authorization: Bearer YOUR_SERVICE_KEY` is also accepted. The older `X-TraceUX-Log-Key` header remains available for compatibility. Messages may be up to 4 MiB and `extra` may be any valid JSON value up to 4 MiB; both are stored complete and `extra` is displayed as expandable formatted JSON. A request may contain up to 1,000 log entries within the 12 MB request limit.
 
 Log storage has two independent per-site caps: 15 days by default and 1,000,000 rows by default. The oldest rows are removed during the regular retention sweep; either cap can be changed or disabled from the same Logs configuration. Browser logs are also removed automatically when their related recording is removed, while service logs remain independent of recordings. Browser logs are not yet shown inside the replay timeline.
 

@@ -19,8 +19,10 @@ const (
 	maxLogRows              = 10_000_000
 	MaxLogListLimit         = 1000
 	MaxServiceLogBatch      = 1000
-	MaxLogMessageBytes      = 8 << 10
-	MaxLogExtraBytes        = 64 << 10
+	// Service logs are stored complete rather than truncated. Both caps stay
+	// well inside IngestBodyLimit (12 MB) so one full entry always fits a request.
+	MaxLogMessageBytes      = 4 << 20
+	MaxLogExtraBytes        = 4 << 20
 	MaxLogEnvironmentLength = 128
 )
 

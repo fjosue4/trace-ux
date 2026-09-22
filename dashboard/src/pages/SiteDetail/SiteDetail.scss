@@ -184,7 +184,8 @@ a.hub-row:hover { background: $surface-2; text-decoration: none; }
 .services-create .btn { flex: none; }
 .services-examples { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.8rem; margin-top: 1rem; }
 .services-examples > div { min-width: 0; }
-.services-examples__head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.8rem; }
+.services-examples__head { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; }
+.services-examples__actions { display: flex; align-items: center; gap: 0.55rem; }
 .services-examples__head a { color: $accent; font-size: 0.76rem; font-weight: 650; }
 .services-examples pre {
   margin: 0.45rem 0 0;

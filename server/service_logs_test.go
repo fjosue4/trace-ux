@@ -106,6 +106,25 @@ func TestServiceLogsInheritOverrideExtraAndRevoke(t *testing.T) {
 	}
 	resp.Body.Close()
 
+	// Large entries are stored complete rather than rejected at the old 8 KiB /
+	// 64 KiB caps.
+	largeMessage := strings.Repeat("m", 100<<10)
+	largeExtra := strings.Repeat("x", 200<<10)
+	resp = serviceKeyRequest(t, ingestURL, created.APIKey, "X-TraceUX-Service-Key",
+		fmt.Sprintf(`{"logs":[{"severity":"error","message":%q,"environment":"production","extra":{"blob":%q}}]}`, largeMessage, largeExtra))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("large ingest: got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	var storedLarge int
+	if err := srv.store.DB.QueryRow(`SELECT COUNT(*) FROM logs WHERE service_id = ? AND length(message) = ? AND length(extra) > ?`,
+		created.Service.ID, len(largeMessage), len(largeExtra)).Scan(&storedLarge); err != nil {
+		t.Fatal(err)
+	}
+	if storedLarge != 1 {
+		t.Fatalf("large log stored complete = %d rows, want 1", storedLarge)
+	}
+
 	resp = serviceKeyRequest(t, ingestURL, created.APIKey, "X-TraceUX-Service-Key",
 		`{"logs":[{"severity":"info","message":"charge queued","environment":"staging","extra":{"queue":"payments"}}]}`)
 	if resp.StatusCode != http.StatusOK {
