@@ -110,7 +110,7 @@ export default function Performance() {
           <EmptyState
             icon={<Icon name="activity" size={20} />}
             title="No performance data yet"
-            description="Open a site, use Site → Backend performance for the connection example, and send observations from your application server. Once traffic arrives, this page will show latency percentiles and release comparisons."
+            description="Open a site, add a service, and use its shared key to send performance observations from your application server. Once traffic arrives, this page will show latency percentiles and release comparisons."
           />
         </Card>
       ) : (

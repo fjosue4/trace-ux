@@ -30,18 +30,27 @@ func postPerformance(t *testing.T, url, key string, payload performanceIngestReq
 	return resp
 }
 
+// seedLegacyPerformanceKey stores a site-level key the way older releases did,
+// so compatibility paths stay covered now that sites no longer start with one.
+func seedLegacyPerformanceKey(t *testing.T, srv *Server, siteID int64) string {
+	t.Helper()
+	_, key, err := srv.store.CreatePerformanceKey(siteID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return key
+}
+
 func TestPerformanceIngestAndReport(t *testing.T) {
 	srv, ts := newTestServer(t)
 	site, err := srv.store.CreateSite("Performance", "https://performance.example")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if site.PerformanceKey == "" {
-		t.Fatal("site creation did not return a performance key")
-	}
+	legacyKey := seedLegacyPerformanceKey(t, srv, site.ID)
 
 	now := time.Now().UnixMilli()
-	resp := postPerformance(t, fmt.Sprintf("%s/api/performance/ingest/%s", ts.URL, site.SiteKey), site.PerformanceKey, performanceIngestRequest{
+	resp := postPerformance(t, fmt.Sprintf("%s/api/performance/ingest/%s", ts.URL, site.SiteKey), legacyKey, performanceIngestRequest{
 		Observations: []store.PerformanceObservation{
 			{Environment: "production", Service: "api", Version: "1.4.0", Endpoint: "GET /orders", DurationMs: 15, TimestampMs: now},
 			{Environment: "production", Service: "api", Version: "1.4.0", Endpoint: "GET /orders", DurationMs: 45, TimestampMs: now},
@@ -110,7 +119,7 @@ func TestPerformanceKeyRotationRevokesPreviousKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	oldKey := site.PerformanceKey
+	oldKey := seedLegacyPerformanceKey(t, srv, site.ID)
 	newKeyValue, err := srv.store.RotatePerformanceKey(site.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -132,6 +141,11 @@ func TestPerformanceKeyManagement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if keys, err := srv.store.ListPerformanceKeys(site.ID); err != nil || len(keys) != 0 {
+		t.Fatalf("new site keys = %+v, %v; want none", keys, err)
+	}
+	first := seedLegacyPerformanceKey(t, srv, site.ID)
+	second := seedLegacyPerformanceKey(t, srv, site.ID)
 	admin := login(t, ts.URL, "admin", "pw")
 
 	resp := doReq(t, http.MethodGet, fmt.Sprintf("%s/api/sites/%d/performance-keys", ts.URL, site.ID), admin, "")
@@ -145,51 +159,29 @@ func TestPerformanceKeyManagement(t *testing.T) {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
-	if len(keys) != 1 || keys[0].KeyHint != store.PerformanceKeyHint(site.PerformanceKey[:4], site.PerformanceKey[len(site.PerformanceKey)-4:]) {
-		t.Fatalf("initial keys = %+v, want one masked key", keys)
+	if len(keys) != 2 || keys[0].KeyHint != store.PerformanceKeyHint(second[:4], second[len(second)-4:]) {
+		t.Fatalf("listed keys = %+v, want two masked keys, newest first", keys)
 	}
 
 	resp = doReq(t, http.MethodPost, fmt.Sprintf("%s/api/sites/%d/performance-keys", ts.URL, site.ID), admin, "")
-	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		t.Fatalf("create performance key: got %d", resp.StatusCode)
-	}
-	var created struct {
-		ID   int64  `json:"key_id"`
-		Hint string `json:"key_hint"`
-		Key  string `json:"performance_key"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&created); err != nil {
-		resp.Body.Close()
-		t.Fatal(err)
-	}
 	resp.Body.Close()
-	if created.ID == 0 || created.Key == "" || created.Hint != store.PerformanceKeyHint(created.Key[:4], created.Key[len(created.Key)-4:]) {
-		t.Fatalf("created key response = %+v, want raw key and masked hint", created)
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("create performance key: got 200, want legacy key creation removed")
+	}
+	if keys, err := srv.store.ListPerformanceKeys(site.ID); err != nil || len(keys) != 2 {
+		t.Fatalf("keys after create attempt = %d, %v; want 2", len(keys), err)
 	}
 
-	keys, err = srv.store.ListPerformanceKeys(site.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(keys) != 2 {
-		t.Fatalf("keys after create = %d, want 2", len(keys))
-	}
-	if ok, err := srv.store.ValidatePerformanceKey(site.ID, site.PerformanceKey); err != nil || !ok {
-		t.Fatalf("original key validation = %t, %v; want true", ok, err)
-	}
-
-	resp = doReq(t, http.MethodDelete, fmt.Sprintf("%s/api/sites/%d/performance-keys/%d", ts.URL, site.ID, keys[1].ID), admin, "")
+	resp = doReq(t, http.MethodDelete, fmt.Sprintf("%s/api/sites/%d/performance-keys/%d", ts.URL, site.ID, keys[0].ID), admin, "")
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
 		t.Fatalf("delete performance key: got %d", resp.StatusCode)
 	}
 	resp.Body.Close()
-	remaining, err := srv.store.ListPerformanceKeys(site.ID)
-	if err != nil {
-		t.Fatal(err)
+	if ok, err := srv.store.ValidatePerformanceKey(site.ID, second); err != nil || ok {
+		t.Fatalf("removed key validation = %t, %v; want false", ok, err)
 	}
-	if len(remaining) != 1 {
-		t.Fatalf("keys after delete = %d, want 1", len(remaining))
+	if ok, err := srv.store.ValidatePerformanceKey(site.ID, first); err != nil || !ok {
+		t.Fatalf("remaining key validation = %t, %v; want true", ok, err)
 	}
 }

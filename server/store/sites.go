@@ -21,9 +21,6 @@ type Site struct {
 	SessionCount     int64        `json:"session_count"`
 	RecordingEnabled bool         `json:"recording_enabled"`
 	Settings         SiteSettings `json:"settings"`
-	// PerformanceKey is only populated on site creation or explicit key creation;
-	// stored/listed sites never expose the hashed credential.
-	PerformanceKey string `json:"performance_key,omitempty"`
 }
 
 func newKey(n int) string {
@@ -37,30 +34,17 @@ func newKey(n int) string {
 func (s *Store) CreateSite(name, url string) (Site, error) {
 	now := time.Now().Unix()
 	key := newKey(16)
-	performanceKey := newPerformanceKey()
-	tx, err := s.DB.Begin()
+	// Backend telemetry credentials are issued per service, so new sites start
+	// without a legacy site-level performance key.
+	res, err := s.DB.Exec(`INSERT INTO sites (name, url, site_key, created_at) VALUES (?, ?, ?, ?)`, name, url, key, now)
 	if err != nil {
-		return Site{}, err
-	}
-	res, err := tx.Exec(`INSERT INTO sites (name, url, site_key, created_at) VALUES (?, ?, ?, ?)`, name, url, key, now)
-	if err != nil {
-		tx.Rollback()
 		return Site{}, err
 	}
 	id, err := res.LastInsertId()
 	if err != nil {
-		tx.Rollback()
 		return Site{}, err
 	}
-	if _, err := tx.Exec(`INSERT INTO performance_keys (site_id, key_hash, key_prefix, key_suffix, created_at) VALUES (?, ?, ?, ?, ?)`,
-		id, hashPerformanceKey(performanceKey), performanceKey[:4], performanceKey[len(performanceKey)-4:], now); err != nil {
-		tx.Rollback()
-		return Site{}, err
-	}
-	if err := tx.Commit(); err != nil {
-		return Site{}, err
-	}
-	return Site{ID: id, Name: name, URL: url, SiteKey: key, CreatedAt: now, RecordingEnabled: true, Settings: DefaultSiteSettings(), PerformanceKey: performanceKey}, nil
+	return Site{ID: id, Name: name, URL: url, SiteKey: key, CreatedAt: now, RecordingEnabled: true, Settings: DefaultSiteSettings()}, nil
 }
 
 const siteCols = `s.id, s.name, s.url, s.site_key, s.created_at, s.recording_enabled, s.config,

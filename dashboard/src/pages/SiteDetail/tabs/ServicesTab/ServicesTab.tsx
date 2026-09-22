@@ -1,5 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { api, LogSeverity, Service } from '../../../../api';
+import { Link } from 'react-router-dom';
+import { api, LogSeverity, PerformanceKey, Service } from '../../../../api';
 import Button from '../../../../components/ui/Button';
 import Card from '../../../../components/ui/Card';
 import EmptyState from '../../../../components/ui/EmptyState';
@@ -21,15 +22,21 @@ type Props = {
   siteId: number;
   isAdmin: boolean;
   siteSeverities: LogSeverity[];
+  legacyPerformanceKeys: PerformanceKey[];
 };
 
-export function ServicesTab({ siteId, isAdmin, siteSeverities }: Props) {
+export function ServicesTab({ siteId, isAdmin, siteSeverities, legacyPerformanceKeys }: Props) {
   const [services, setServices] = useState<Service[] | null>(null);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [newKey, setNewKey] = useState<{ service: string; value: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [legacyKeys, setLegacyKeys] = useState<PerformanceKey[]>(legacyPerformanceKeys);
+
+  useEffect(() => {
+    setLegacyKeys(legacyPerformanceKeys);
+  }, [legacyPerformanceKeys]);
 
   async function load() {
     try {
@@ -102,11 +109,25 @@ export function ServicesTab({ siteId, isAdmin, siteSeverities }: Props) {
     }
   }
 
-  const endpoint = `${location.origin}/api/logs/ingest`;
-  const example = `curl -X POST "${endpoint}" \\
+  async function removeLegacyKey(key: PerformanceKey) {
+    if (!window.confirm(`Remove legacy performance key ${key.key_hint}? Any backend using it will stop sending performance data.`)) return;
+    setError('');
+    try {
+      await api.deletePerformanceKey(siteId, key.id);
+      setLegacyKeys((keys) => keys.filter((item) => item.id !== key.id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not remove the legacy performance key.');
+    }
+  }
+
+  const logsExample = `curl -X POST "${location.origin}/api/logs/ingest" \\
   -H "Content-Type: application/json" \\
-  -H "X-TraceUX-Log-Key: $TRACE_UX_LOG_KEY" \\
+  -H "X-TraceUX-Service-Key: $TRACE_UX_SERVICE_KEY" \\
   -d '{"logs":[{"severity":"error","message":"Payment request failed","environment":"production","extra":{"request_id":"req_123","status_code":502}}]}'`;
+  const performanceExample = `curl -X POST "${location.origin}/api/performance/ingest" \\
+  -H "Content-Type: application/json" \\
+  -H "X-TraceUX-Service-Key: $TRACE_UX_SERVICE_KEY" \\
+  -d '{"observations":[{"environment":"production","version":"1.4.0","endpoint":"GET /orders","duration_ms":184,"status_code":200}]}'`;
 
   return (
     <div className="services-tab">
@@ -115,8 +136,8 @@ export function ServicesTab({ siteId, isAdmin, siteSeverities }: Props) {
           <div>
             <h2>Services</h2>
             <p className="muted small">
-              Send backend or external-service logs into the same stream as browser logs. Each
-              service gets its own revocable API key and inherits the site severity selection by default.
+              Connect a backend or external service once, then use the same revocable API key for
+              logs and performance. The key identifies both this site and the service automatically.
             </p>
           </div>
           {isAdmin && (
@@ -135,7 +156,19 @@ export function ServicesTab({ siteId, isAdmin, siteSeverities }: Props) {
             </form>
           )}
         </div>
-        <pre className="site-performance-key__example">{example}</pre>
+        <div className="services-examples">
+          <div>
+            <strong>Send logs</strong>
+            <pre>{logsExample}</pre>
+          </div>
+          <div>
+            <div className="services-examples__head">
+              <strong>Send performance</strong>
+              <Link to="/performance">Open Performance</Link>
+            </div>
+            <pre>{performanceExample}</pre>
+          </div>
+        </div>
       </Card>
 
       {error && <Notice tone="error">{error}</Notice>}
@@ -143,7 +176,7 @@ export function ServicesTab({ siteId, isAdmin, siteSeverities }: Props) {
       {newKey && (
         <Notice tone="success">
           <div className="service-new-key">
-            <span><strong>{newKey.service} key created.</strong> Copy it now; the full value is shown only once.</span>
+            <span><strong>{newKey.service} key created.</strong> Use it for logs and performance. Copy it now; the full value is shown only once.</span>
             <code>{newKey.value}</code>
             <Button variant="secondary" size="sm" onClick={copyKey}>
               <Icon name={copied ? 'check' : 'copy'} size={13} /> {copied ? 'Copied' : 'Copy key'}
@@ -157,7 +190,7 @@ export function ServicesTab({ siteId, isAdmin, siteSeverities }: Props) {
       ) : services.length === 0 ? (
         <EmptyState
           title="No services yet"
-          description="Add a backend or external service to generate its log ingestion key."
+          description="Add a backend or external service to generate one key for logs and performance."
           icon={<Icon name="code" size={20} />}
         />
       ) : (
@@ -174,6 +207,33 @@ export function ServicesTab({ siteId, isAdmin, siteSeverities }: Props) {
             />
           ))}
         </div>
+      )}
+
+      {legacyKeys.length > 0 && (
+        <Card className="legacy-keys">
+          <div className="legacy-keys__head">
+            <strong>Legacy performance keys</strong>
+            <span className="muted small">
+              Site-level keys from before services still send performance data to the site-addressed
+              endpoint. Move those backends to a service key, then remove these.
+            </span>
+          </div>
+          <div className="legacy-keys__rows">
+            {legacyKeys.map((key) => (
+              <div className="legacy-keys__row" key={key.id}>
+                <code>{key.key_hint}</code>
+                <span className="muted small">
+                  Created {fmtTime(key.created_at)} · {key.last_used_at ? `Last used ${fmtTime(key.last_used_at)}` : 'Not used yet'}
+                </span>
+                {isAdmin && (
+                  <Button variant="dangerGhost" size="sm" onClick={() => removeLegacyKey(key)}>
+                    <Icon name="trash" size={13} /> Remove
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
       )}
     </div>
   );
@@ -238,7 +298,7 @@ function ServiceCard({
         </Field>
         <div className="field service-severity-field">
           <div className="service-severity-field__head">
-            <span className="field-label">Severity levels</span>
+            <span className="field-label">Log severity levels</span>
             <Switch
               checked={inherit}
               disabled={!isAdmin}
