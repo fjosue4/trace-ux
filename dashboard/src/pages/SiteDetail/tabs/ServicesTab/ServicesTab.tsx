@@ -128,7 +128,7 @@ export function ServicesTab({ siteId, isAdmin, siteSeverities }: Props) {
                 maxLength={100}
                 aria-label="Service name"
               />
-              <Button type="submit" size="sm" disabled={busy || !name.trim()}>
+              <Button type="submit" disabled={busy || !name.trim()}>
                 <Icon name="plus" size={13} />
                 {busy ? 'Creating…' : 'Add service'}
               </Button>
