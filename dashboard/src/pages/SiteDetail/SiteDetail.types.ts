@@ -1,4 +1,4 @@
-export type SiteTab = 'overview' | 'site' | 'recordings' | 'widget' | 'logs' | 'integrations';
+export type SiteTab = 'overview' | 'site' | 'services' | 'recordings' | 'widget' | 'logs' | 'integrations';
 
 export type WidgetSettingsModalKind = 'announcements' | 'feedback' | null;
 
@@ -9,6 +9,7 @@ export const siteTabs: {
 }[] = [
   { id: 'overview', label: 'Overview', icon: 'activity' },
   { id: 'site', label: 'Site', icon: 'settings' },
+  { id: 'services', label: 'Services', icon: 'code' },
   { id: 'recordings', label: 'Recordings', icon: 'film' },
   { id: 'widget', label: 'Widget', icon: 'settings' },
   { id: 'logs', label: 'Logs', icon: 'code' },

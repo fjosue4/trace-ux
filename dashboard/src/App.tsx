@@ -41,7 +41,7 @@ export default function App() {
   const content = (() => {
     if (!checked) return <Loading />;
     if (isPublicShare) return <Outlet />;
-    if (isLogin) return user ? <Navigate to="/" replace /> : <Outlet />;
+    if (isLogin) return user ? <Navigate to="/sites" replace /> : <Outlet />;
     if (!user) return <Navigate to="/login" replace />;
     return (
       <div className="app">

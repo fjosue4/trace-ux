@@ -1,7 +1,5 @@
 @use 'abstracts' as *;
 
-.announcements-toolbar { display: flex; gap: .75rem; margin-bottom: 1rem; }
-
 .announcement-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
 
 .announcement-card {
@@ -94,12 +92,7 @@
   }
 
   textarea {
-    background: $surface-2;
-    color: $ink;
-    border: 1px solid $line-strong;
-    border-radius: $radius-sm;
     padding: .75rem;
-    font: inherit;
     min-height: 80px;
     resize: vertical;
   }

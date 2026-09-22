@@ -21,7 +21,7 @@ export default function SiteRow({ site, origin, onDelete }: SiteRowProps) {
       </motion.span>
 
       <div className="site-row__main">
-        <Link to={`/site/${site.id}`} className="site-row__name" title="Manage this site">
+        <Link to={`/sites/site/${site.id}`} className="site-row__name" title="Manage this site">
           {site.name}
         </Link>
         <span className="site-row__key">

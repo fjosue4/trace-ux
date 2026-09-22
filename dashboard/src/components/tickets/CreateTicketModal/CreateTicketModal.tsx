@@ -44,7 +44,7 @@ export default function CreateTicketModal(props: CreateTicketModalProps) {
 
       <Field label="Message">
         <textarea
-          className="create-ticket-modal__body"
+          className="field-control create-ticket-modal__body"
           value={body}
           maxLength={4000}
           rows={5}

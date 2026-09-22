@@ -248,16 +248,8 @@
     width: 100%;
     min-height: 90px;
     resize: none;
-    border: 1px solid $line-strong;
-    border-radius: $radius-sm;
-    background: $surface-2;
-    color: $ink;
     padding: .75rem;
-    font: inherit;
     line-height: 1.5;
-    outline: none;
-
-    &:focus { border-color: $accent; box-shadow: 0 0 0 3px $accent-soft; }
   }
 
   &__bottom {
@@ -272,10 +264,10 @@
 }
 
 .ticket-closed-note {
-  margin: auto 1.5rem 1.5rem;
-  padding: .9rem 1rem;
-  border: 1px solid $line;
-  border-radius: $radius-sm;
+  flex: none;
+  margin: 0;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid $line;
   color: $muted;
   font-size: .8rem;
   background: $surface-2;
@@ -305,4 +297,5 @@
   .ticket-status-select { width: 100%; flex-basis: auto; }
   .ticket-message { max-width: 92%; }
   .ticket-thread__archive { padding-left: 1rem; padding-right: 1rem; }
+  .ticket-closed-note { padding-left: 1rem; padding-right: 1rem; }
 }

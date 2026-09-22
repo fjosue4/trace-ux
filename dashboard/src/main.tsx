@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate, RouterProvider, useParams } from 'react-router-dom';
 // Self-hosted Inter (latin subset) — consistent, professional type everywhere,
 // no external font CDN calls.
 import '@fontsource/inter/latin-400.css';
@@ -26,16 +26,23 @@ import Settings from './pages/Settings';
 import SystemHealth from './pages/SystemHealth';
 import Announcements from './pages/Announcements';
 
+function LegacySiteRedirect() {
+  const { siteId } = useParams();
+  return <Navigate to={`/sites/site/${siteId}`} replace />;
+}
+
 const router = createBrowserRouter([
   {
     path: '/',
     element: <App />,
     children: [
-      { index: true, element: <Sites /> },
+      { index: true, element: <Navigate to="/sites" replace /> },
       { path: 'login', element: <Login /> },
+      { path: 'sites', element: <Sites /> },
+      { path: 'sites/site/:siteId', element: <SiteDetail /> },
       { path: 'sessions', element: <Sessions /> },
       { path: 'performance', element: <Performance /> },
-      { path: 'site/:siteId', element: <SiteDetail /> },
+      { path: 'site/:siteId', element: <LegacySiteRedirect /> },
       { path: 'feedback', element: <Feedback /> },
       { path: 'tickets', element: <Tickets /> },
       { path: 'announcements', element: <Announcements /> },

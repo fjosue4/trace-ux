@@ -506,6 +506,53 @@ var migrations = []string{
 	ALTER TABLE slack_integration ADD COLUMN signing_fingerprint TEXT NOT NULL DEFAULT '';
 	ALTER TABLE slack_integration ADD COLUMN signing_hint TEXT NOT NULL DEFAULT '';
 	`,
+	// v24: site-scoped backend services and one unified log stream. Browser
+	// logs keep their recording link; service logs instead carry a service and
+	// environment. The explicit site_id lets both kinds share filtering,
+	// retention, search and presentation without inventing recording sessions.
+	`
+	CREATE TABLE IF NOT EXISTS services (
+		id                 INTEGER PRIMARY KEY,
+		site_id            INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+		name               TEXT    NOT NULL,
+		key_hash           TEXT    NOT NULL UNIQUE,
+		key_prefix         TEXT    NOT NULL,
+		key_suffix         TEXT    NOT NULL,
+		inherit_severities INTEGER NOT NULL DEFAULT 1,
+		severities         TEXT    NOT NULL DEFAULT '["error"]',
+		created_at         INTEGER NOT NULL,
+		last_used_at       INTEGER NOT NULL DEFAULT 0,
+		revoked_at         INTEGER NOT NULL DEFAULT 0,
+		UNIQUE (site_id, name)
+	);
+	CREATE INDEX IF NOT EXISTS idx_services_site ON services(site_id, created_at DESC);
+
+	CREATE TABLE logs_v24 (
+		id           INTEGER PRIMARY KEY,
+		site_id      INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+		session_id   TEXT REFERENCES sessions(id) ON DELETE CASCADE,
+		service_id   INTEGER REFERENCES services(id) ON DELETE SET NULL,
+		client_seq   INTEGER,
+		timestamp_ms INTEGER NOT NULL,
+		severity     TEXT    NOT NULL CHECK (severity IN ('debug', 'info', 'warn', 'error')),
+		message      TEXT    NOT NULL,
+		extra        TEXT    NOT NULL DEFAULT '',
+		environment  TEXT    NOT NULL DEFAULT '',
+		url          TEXT    NOT NULL DEFAULT '',
+		created_at   INTEGER NOT NULL,
+		CHECK (session_id IS NOT NULL OR service_id IS NOT NULL)
+	);
+	INSERT INTO logs_v24 (id, site_id, session_id, client_seq, timestamp_ms, severity, message, url, created_at)
+		SELECT l.id, se.site_id, l.session_id, l.client_seq, l.timestamp_ms, l.severity, l.message, l.url, l.created_at
+		FROM logs l JOIN sessions se ON se.id = l.session_id;
+	DROP TABLE logs;
+	ALTER TABLE logs_v24 RENAME TO logs;
+	CREATE UNIQUE INDEX idx_logs_session_seq ON logs(session_id, client_seq) WHERE session_id IS NOT NULL;
+	CREATE INDEX idx_logs_session_time ON logs(session_id, timestamp_ms);
+	CREATE INDEX idx_logs_site_time ON logs(site_id, timestamp_ms DESC);
+	CREATE INDEX idx_logs_service_env_time ON logs(service_id, environment, timestamp_ms DESC);
+	CREATE INDEX idx_logs_severity_time ON logs(severity, created_at DESC);
+	`,
 }
 
 func (s *Store) migrate() error {

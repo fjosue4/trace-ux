@@ -4,17 +4,17 @@ import Table from '../../components/ui/Table';
 import Notice from '../../components/ui/Notice';
 import Loading from '../../components/ui/Loading';
 import EmptyState from '../../components/ui/EmptyState';
-import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import FilterPanel from '../../components/ui/FilterPanel';
 import Switch from '../../components/ui/Switch';
-import DebouncedTextInput from '../../components/ui/DebouncedTextInput';
 import { Icon } from '../../components/ui/Icon';
 import { Input, Select } from '../../components/ui/fields';
 import { fmtClock } from '../../lib/format';
 import { useLogs } from './hooks/useLogs';
 import { LogsSummary } from './subcomponents/LogsSummary';
 import { LogRow } from './subcomponents/LogRow';
-import { MAX_VISIBLE_LOGS, rangeLabels, severityOptions, timeRangeOptions } from './Logs.constants';
+import { LogSearchField } from './subcomponents/LogSearchField';
+import { MAX_VISIBLE_LOGS, severityOptions, timeRangeOptions } from './Logs.constants';
 import { SeveritySelection } from './Logs.types';
 import './Logs.scss';
 
@@ -32,8 +32,15 @@ export default function Logs() {
     setSiteSel,
     severitySel,
     setSeveritySel,
+    serviceSel,
+    setServiceSel,
+    environment,
+    setEnvironment,
+    filterOptions,
     search,
     setSearch,
+    searchIn,
+    setSearchIn,
     timeRange,
     changeTimeRange,
     customFrom,
@@ -48,7 +55,7 @@ export default function Logs() {
     <main className="page">
       <PageHeader
         title="Logs"
-        subtitle="Monitor browser output captured alongside visitor recordings."
+        subtitle="Monitor browser and service logs in one searchable stream."
         actions={
           <div className="logs-live-control">
             <span className={`logs-live-state${live ? ' is-live' : ''}`}>
@@ -60,62 +67,11 @@ export default function Logs() {
         }
       />
 
-      <div className="logs-overview">
-        <Card className="logs-controls">
-          <div className="logs-controls__head">
-            <div>
-              <strong>Filter logs</strong>
-              <p className="muted small">Use a rolling window for monitoring or choose an exact time range.</p>
-            </div>
-            <span className="logs-window-label">
-              <Icon name="clock" size={13} />
-              {rangeLabels[timeRange]}
-            </span>
-          </div>
-          <div className="logs-query-row">
-            <label className="logs-search">
-              <span className="visually-hidden">Search logs</span>
-              <Icon name="search" size={16} />
-              <DebouncedTextInput
-                className="field-control logs-search__input"
-                type="search"
-                value={search}
-                onDebouncedChange={setSearch}
-                delayMs={320}
-                placeholder="Search messages, pages, sites, or session IDs"
-                autoComplete="off"
-              />
-            </label>
-            <div className="logs-filters">
-              <Select
-                className="logs-filter logs-filter--site"
-                ariaLabel="Site"
-                value={String(siteSel)}
-                onChange={(value) => setSiteSel(value === 'all' ? 'all' : Number(value))}
-                options={[
-                  { value: 'all', label: 'All sites' },
-                  ...(sites ?? []).map((site) => ({ value: String(site.id), label: site.name })),
-                ]}
-              />
-              <Select
-                className="logs-filter"
-                ariaLabel="Severity"
-                multiple
-                value={severitySel}
-                onChange={(value) => setSeveritySel(value as SeveritySelection)}
-                emptyLabel="All severities"
-                options={severityOptions}
-              />
-              <Select
-                className="logs-filter logs-filter--time"
-                ariaLabel="Time range"
-                value={timeRange}
-                onChange={changeTimeRange}
-                options={timeRangeOptions}
-              />
-            </div>
-          </div>
-          {timeRange === 'custom' && (
+      <FilterPanel
+        title="Filter logs"
+        className="logs-controls filter-panel--grid"
+        controlsClassName="logs-query-row"
+        afterControls={timeRange === 'custom' ? (
             <div className="logs-custom-range">
               <label>
                 <span>From</span>
@@ -126,8 +82,9 @@ export default function Logs() {
                 <Input type="datetime-local" value={customTo} onChange={(e) => setCustomTo(e.target.value)} />
               </label>
             </div>
-          )}
-          <div className="logs-controls__foot">
+          ) : undefined}
+        footer={(
+          <>
             <span className="muted small">
               {logs ? `${logs.length.toLocaleString()} shown` : 'Loading'} · up to {MAX_VISIBLE_LOGS.toLocaleString()} rows
               {lastUpdated > 0 && ` · updated ${fmtClock(Math.floor(lastUpdated / 1000))}`}
@@ -136,9 +93,62 @@ export default function Logs() {
             <Button variant="ghost" size="sm" onClick={() => setRefreshNonce((value) => value + 1)}>
               Refresh
             </Button>
-          </div>
-        </Card>
-      </div>
+          </>
+        )}
+      >
+        <LogSearchField
+          value={search}
+          onChange={setSearch}
+          scope={searchIn}
+          onScopeChange={setSearchIn}
+        />
+        <Select
+          className="logs-filter logs-filter--site"
+          ariaLabel="Site"
+          value={String(siteSel)}
+          onChange={(value) => setSiteSel(value === 'all' ? 'all' : Number(value))}
+          options={[
+            { value: 'all', label: 'All sites' },
+            ...(sites ?? []).map((site) => ({ value: String(site.id), label: site.name })),
+          ]}
+        />
+        <Select
+          className="logs-filter"
+          ariaLabel="Service"
+          value={String(serviceSel)}
+          onChange={(value) => setServiceSel(value === 'all' ? 'all' : Number(value))}
+          options={[
+            { value: 'all', label: 'All services' },
+            ...filterOptions.services.map((service) => ({ value: String(service.id), label: service.name })),
+          ]}
+        />
+        <Select
+          className="logs-filter"
+          ariaLabel="Environment"
+          value={environment}
+          onChange={setEnvironment}
+          options={[
+            { value: 'all', label: 'All environments' },
+            ...filterOptions.environments.map((value) => ({ value, label: value })),
+          ]}
+        />
+        <Select
+          className="logs-filter"
+          ariaLabel="Severity"
+          multiple
+          value={severitySel}
+          onChange={(value) => setSeveritySel(value as SeveritySelection)}
+          emptyLabel="All severities"
+          options={severityOptions}
+        />
+        <Select
+          className="logs-filter logs-filter--time"
+          ariaLabel="Time range"
+          value={timeRange}
+          onChange={changeTimeRange}
+          options={timeRangeOptions}
+        />
+      </FilterPanel>
 
       {error && <Notice tone="error">{error}</Notice>}
       {!timeWindow.valid && <Notice tone="info">{timeWindow.error}</Notice>}
@@ -149,7 +159,7 @@ export default function Logs() {
           description="Create a site first — its logs will show up here."
           icon={<Icon name="code" size={20} />}
           action={
-            <Link to="/" className="btn btn--primary btn--md">
+            <Link to="/sites" className="btn btn--primary btn--md">
               Go to sites
             </Link>
           }
@@ -178,8 +188,8 @@ export default function Logs() {
           <Table
             className="logs-table"
             fixed
-            widths={['14%', '9%', '34%', '13%', '17%', '13%']}
-            headers={['Time', 'Severity', 'Message', 'Site', 'Page', 'Recording']}
+            widths={['12%', '8%', '24%', '18%', '12%', '10%', '8%', '8%']}
+            headers={['Time', 'Level', 'Message', 'Extra', 'Service', 'Environment', 'Site', 'Source']}
           >
             {logs.map((log) => (
               <LogRow key={log.id} log={log} />

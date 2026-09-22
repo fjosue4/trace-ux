@@ -10,6 +10,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import Loading from '../../components/ui/Loading';
 import Modal from '../../components/ui/Modal';
 import Notice from '../../components/ui/Notice';
+import FilterPanel from '../../components/ui/FilterPanel';
 import { Input, Select } from '../../components/ui/fields';
 import EngagementModal from './subcomponents/EngagementModal';
 import { useAnnouncements } from './hooks/useAnnouncements';
@@ -47,7 +48,7 @@ export default function Announcements() {
         subtitle="Publish feature releases, maintenance notices, and product news to your visitors."
         actions={user.role === 'admin' ? <Button onClick={() => open()} disabled={!siteId}>New announcement</Button> : undefined}
       />
-      <div className="announcements-toolbar">
+      <FilterPanel title="Filter announcements">
         <Select
           ariaLabel="Site"
           value={String(siteId || '')}
@@ -60,7 +61,7 @@ export default function Announcements() {
           onChange={setFilter}
           options={['all', 'draft', 'published', 'archived'].map((v) => ({ value: v, label: v[0].toUpperCase() + v.slice(1) }))}
         />
-      </div>
+      </FilterPanel>
       {error && <Notice tone="error">{error}</Notice>}
       {items === null ? (
         <Loading />
@@ -132,11 +133,11 @@ export default function Announcements() {
             </div>
             <label>
               Short summary
-              <textarea value={form.summary} maxLength={300} onChange={(e) => setForm({ ...form, summary: e.currentTarget.value })} placeholder="A concise overview for the feed." />
+              <textarea className="field-control" value={form.summary} maxLength={300} onChange={(e) => setForm({ ...form, summary: e.currentTarget.value })} placeholder="A concise overview for the feed." />
             </label>
             <label>
               Details
-              <textarea className="announcement-form__body" value={form.body} maxLength={10000} onChange={(e) => setForm({ ...form, body: e.currentTarget.value })} placeholder="Explain the update in plain text." />
+              <textarea className="field-control announcement-form__body" value={form.body} maxLength={10000} onChange={(e) => setForm({ ...form, body: e.currentTarget.value })} placeholder="Explain the update in plain text." />
             </label>
             <div className="announcement-form__internal">
               <div className="announcement-form__section-head">

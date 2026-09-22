@@ -17,6 +17,7 @@ import { RecordingsTab } from './tabs/RecordingsTab';
 import { WidgetTab } from './tabs/WidgetTab';
 import { LogsTab } from './tabs/LogsTab';
 import { IntegrationsTab } from './tabs/IntegrationsTab';
+import { ServicesTab } from './tabs/ServicesTab';
 import { siteTabs } from './SiteDetail.types';
 import './SiteDetail.scss';
 
@@ -125,7 +126,15 @@ export default function SiteDetail() {
 
       {activeTab === 'integrations' && <IntegrationsTab siteId={id} isAdmin={isAdmin} />}
 
-      {isAdmin && draft && activeTab !== 'overview' && activeTab !== 'site' && activeTab !== 'integrations' && (
+      {activeTab === 'services' && (
+        <ServicesTab
+          siteId={id}
+          isAdmin={isAdmin}
+          siteSeverities={(draft?.logs.severities ?? [draft?.logs.minimum_severity ?? 'error']).filter(Boolean)}
+        />
+      )}
+
+      {isAdmin && draft && activeTab !== 'overview' && activeTab !== 'site' && activeTab !== 'services' && activeTab !== 'integrations' && (
         <Card className="hub-config">
           <h2>Manage {activeTab}</h2>
           <p className="muted small">
@@ -179,7 +188,7 @@ export default function SiteDetail() {
         </>
       )}
 
-      {!isAdmin && activeTab !== 'overview' && activeTab !== 'site' && activeTab !== 'integrations' && (
+      {!isAdmin && activeTab !== 'overview' && activeTab !== 'site' && activeTab !== 'services' && activeTab !== 'integrations' && (
         <Card className="hub-config card--static">
           <h2>Manage {activeTab}</h2>
           <Notice tone="info">Only administrators can change this site's configuration.</Notice>

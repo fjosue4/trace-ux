@@ -12,15 +12,8 @@
     width: 100%;
     min-height: 7rem;
     padding: .6rem .7rem;
-    border: 1px solid $line-strong;
-    border-radius: $radius;
-    background: $surface-2;
-    color: $ink;
-    font: inherit;
     font-size: .85rem;
     line-height: 1.55;
     resize: none;
-
-    &:focus-visible { outline: 2px solid $accent; outline-offset: 1px; }
   }
 }

@@ -592,9 +592,7 @@ func (s *Store) RetentionSweep(defaultDays int) (int64, error) {
 		logSettings := st.Settings.Logs
 		if logSettings.RetentionDays > 0 {
 			logCutoff := time.Now().AddDate(0, 0, -logSettings.RetentionDays).Unix()
-			res, err = s.DB.Exec(`DELETE FROM logs
-				WHERE session_id IN (SELECT id FROM sessions WHERE site_id = ?)
-				AND created_at < ?`, st.ID, logCutoff)
+			res, err = s.DB.Exec(`DELETE FROM logs WHERE site_id = ? AND created_at < ?`, st.ID, logCutoff)
 			if err != nil {
 				return total, err
 			}
@@ -604,18 +602,14 @@ func (s *Store) RetentionSweep(defaultDays int) (int64, error) {
 
 		if logSettings.MaxRows > 0 {
 			var logCount int64
-			if err := s.DB.QueryRow(`SELECT COUNT(*) FROM logs l
-				JOIN sessions se ON se.id = l.session_id
-				WHERE se.site_id = ?`, st.ID).Scan(&logCount); err != nil {
+			if err := s.DB.QueryRow(`SELECT COUNT(*) FROM logs WHERE site_id = ?`, st.ID).Scan(&logCount); err != nil {
 				return total, err
 			}
 			if logCount > int64(logSettings.MaxRows) {
 				remove := logCount - int64(logSettings.MaxRows)
 				res, err = s.DB.Exec(`DELETE FROM logs WHERE id IN (
-					SELECT l.id FROM logs l
-					JOIN sessions se ON se.id = l.session_id
-					WHERE se.site_id = ?
-					ORDER BY l.id ASC
+					SELECT id FROM logs WHERE site_id = ?
+					ORDER BY id ASC
 					LIMIT ?
 				)`, st.ID, remove)
 				if err != nil {

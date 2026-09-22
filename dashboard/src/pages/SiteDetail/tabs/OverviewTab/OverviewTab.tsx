@@ -58,7 +58,7 @@ export function OverviewTab({ site, sessions, feedback, stats, latestLogs }: Ove
           {latestLogs.length === 0 ? (
             <EmptyState
               title="No logs yet"
-              description="Enable browser logs in the Logs tab to see recent console output here."
+              description="Enable browser logs or connect a service to see recent output here."
             />
           ) : (
             <div className="hub-list">
@@ -67,11 +67,16 @@ export function OverviewTab({ site, sessions, feedback, stats, latestLogs }: Ove
                   <span className={`hub-row__icon hub-row__icon--log hub-row__icon--${log.severity}`}>{log.severity.slice(0, 3).toUpperCase()}</span>
                   <span className="hub-row__body">
                     <span className="hub-row__title">{truncate(log.message, 52)}</span>
-                    <span className="muted small">{fmtTime(Math.floor(log.timestamp_ms / 1000))}</span>
+                    <span className="muted small">
+                      {log.service_name || 'Browser'}{log.environment ? ` · ${log.environment}` : ''} · {fmtTime(Math.floor(log.timestamp_ms / 1000))}
+                      {log.extra ? ` · ${truncate(log.extra, 42)}` : ''}
+                    </span>
                   </span>
-                  <Link to={`/replay/${log.session_id}`} className="icon-btn" title="Open replay">
-                    <Icon name="play" size={13} />
-                  </Link>
+                  {log.session_id && (
+                    <Link to={`/replay/${log.session_id}`} className="icon-btn" title="Open replay">
+                      <Icon name="play" size={13} />
+                    </Link>
+                  )}
                 </div>
               ))}
             </div>

@@ -1,9 +1,5 @@
 @use 'abstracts' as *;
 
-.logs-overview {
-  margin-bottom: 1.1rem;
-}
-
 .logs-summary {
   display: flex;
   align-items: center;
@@ -73,50 +69,37 @@
 
 .logs-controls {
   min-width: 0;
-  margin: 0;
-}
-
-.logs-controls__head,
-.logs-controls__foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.logs-controls__head {
-  margin-bottom: 1rem;
-  p { margin: 0.25rem 0 0; }
-}
-
-.logs-window-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  flex: 0 0 auto;
-  color: $accent;
-  font-size: 0.76rem;
-  font-weight: 700;
-}
-
-.logs-filters {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: center;
-  gap: 0.7rem;
 }
 
 .logs-query-row {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(300px, 1.55fr) repeat(5, minmax(95px, 1fr));
   align-items: center;
-  gap: 0.7rem;
+  gap: 0.55rem;
+  overflow-x: auto;
+  padding-bottom: 0.15rem;
 }
 
 .logs-search {
   position: relative;
   display: flex;
   align-items: center;
+  height: 40px;
+  min-width: 0;
+  overflow: hidden;
+  background: $surface;
+  border: 1px solid $line-strong;
+  border-radius: $radius-sm;
+  transition: border-color $duration-fast $ease-out,
+    background-color $duration-fast $ease-out, box-shadow $duration-fast $ease-out;
+
+  &:hover { border-color: $line-strong; }
+
+  &:focus-within {
+    background: $surface;
+    border-color: $accent;
+    box-shadow: 0 0 0 3px $accent-soft;
+  }
 
   > svg {
     position: absolute;
@@ -126,7 +109,38 @@
     pointer-events: none;
   }
 
-  &__input { padding-left: 2.45rem; padding-right: 2rem; }
+  &__input {
+    min-width: 0;
+    height: 38px;
+    padding-left: 2.45rem;
+    padding-right: 0.6rem;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+
+    &:hover:not(:disabled):not(:focus) { border-color: transparent; }
+    &:focus { background: transparent; box-shadow: none; }
+  }
+
+  &__scope {
+    flex: 0 0 124px;
+    width: 124px;
+    height: 100%;
+
+    .select-trigger {
+      width: 124px;
+      min-width: 124px;
+      height: 100%;
+      padding-left: 0.75rem;
+      background: transparent;
+      border: 0;
+      border-left: 1px solid $line;
+      border-radius: 0;
+
+      &:hover:not(:disabled):not(:focus) { border-color: $line; }
+      &:focus { background: transparent; border-color: $line; box-shadow: none; }
+    }
+  }
 }
 
 .logs-filter { width: auto; min-width: 0; }
@@ -153,17 +167,30 @@
   }
 }
 
-.logs-controls__foot {
-  margin-top: 1rem;
-  padding-top: 0.85rem;
-  border-top: 1px solid $line;
-}
-
 .logs-message {
   max-width: 420px;
   font-family: #{$font-mono};
   font-size: 0.78rem;
 }
+
+.logs-extra details { max-width: 100%; }
+.logs-extra summary {
+  overflow: hidden;
+  color: $muted;
+  font: 0.72rem #{$font-mono};
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.logs-extra pre {
+  max-height: 220px;
+  margin: 0.45rem 0 0;
+  overflow: auto;
+  font: 0.7rem/1.45 #{$font-mono};
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.logs-source { display: inline-flex; align-items: center; gap: 0.25rem; }
 
 .logs-replay {
   display: inline-flex;
@@ -177,16 +204,14 @@
 }
 
 @media (max-width: 700px) {
-  .logs-query-row { grid-template-columns: 1fr; }
-  .logs-filters { grid-template-columns: 1fr; }
-  .logs-controls__head,
-  .logs-controls__foot,
+  .logs-query-row {
+    grid-template-columns: minmax(300px, 1.55fr) repeat(5, minmax(95px, 1fr));
+  }
   .logs-live-control {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .logs-window-label { align-self: flex-start; }
   .logs-summary {
     width: 100%;
     justify-content: flex-start;

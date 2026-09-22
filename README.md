@@ -497,9 +497,25 @@ Masking: all form inputs are masked by default; any element carrying `trace-ux-m
 
 ### Logs
 
-Logs can be enabled per site from the site's **Logs** configuration. Select any combination of the four levels — debug, info, warnings, and errors — and only those exact levels are stored (for example, info and errors without warnings). Captured rows are linked to the visitor's recording session and appear in the dashboard's **Logs** page, which opens in a live view of the last 15 minutes, refreshes every 5 seconds, and shows up to 1,000 rows. The page also supports site, severity, preset time-window, and custom time filters.
+Logs can be enabled per site from the site's **Logs** configuration. Select any combination of the four levels — debug, info, warnings, and errors — and only those exact levels are stored (for example, info and errors without warnings). Browser rows stay linked to the visitor's recording session. The dashboard's unified **Logs** page opens in a live view of the last 15 minutes, refreshes every 5 seconds, and shows up to 1,000 browser and service rows together. It supports site, service, environment, severity, preset time-window, and custom time filters. Search can target the message, structured `extra` data, or both.
 
-Log storage has two independent per-site caps: 15 days by default and 1,000,000 rows by default. The oldest rows are removed during the regular retention sweep; either cap can be changed or disabled from the same Logs configuration. Logs are also removed automatically when their related recording is removed, and are not yet shown inside the replay timeline.
+Add backend or external producers from a site's **Services** tab. Each service receives its own generated `tux_log_…` API key, shown in full only when it is created or rotated. Keys are stored as hashes and can be revoked independently. A service inherits the site's selected severity levels by default or can override them. Environment belongs to each event, so the same service key can report from staging and production:
+
+```bash
+curl -X POST "https://your-server/api/logs/ingest" \
+  -H "Content-Type: application/json" \
+  -H "X-TraceUX-Log-Key: YOUR_SERVICE_KEY" \
+  -d '{"logs":[{
+    "severity":"error",
+    "message":"Payment request failed",
+    "environment":"production",
+    "extra":{"request_id":"req_123","status_code":502}
+  }]}'
+```
+
+`Authorization: Bearer YOUR_SERVICE_KEY` is also accepted. `extra` may be any valid JSON value up to 64 KiB and is displayed as expandable formatted JSON. A request may contain up to 1,000 log entries.
+
+Log storage has two independent per-site caps: 15 days by default and 1,000,000 rows by default. The oldest rows are removed during the regular retention sweep; either cap can be changed or disabled from the same Logs configuration. Browser logs are also removed automatically when their related recording is removed, while service logs remain independent of recordings. Browser logs are not yet shown inside the replay timeline.
 
 Because browser console output can contain sensitive values, enable this only when the site's logging policy allows it. TraceUX stores a bounded, formatted message rather than raw console argument objects.
 

@@ -14,6 +14,7 @@ import Button from '../../components/ui/Button';
 import CreateTicketModal from '../../components/tickets/CreateTicketModal';
 import { Icon } from '../../components/ui/Icon';
 import { Select } from '../../components/ui/fields';
+import FilterPanel from '../../components/ui/FilterPanel';
 import { useFeedback } from './hooks/useFeedback';
 import { Stars } from './subcomponents/Stars';
 import './Feedback.scss';
@@ -33,7 +34,7 @@ export default function Feedback() {
         subtitle="In-app responses from your sites — click a row's session to watch the moment it happened."
       />
 
-      <div className="filters">
+      <FilterPanel title="Filter feedback">
         <Select
           className="site-picker"
           ariaLabel="Site"
@@ -54,7 +55,7 @@ export default function Feedback() {
             ...summaries.map((s) => ({ value: s.survey_id, label: s.survey_id })),
           ]}
         />
-      </div>
+      </FilterPanel>
 
       {error && <Notice tone="error">{error}</Notice>}
 
