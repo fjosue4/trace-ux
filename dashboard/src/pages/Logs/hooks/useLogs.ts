@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api, Log, LogStats, Site } from '../../../api';
+import { api, Log, LogFilterOptions, LogStats, Site } from '../../../api';
 import { LIVE_REFRESH_MS, MAX_VISIBLE_LOGS } from '../Logs.constants';
 import { resolveTimeWindow } from '../Logs.helpers';
-import { SeveritySelection, SiteSelection, TimeRange } from '../Logs.types';
+import { SearchScope, ServiceSelection, SeveritySelection, SiteSelection, TimeRange } from '../Logs.types';
 
 export function useLogs() {
   const [params] = useSearchParams();
   const [sites, setSites] = useState<Site[] | null>(null);
   const [logs, setLogs] = useState<Log[] | null>(null);
   const [stats, setStats] = useState<LogStats | null>(null);
+  const [filterOptions, setFilterOptions] = useState<LogFilterOptions>({ services: [], environments: [] });
   const [error, setError] = useState('');
   const [lastUpdated, setLastUpdated] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -19,7 +20,10 @@ export function useLogs() {
     params.get('site') ? Number(params.get('site')) : 'all',
   );
   const [severitySel, setSeveritySel] = useState<SeveritySelection>([]);
+  const [serviceSel, setServiceSel] = useState<ServiceSelection>('all');
+  const [environment, setEnvironment] = useState('all');
   const [search, setSearch] = useState('');
+  const [searchIn, setSearchIn] = useState<SearchScope>('both');
   const [timeRange, setTimeRange] = useState<TimeRange>('15m');
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
@@ -30,6 +34,15 @@ export function useLogs() {
       .then(setSites)
       .catch(() => setError('Could not load sites.'));
   }, []);
+
+  useEffect(() => {
+    const siteId = siteSel === 'all' ? null : siteSel;
+    api.logOptions(siteId).then((options) => {
+      setFilterOptions(options);
+      setServiceSel((current) => current === 'all' || options.services.some((service) => service.id === current) ? current : 'all');
+      setEnvironment((current) => current === 'all' || options.environments.includes(current) ? current : 'all');
+    }).catch(() => setFilterOptions({ services: [], environments: [] }));
+  }, [siteSel]);
 
   useEffect(() => {
     const initialWindow = resolveTimeWindow(timeRange, customFrom, customTo);
@@ -49,17 +62,22 @@ export function useLogs() {
       const window = resolveTimeWindow(timeRange, customFrom, customTo);
       const siteId = siteSel === 'all' ? null : siteSel;
       const severity = severitySel.length > 0 ? severitySel : '';
+      const serviceId = serviceSel === 'all' ? null : serviceSel;
+      const environmentValue = environment === 'all' ? undefined : environment;
       try {
         const [rows, summary] = await Promise.all([
           api.listLogs({
             siteId,
+            serviceId,
+            environment: environmentValue,
             severity,
             search: search.trim(),
+            searchIn,
             fromMs: window.fromMs,
             toMs: window.toMs,
             limit: MAX_VISIBLE_LOGS,
           }),
-          api.logStats({ siteId, fromMs: window.fromMs, toMs: window.toMs }),
+          api.logStats({ siteId, serviceId, environment: environmentValue, fromMs: window.fromMs, toMs: window.toMs }),
         ]);
         if (!cancelled) {
           setLogs(rows);
@@ -84,7 +102,7 @@ export function useLogs() {
       cancelled = true;
       if (timer) window.clearInterval(timer);
     };
-  }, [siteSel, severitySel, search, timeRange, customFrom, customTo, live, refreshNonce]);
+  }, [siteSel, serviceSel, environment, severitySel, search, searchIn, timeRange, customFrom, customTo, live, refreshNonce]);
 
   const timeWindow = resolveTimeWindow(timeRange, customFrom, customTo);
   const summary = stats
@@ -116,8 +134,15 @@ export function useLogs() {
     setSiteSel,
     severitySel,
     setSeveritySel,
+    serviceSel,
+    setServiceSel,
+    environment,
+    setEnvironment,
+    filterOptions,
     search,
     setSearch,
+    searchIn,
+    setSearchIn,
     timeRange,
     changeTimeRange,
     customFrom,

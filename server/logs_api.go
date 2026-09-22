@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,6 +19,26 @@ func parseLogFilter(r *http.Request) (store.LogFilter, error) {
 		SessionID: strings.TrimSpace(q.Get("session_id")),
 		Search:    strings.TrimSpace(q.Get("search")),
 		Limit:     store.MaxLogListLimit,
+	}
+	if value := strings.TrimSpace(q.Get("service_id")); value != "" {
+		id, err := strconv.ParseInt(value, 10, 64)
+		if err != nil || id <= 0 {
+			return f, fmt.Errorf("invalid service_id")
+		}
+		f.ServiceID = id
+	}
+	f.Environment = strings.TrimSpace(q.Get("environment"))
+	if len(f.Environment) > store.MaxLogEnvironmentLength {
+		return f, fmt.Errorf("environment is too long")
+	}
+	f.SearchIn = strings.TrimSpace(q.Get("search_in"))
+	if f.SearchIn == "" {
+		// Preserve the original broad dashboard/API search for older callers.
+		// The new dashboard sends an explicit message/extra/both scope.
+		f.SearchIn = "all"
+	}
+	if f.SearchIn != "message" && f.SearchIn != "extra" && f.SearchIn != "both" && f.SearchIn != "all" {
+		return f, fmt.Errorf("search_in must be message, extra, or both")
 	}
 	if len(f.Search) > 256 {
 		return f, fmt.Errorf("search must be 256 characters or fewer")
@@ -80,6 +102,89 @@ func parseLogFilter(r *http.Request) (store.LogFilter, error) {
 		f.Limit = n
 	}
 	return f, nil
+}
+
+func (s *Server) handleLogOptions(w http.ResponseWriter, r *http.Request) {
+	var siteID int64
+	if value := r.URL.Query().Get("site_id"); value != "" {
+		id, err := strconv.ParseInt(value, 10, 64)
+		if err != nil || id <= 0 {
+			writeErr(w, http.StatusBadRequest, "invalid site_id")
+			return
+		}
+		siteID = id
+	}
+	options, err := s.store.LogOptions(siteID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, options)
+}
+
+type serviceLogIngestRequest struct {
+	Logs []store.ServiceLogEntry `json:"logs"`
+}
+
+// handleServiceLogIngest is intentionally independent from tracker ingest.
+// The generated service key identifies both the site and service; callers may
+// use either the dedicated header or a Bearer token.
+func (s *Server) handleServiceLogIngest(w http.ResponseWriter, r *http.Request) {
+	key := strings.TrimSpace(r.Header.Get("X-TraceUX-Log-Key"))
+	if key == "" {
+		authorization := strings.TrimSpace(r.Header.Get("Authorization"))
+		if strings.HasPrefix(strings.ToLower(authorization), "bearer ") {
+			key = strings.TrimSpace(authorization[len("Bearer "):])
+		}
+	}
+	service, allowed, valid, err := s.store.ServiceForKey(key)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !valid {
+		writeErr(w, http.StatusUnauthorized, "invalid log service key")
+		return
+	}
+	s.initSecurity()
+	if !s.ingestIPLimiter.allow("ip:"+s.clientIP(r)) || !s.ingestSiteLimiter.allow(fmt.Sprintf("logs-service:%d", service.ID)) {
+		writeRateLimited(w, "log ingest rate limit exceeded")
+		return
+	}
+	body, err := readBody(r)
+	if err != nil {
+		if err == errRequestBodyTooLarge {
+			writeErr(w, http.StatusRequestEntityTooLarge, "request body too large")
+		} else {
+			writeErr(w, http.StatusBadRequest, "unreadable body")
+		}
+		return
+	}
+	var payload serviceLogIngestRequest
+	dec := json.NewDecoder(strings.NewReader(string(body)))
+	if err := dec.Decode(&payload); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if len(payload.Logs) == 0 || len(payload.Logs) > store.MaxServiceLogBatch {
+		writeErr(w, http.StatusBadRequest, fmt.Sprintf("logs must contain 1-%d entries", store.MaxServiceLogBatch))
+		return
+	}
+	accepted, skipped, err := s.store.SaveServiceLogs(service, allowed, payload.Logs)
+	if err != nil {
+		if strings.Contains(err.Error(), "logs[") {
+			writeErr(w, http.StatusBadRequest, err.Error())
+		} else {
+			writeErr(w, http.StatusInternalServerError, err.Error())
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"accepted": accepted, "skipped": skipped})
 }
 
 func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {

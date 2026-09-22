@@ -84,11 +84,16 @@
     height: 30px;
     display: grid;
     place-items: center;
+    place-content: center;
+    padding: 0;
+    line-height: 0;
     margin-top: 0.05rem;
     border: 1px solid $line;
     border-radius: $radius-pill;
     background: $accent-soft;
     color: $accent;
+
+    > svg { display: block; margin: 0; }
   }
 
   .session-cell { min-width: 0; }

@@ -1,0 +1,79 @@
+@use 'abstracts' as *;
+
+.filter-panel {
+  min-width: 0;
+  margin-bottom: 1.1rem;
+  padding: 1.1rem 1.35rem;
+
+  &__head,
+  &__foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  &__head { margin-bottom: 0.7rem; }
+
+  &__controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+
+    > .select-wrap {
+      flex: 0 1 auto;
+      width: auto;
+      max-width: 260px;
+
+      > .field-control {
+        width: auto;
+        min-width: 132px;
+      }
+    }
+
+    > input.field-control {
+      flex: 1 1 220px;
+      width: auto;
+      min-width: 180px;
+      max-width: 360px;
+    }
+
+    > .select-wrap > .field-control,
+    > input.field-control {
+      background: $surface;
+      border-color: $line-strong;
+    }
+  }
+
+  &__foot {
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid $line;
+  }
+
+  &--grid &__controls > .select-wrap {
+    width: 100%;
+    max-width: none;
+
+    > .field-control { width: 100%; min-width: 0; }
+  }
+}
+
+@media (max-width: 640px) {
+  .filter-panel {
+    padding: 1rem;
+
+    &__head,
+    &__foot { align-items: flex-start; flex-direction: column; }
+
+    &__controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+
+      > .select-wrap { width: 100%; max-width: none; }
+      > .select-wrap > .field-control { width: 100%; min-width: 0; }
+      > input.field-control { width: 100%; min-width: 0; max-width: none; grid-column: 1 / -1; }
+    }
+  }
+}

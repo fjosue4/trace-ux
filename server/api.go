@@ -342,6 +342,11 @@ func (s *Server) routes() http.Handler {
 	// Custom launcher icon for the unified widget.
 	mux.HandleFunc("PUT /api/sites/{id}/widget-icon", s.auth(s.requireAdmin(s.handleUploadWidgetIcon)))
 	mux.HandleFunc("DELETE /api/sites/{id}/widget-icon", s.auth(s.requireAdmin(s.handleDeleteWidgetIcon)))
+	mux.HandleFunc("GET /api/sites/{id}/services", s.auth(s.handleListServices))
+	mux.HandleFunc("POST /api/sites/{id}/services", s.auth(s.requireAdmin(s.handleCreateService)))
+	mux.HandleFunc("PATCH /api/sites/{id}/services/{serviceId}", s.auth(s.requireAdmin(s.handleUpdateService)))
+	mux.HandleFunc("POST /api/sites/{id}/services/{serviceId}/rotate-key", s.auth(s.requireAdmin(s.handleRotateServiceKey)))
+	mux.HandleFunc("DELETE /api/sites/{id}/services/{serviceId}/key", s.auth(s.requireAdmin(s.handleRevokeServiceKey)))
 
 	mux.HandleFunc("GET /api/sessions", s.auth(s.handleListSessions))
 	mux.HandleFunc("GET /api/sessions/countries", s.auth(s.handleListSessionCountries))
@@ -356,6 +361,8 @@ func (s *Server) routes() http.Handler {
 	// recording through its session_id.
 	mux.HandleFunc("GET /api/logs", s.auth(s.handleListLogs))
 	mux.HandleFunc("GET /api/logs/stats", s.auth(s.handleLogStats))
+	mux.HandleFunc("GET /api/logs/options", s.auth(s.handleLogOptions))
+	mux.HandleFunc("POST /api/logs/ingest", s.handleServiceLogIngest)
 
 	// Backend endpoint latency and percentile metrics.
 	mux.HandleFunc("GET /api/performance", s.auth(s.handlePerformance))

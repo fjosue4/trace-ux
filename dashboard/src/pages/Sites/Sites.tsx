@@ -70,7 +70,7 @@ export default function Sites() {
         onCreated={load}
         onConfigureSite={(site) => {
           setAdding(false);
-          navigate(`/site/${site.id}`);
+          navigate(`/sites/site/${site.id}`);
         }}
       />
     </main>

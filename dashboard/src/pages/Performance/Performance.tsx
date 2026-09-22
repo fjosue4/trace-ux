@@ -7,6 +7,7 @@ import Badge from '../../components/ui/Badge';
 import Switch from '../../components/ui/Switch';
 import Button from '../../components/ui/Button';
 import Table from '../../components/ui/Table';
+import FilterPanel from '../../components/ui/FilterPanel';
 import { Icon } from '../../components/ui/Icon';
 import { Select } from '../../components/ui/fields';
 import { usePerformance } from './hooks/usePerformance';
@@ -56,12 +57,9 @@ export default function Performance() {
         }
       />
 
-      <Card className="performance-controls">
-        <div className="performance-controls__head">
-          <div>
-            <strong>Filter performance</strong>
-            <p className="muted small">Compare the same endpoint across deployments and releases.</p>
-          </div>
+      <FilterPanel
+        title="Filter performance"
+        actions={(
           <div className="performance-controls__actions">
             <Select
               className="performance-range"
@@ -74,33 +72,34 @@ export default function Performance() {
               Refresh
             </Button>
           </div>
-        </div>
-        <div className="performance-filters">
-          <Select ariaLabel="Site" value={String(siteSel)} onChange={(value) => setSiteSel(value === 'all' ? 'all' : Number(value))} options={siteOptions} />
-          <Select
-            ariaLabel="Environment"
-            value={environment}
-            onChange={setEnvironment}
-            options={[{ value: 'all', label: 'All environments' }, ...filterOptions.environments.map((value) => ({ value, label: value }))]}
-          />
-          <Select
-            ariaLabel="Service"
-            value={service}
-            onChange={setService}
-            options={[{ value: 'all', label: 'All services' }, ...filterOptions.services.map((value) => ({ value, label: value }))]}
-          />
-          <Select
-            ariaLabel="Version"
-            value={version}
-            onChange={setVersion}
-            options={[{ value: 'all', label: 'All versions' }, ...filterOptions.versions.map((value) => ({ value, label: value }))]}
-          />
-        </div>
-        <div className="performance-controls__foot">
-          <span className="muted small">{rangeLabels[range]} · {report ? `${report.endpoints.length} endpoint${report.endpoints.length === 1 ? '' : 's'}` : 'Loading'}</span>
-          <span className="performance-controls__hint"><Icon name="activity" size={13} /> p95 and p99 expose slow-tail regressions</span>
-        </div>
-      </Card>
+        )}
+        footer={(
+          <>
+            <span className="muted small">{rangeLabels[range]} · {report ? `${report.endpoints.length} endpoint${report.endpoints.length === 1 ? '' : 's'}` : 'Loading'}</span>
+            <span className="performance-controls__hint"><Icon name="activity" size={13} /> p95 and p99 expose slow-tail regressions</span>
+          </>
+        )}
+      >
+        <Select ariaLabel="Site" value={String(siteSel)} onChange={(value) => setSiteSel(value === 'all' ? 'all' : Number(value))} options={siteOptions} />
+        <Select
+          ariaLabel="Environment"
+          value={environment}
+          onChange={setEnvironment}
+          options={[{ value: 'all', label: 'All environments' }, ...filterOptions.environments.map((value) => ({ value, label: value }))]}
+        />
+        <Select
+          ariaLabel="Service"
+          value={service}
+          onChange={setService}
+          options={[{ value: 'all', label: 'All services' }, ...filterOptions.services.map((value) => ({ value, label: value }))]}
+        />
+        <Select
+          ariaLabel="Version"
+          value={version}
+          onChange={setVersion}
+          options={[{ value: 'all', label: 'All versions' }, ...filterOptions.versions.map((value) => ({ value, label: value }))]}
+        />
+      </FilterPanel>
 
       {error && <Notice tone="error">{error}</Notice>}
 

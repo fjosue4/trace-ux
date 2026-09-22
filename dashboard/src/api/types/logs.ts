@@ -14,9 +14,13 @@ export type Log = {
   session_id: string;
   site_id: number;
   site_name?: string;
+  service_id?: number;
+  service_name?: string;
+  environment?: string;
   timestamp_ms: number;
   severity: LogSeverity;
   message: string;
+  extra?: string;
   url: string;
   created_at: number;
   session_started_at: number;
@@ -35,11 +39,19 @@ export type LogStats = {
 
 export type LogQuery = {
   siteId?: number | null;
+  serviceId?: number | null;
+  environment?: string;
   severity?: LogSeverity | LogSeverity[] | '';
   search?: string;
+  searchIn?: 'message' | 'extra' | 'both';
   sessionId?: string;
   beforeId?: number;
   fromMs?: number;
   toMs?: number;
   limit?: number;
+};
+
+export type LogFilterOptions = {
+  services: Array<{ id: number; site_id: number; name: string }>;
+  environments: string[];
 };

@@ -64,7 +64,7 @@ export default function Sessions() {
           title="No sites yet"
           description="Create a site first — its sessions will show up here."
           action={
-            <Link to="/" className="btn btn--primary btn--md">
+            <Link to="/sites" className="btn btn--primary btn--md">
               Go to sites
             </Link>
           }

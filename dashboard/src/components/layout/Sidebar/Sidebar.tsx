@@ -13,13 +13,13 @@ export default function Sidebar({ user, onLogout }: SidebarProps) {
   return (
     <motion.aside className="sidebar" initial={{ opacity: 0, x: -18 }} animate={{ opacity: 1, x: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 26 }}>
       <motion.div whileHover={{ x: 2 }} transition={spring}>
-        <NavLink to="/" className="sidebar__brand" aria-label="TraceUX home">
+        <NavLink to="/sites" className="sidebar__brand" aria-label="TraceUX home">
           <Logo className="sidebar__logo" />
         </NavLink>
       </motion.div>
 
       <motion.nav className="sidebar__nav" variants={stagger} initial="hidden" animate="visible">
-        <NavItem to="/" end icon="globe" label="Sites" />
+        <NavItem to="/sites" icon="globe" label="Sites" />
         <NavItem to="/sessions" icon="film" label="Sessions" />
         <NavItem to="/performance" icon="activity" label="Performance" />
         <NavItem to="/feedback" icon="message" label="Feedback" />

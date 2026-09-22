@@ -105,6 +105,7 @@ export function TicketThreadView({ thread, userRole, onStatus, onReply, onArchiv
       ) : (
         <div className="ticket-reply">
           <textarea
+            className="field-control"
             value={body}
             maxLength={4000}
             onChange={(event) => setBody(event.currentTarget.value)}

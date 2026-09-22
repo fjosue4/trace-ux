@@ -223,6 +223,37 @@ a.hub-row:hover { background: $surface-2; text-decoration: none; }
 .site-performance-key__row code { color: $ink; font: 0.78rem #{$font-mono}; }
 .site-performance-key__row .btn { justify-self: end; }
 
+.services-tab { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.2rem; }
+.services-intro__head,
+.service-card__head,
+.service-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.services-intro h2 { margin: 0 0 0.2rem; }
+.services-intro p { max-width: 720px; margin: 0; }
+.services-create { display: flex; align-items: center; gap: 0.55rem; min-width: min(100%, 360px); }
+.services-create .field-control { min-width: 0; }
+.services-create .btn { flex: none; }
+.services-list { display: flex; flex-direction: column; gap: 0.8rem; }
+.service-card__head > div:first-child { display: flex; flex-direction: column; gap: 0.18rem; min-width: 0; }
+.service-card__head .muted { overflow-wrap: anywhere; }
+.service-card__fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+.service-severity-field__head { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; }
+.service-severity-field__head .switch { flex: none; }
+.service-severity-field__head .switch__label { font-size: 0.76rem; color: $muted; }
+.service-card__actions { display: flex; justify-content: flex-end; margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid $line; }
+.service-card__actions > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.45rem; }
+.service-new-key { display: grid; grid-template-columns: minmax(0, 1fr) minmax(180px, auto) auto; align-items: center; gap: 0.7rem; }
+.service-new-key code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 .hub-config__title {
   margin: 1.2rem 0 0.2rem;
   font-size: 0.72rem;
@@ -246,6 +277,12 @@ a.hub-row:hover { background: $surface-2; text-decoration: none; }
   .site-performance-key__row { grid-template-columns: 1fr auto; }
   .site-performance-key__row > .muted { grid-column: 1 / -1; grid-row: 2; }
   .site-performance-key__row .btn { grid-column: 2; grid-row: 1; }
+  .services-intro__head,
+  .service-card__actions { align-items: stretch; flex-direction: column; }
+  .services-create { width: 100%; min-width: 0; }
+  .service-card__fields { grid-template-columns: 1fr; }
+  .service-card__actions > div { justify-content: flex-start; }
+  .service-new-key { grid-template-columns: 1fr; }
 }
 
 .announcement-customizer {
@@ -341,7 +378,7 @@ a.hub-row:hover { background: $surface-2; text-decoration: none; }
     height: 38px;
     padding: 3px;
     border: 1px solid $line-strong;
-    border-radius: 9px;
+    border-radius: $radius-sm;
     background: $surface;
     cursor: pointer;
   }
@@ -406,7 +443,7 @@ a.hub-row:hover { background: $surface-2; text-decoration: none; }
     height: 32px;
     padding: 0 13px;
     border: 1px solid $line;
-    border-radius: 8px;
+    border-radius: $radius-sm;
     background: $surface-2;
     color: var(--text);
     font-size: 13px;

@@ -1,6 +1,8 @@
 package store
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -16,6 +18,10 @@ const (
 	maxLogRetentionDays     = 3650
 	maxLogRows              = 10_000_000
 	MaxLogListLimit         = 1000
+	MaxServiceLogBatch      = 1000
+	MaxLogMessageBytes      = 8 << 10
+	MaxLogExtraBytes        = 64 << 10
+	MaxLogEnvironmentLength = 128
 )
 
 // LogSettings controls the browser logs captured for one site. Severities are
@@ -154,12 +160,16 @@ func LogMeetsMinimumSeverity(value, minimum string) bool {
 
 type Log struct {
 	ID               int64  `json:"id"`
-	SessionID        string `json:"session_id"`
+	SessionID        string `json:"session_id,omitempty"`
 	SiteID           int64  `json:"site_id"`
 	SiteName         string `json:"site_name,omitempty"`
+	ServiceID        int64  `json:"service_id,omitempty"`
+	ServiceName      string `json:"service_name,omitempty"`
+	Environment      string `json:"environment,omitempty"`
 	TimestampMs      int64  `json:"timestamp_ms"`
 	Severity         string `json:"severity"`
 	Message          string `json:"message"`
+	Extra            string `json:"extra,omitempty"`
 	URL              string `json:"url"`
 	CreatedAt        int64  `json:"created_at"`
 	SessionStartedAt int64  `json:"session_started_at"`
@@ -167,15 +177,38 @@ type Log struct {
 }
 
 type LogFilter struct {
-	SiteID     int64
-	Severity   string
-	Severities []string
-	Search     string
-	SessionID  string
-	FromMs     int64
-	ToMs       int64
-	BeforeID   int64
-	Limit      int
+	SiteID      int64
+	ServiceID   int64
+	Environment string
+	Severity    string
+	Severities  []string
+	Search      string
+	SearchIn    string
+	SessionID   string
+	FromMs      int64
+	ToMs        int64
+	BeforeID    int64
+	Limit       int
+}
+
+type LogFilterOptions struct {
+	Services     []ServiceOption `json:"services"`
+	Environments []string        `json:"environments"`
+}
+
+type ServiceOption struct {
+	ID     int64  `json:"id"`
+	SiteID int64  `json:"site_id"`
+	Name   string `json:"name"`
+}
+
+type ServiceLogEntry struct {
+	TimestampMs int64           `json:"timestamp_ms"`
+	Severity    string          `json:"severity"`
+	Message     string          `json:"message"`
+	Extra       json.RawMessage `json:"extra,omitempty"`
+	Environment string          `json:"environment,omitempty"`
+	URL         string          `json:"url,omitempty"`
 }
 
 type LogStats struct {
@@ -204,9 +237,9 @@ func (s *Store) SaveLogs(siteID int64, sessionID string, logs []Log) ([]Log, err
 	inserted := make([]Log, 0, len(logs))
 	for _, item := range logs {
 		res, err := tx.Exec(`INSERT OR IGNORE INTO logs
-			(session_id, client_seq, timestamp_ms, severity, message, url, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			sessionID, item.ClientSeq, item.TimestampMs, item.Severity, item.Message, item.URL, now)
+			(site_id, session_id, client_seq, timestamp_ms, severity, message, url, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			siteID, sessionID, item.ClientSeq, item.TimestampMs, item.Severity, item.Message, item.URL, now)
 		if err != nil {
 			return nil, err
 		}
@@ -226,19 +259,87 @@ func (s *Store) SaveLogs(siteID int64, sessionID string, logs []Log) ([]Log, err
 	return inserted, nil
 }
 
+func (s *Store) SaveServiceLogs(service Service, allowed []string, entries []ServiceLogEntry) (accepted, skipped int, err error) {
+	allowedSet := make(map[string]bool, len(allowed))
+	for _, severity := range allowed {
+		allowedSet[severity] = true
+	}
+	now := time.Now()
+	nowMs := now.UnixMilli()
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return 0, 0, err
+	}
+	defer tx.Rollback()
+	for index, entry := range entries {
+		entry.Message = strings.TrimSpace(entry.Message)
+		entry.Environment = strings.TrimSpace(entry.Environment)
+		if entry.Environment == "" {
+			entry.Environment = "unknown"
+		}
+		if !ValidLogSeverity(entry.Severity) {
+			return 0, 0, fmt.Errorf("logs[%d].severity is invalid", index)
+		}
+		if entry.Message == "" || len(entry.Message) > MaxLogMessageBytes {
+			return 0, 0, fmt.Errorf("logs[%d].message must be 1-%d bytes", index, MaxLogMessageBytes)
+		}
+		if len(entry.Environment) > MaxLogEnvironmentLength {
+			return 0, 0, fmt.Errorf("logs[%d].environment must be at most %d characters", index, MaxLogEnvironmentLength)
+		}
+		if len(entry.URL) > 4096 {
+			return 0, 0, fmt.Errorf("logs[%d].url is too long", index)
+		}
+		extra := ""
+		if len(entry.Extra) > 0 && string(entry.Extra) != "null" {
+			if !json.Valid(entry.Extra) || len(entry.Extra) > MaxLogExtraBytes {
+				return 0, 0, fmt.Errorf("logs[%d].extra must be valid JSON up to %d bytes", index, MaxLogExtraBytes)
+			}
+			extra = string(entry.Extra)
+		}
+		if entry.TimestampMs <= 0 {
+			entry.TimestampMs = nowMs
+		}
+		if !allowedSet[entry.Severity] {
+			skipped++
+			continue
+		}
+		if _, err := tx.Exec(`INSERT INTO logs
+			(site_id, service_id, timestamp_ms, severity, message, extra, environment, url, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, service.SiteID, service.ID, entry.TimestampMs,
+			entry.Severity, entry.Message, extra, entry.Environment, strings.TrimSpace(entry.URL), now.Unix()); err != nil {
+			return 0, 0, err
+		}
+		accepted++
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, 0, err
+	}
+	return accepted, skipped, nil
+}
+
 // ListLogs returns newest logs first. Logs are joined to their session
 // and site so the global Logs page can link each row back to its recording.
 func (s *Store) ListLogs(f LogFilter) ([]Log, error) {
-	query := `SELECT l.id, l.session_id, se.site_id, si.name, l.timestamp_ms,
-		l.severity, l.message, l.url, l.created_at, se.started_at
+	query := `SELECT l.id, COALESCE(l.session_id, ''), l.site_id, si.name,
+		COALESCE(l.service_id, 0), COALESCE(sv.name, ''), l.environment, l.timestamp_ms,
+		l.severity, l.message, l.extra, l.url, l.created_at, COALESCE(se.started_at, 0)
 		FROM logs l
-		JOIN sessions se ON se.id = l.session_id
-		JOIN sites si ON si.id = se.site_id
+		JOIN sites si ON si.id = l.site_id
+		LEFT JOIN sessions se ON se.id = l.session_id
+		LEFT JOIN services sv ON sv.id = l.service_id
 		WHERE 1=1`
 	args := []any{}
 	if f.SiteID > 0 {
-		query += ` AND se.site_id = ?`
+		query += ` AND l.site_id = ?`
 		args = append(args, f.SiteID)
+	}
+	if f.ServiceID > 0 {
+		query += ` AND l.service_id = ?`
+		args = append(args, f.ServiceID)
+	}
+	if f.Environment != "" {
+		query += ` AND l.environment = ?`
+		args = append(args, f.Environment)
 	}
 	severities := f.Severities
 	if len(severities) == 0 && f.Severity != "" {
@@ -252,11 +353,26 @@ func (s *Store) ListLogs(f LogFilter) ([]Log, error) {
 		}
 	}
 	if f.Search != "" {
-		query += ` AND (instr(lower(l.message), lower(?)) > 0
-			OR instr(lower(l.url), lower(?)) > 0
-			OR instr(lower(si.name), lower(?)) > 0
-			OR instr(lower(l.session_id), lower(?)) > 0)`
-		args = append(args, f.Search, f.Search, f.Search, f.Search)
+		switch f.SearchIn {
+		case "message":
+			query += ` AND instr(lower(l.message), lower(?)) > 0`
+			args = append(args, f.Search)
+		case "extra":
+			query += ` AND instr(lower(l.extra), lower(?)) > 0`
+			args = append(args, f.Search)
+		case "both", "":
+			query += ` AND (instr(lower(l.message), lower(?)) > 0 OR instr(lower(l.extra), lower(?)) > 0)`
+			args = append(args, f.Search, f.Search)
+		default:
+			query += ` AND (instr(lower(l.message), lower(?)) > 0
+				OR instr(lower(l.extra), lower(?)) > 0
+				OR instr(lower(l.url), lower(?)) > 0
+				OR instr(lower(si.name), lower(?)) > 0
+				OR instr(lower(COALESCE(l.session_id, '')), lower(?)) > 0
+				OR instr(lower(COALESCE(sv.name, '')), lower(?)) > 0
+				OR instr(lower(l.environment), lower(?)) > 0)`
+			args = append(args, f.Search, f.Search, f.Search, f.Search, f.Search, f.Search, f.Search)
+		}
 	}
 	if f.SessionID != "" {
 		query += ` AND l.session_id = ?`
@@ -290,7 +406,8 @@ func (s *Store) ListLogs(f LogFilter) ([]Log, error) {
 	for rows.Next() {
 		var item Log
 		if err := rows.Scan(&item.ID, &item.SessionID, &item.SiteID, &item.SiteName,
-			&item.TimestampMs, &item.Severity, &item.Message, &item.URL,
+			&item.ServiceID, &item.ServiceName, &item.Environment, &item.TimestampMs,
+			&item.Severity, &item.Message, &item.Extra, &item.URL,
 			&item.CreatedAt, &item.SessionStartedAt); err != nil {
 			return nil, err
 		}
@@ -304,13 +421,19 @@ func (s *Store) ListLogs(f LogFilter) ([]Log, error) {
 // the table's severity filter changes.
 func (s *Store) LogStats(f LogFilter) (LogStats, error) {
 	var stats LogStats
-	query := `SELECT l.severity, COUNT(*)
-		FROM logs l JOIN sessions se ON se.id = l.session_id
-		WHERE 1=1`
+	query := `SELECT l.severity, COUNT(*) FROM logs l WHERE 1=1`
 	args := []any{}
 	if f.SiteID > 0 {
-		query += ` AND se.site_id = ?`
+		query += ` AND l.site_id = ?`
 		args = append(args, f.SiteID)
+	}
+	if f.ServiceID > 0 {
+		query += ` AND l.service_id = ?`
+		args = append(args, f.ServiceID)
+	}
+	if f.Environment != "" {
+		query += ` AND l.environment = ?`
+		args = append(args, f.Environment)
 	}
 	if f.FromMs > 0 {
 		query += ` AND l.timestamp_ms >= ?`
@@ -348,4 +471,50 @@ func (s *Store) LogStats(f LogFilter) (LogStats, error) {
 	}
 	stats.Total = stats.Debug + stats.Info + stats.Warn + stats.Error
 	return stats, nil
+}
+
+func (s *Store) LogOptions(siteID int64) (LogFilterOptions, error) {
+	options := LogFilterOptions{Services: []ServiceOption{}, Environments: []string{}}
+	query := `SELECT id, site_id, name FROM services`
+	args := []any{}
+	if siteID > 0 {
+		query += ` WHERE site_id = ?`
+		args = append(args, siteID)
+	}
+	query += ` ORDER BY name`
+	rows, err := s.DB.Query(query, args...)
+	if err != nil {
+		return options, err
+	}
+	for rows.Next() {
+		var item ServiceOption
+		if err := rows.Scan(&item.ID, &item.SiteID, &item.Name); err != nil {
+			rows.Close()
+			return options, err
+		}
+		options.Services = append(options.Services, item)
+	}
+	if err := rows.Close(); err != nil {
+		return options, err
+	}
+	envQuery := `SELECT DISTINCT environment FROM logs WHERE environment <> ''`
+	envArgs := []any{}
+	if siteID > 0 {
+		envQuery += ` AND site_id = ?`
+		envArgs = append(envArgs, siteID)
+	}
+	envQuery += ` ORDER BY environment`
+	envRows, err := s.DB.Query(envQuery, envArgs...)
+	if err != nil {
+		return options, err
+	}
+	defer envRows.Close()
+	for envRows.Next() {
+		var environment string
+		if err := envRows.Scan(&environment); err != nil {
+			return options, err
+		}
+		options.Environments = append(options.Environments, environment)
+	}
+	return options, envRows.Err()
 }
