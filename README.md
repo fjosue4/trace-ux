@@ -61,11 +61,17 @@ SQLite and the dashboard embedded. Backups are copying one folder.
 
 ### Sessions dashboard
 
-<img width="1895" height="891" alt="image" src="https://github.com/user-attachments/assets/6fff39bc-22ba-4cb0-835c-445e337c0f85" />
+<img width="1900" height="892" alt="image" src="https://github.com/user-attachments/assets/e3d1a252-c6c7-44dc-b21d-72a3a6bad661" />
+
 
 ### Session replay
 
-<img width="1901" height="886" alt="image" src="https://github.com/user-attachments/assets/85811ddb-4f22-4f20-8cc4-be2ae6cc885f" />
+<img width="1910" height="890" alt="image" src="https://github.com/user-attachments/assets/e9aa72ba-a630-41c4-ada4-02c43bff416a" />
+
+### Logs view
+
+<img width="1893" height="885" alt="image" src="https://github.com/user-attachments/assets/d51fe1dd-ff0f-409f-9dc3-a59542eed3d7" />
+
 
 ## Quickstart
 
