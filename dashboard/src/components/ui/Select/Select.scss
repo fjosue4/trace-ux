@@ -8,7 +8,7 @@
 .field-control {
   font: inherit;
   color: $ink;
-  background: $surface-2;
+  background: $field-bg;
   border: 1px solid $line;
   border-radius: $radius-sm;
   height: 40px;
@@ -22,7 +22,7 @@
   &:hover:not(:disabled):not(:focus) { border-color: $line-strong; }
   &:focus {
     outline: none;
-    background: $surface;
+    background: $field-bg-focus;
     border-color: $accent;
     box-shadow: 0 0 0 3px $accent-soft;
   }
@@ -68,8 +68,8 @@
   flex-direction: column;
   gap: 2px;
   padding: 5px;
-  background: $surface;
-  border: 1px solid $line;
+  background: $popover-bg;
+  border: 1px solid $line-strong;
   border-radius: $radius;
   box-shadow: $shadow-md;
   transform-origin: top center;
@@ -94,7 +94,7 @@
     transition: background-color $duration-fast $ease-out;
 
     &:hover,
-    &[data-active='true'] { background: $surface-2; }
+    &[data-active='true'] { background: $surface-3; }
 
     &.is-selected { color: $accent; font-weight: 700; background: $accent-soft; }
   }

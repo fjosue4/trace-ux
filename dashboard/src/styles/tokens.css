@@ -3,7 +3,7 @@
  *
  * Direction: restrained operations dashboard (compact geometry, flat panels,
  * crisp borders, and limited elevation). Light theme uses neutral grays; dark
- * theme uses near-black graphite surfaces with the green brand accent. Themes switch via
+ * theme uses soft charcoal surfaces with the green brand accent. Themes switch via
  * <html data-theme="light|dark">; index.html sets it before first paint.
  *
  * Change the look of the whole app here — components only reference tokens.
@@ -23,6 +23,13 @@
   --muted: #707074;
   --line: rgba(24, 24, 26, 0.1);
   --line-strong: rgba(24, 24, 26, 0.18);
+
+  /* form fields & popovers — fields stay filled when focused, and popovers sit
+     above the panel they open from */
+  --field-bg: #f3f3f1;
+  --field-bg-focus: #ffffff;
+  --filter-field-bg: #ffffff; /* white with a strong border in filter bars */
+  --popover-bg: #ffffff;
 
   /* brand & feedback — grounded green, never neon */
   --accent: #2f7d4a;
@@ -53,17 +60,25 @@
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  /* surfaces & text — Cloudflare-inspired near-black, neutral and high-contrast */
-  --page-bg: #080808;
-  --bg: #0b0b0c;
-  --surface: #111112;
-  --surface-2: #18181a;
-  --surface-3: #222225;
-  --ink: #f3f3f4;
-  --ink-2: #c8c8cb;
-  --muted: #929297;
-  --line: rgba(255, 255, 255, 0.09);
-  --line-strong: rgba(255, 255, 255, 0.17);
+  /* surfaces & text — soft charcoal with a faint green-gray cast, lifted off
+     black so long sessions stay comfortable; text is off-white, not pure white */
+  --page-bg: #1a1c1b;
+  --bg: #1d1f1e;
+  --surface: #232625;
+  --surface-2: #2a2d2c;
+  --surface-3: #343837;
+  --ink: #ecedeb;
+  --ink-2: #c3c6c2;
+  --muted: #979b97;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+
+  /* form fields & popovers — focus lifts the field instead of dropping it to
+     the panel colour, and popovers are one step above the panel */
+  --field-bg: #2a2d2c;
+  --field-bg-focus: #303433;
+  --filter-field-bg: #2a2d2c;
+  --popover-bg: #2c2f2e;
 
   /* brand & feedback — luminous botanical green */
   --accent: #66c983;
@@ -85,8 +100,8 @@
   --signal: #66c983;
   --olive: #7e8b5b;
 
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.35);
-  --shadow-md: 0 20px 56px -18px rgb(0 0 0 / 0.9);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.25);
+  --shadow-md: 0 20px 50px -20px rgb(0 0 0 / 0.55);
   --shadow-accent: none;
 }
 

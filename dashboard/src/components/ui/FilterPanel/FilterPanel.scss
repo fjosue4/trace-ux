@@ -41,8 +41,11 @@
 
     > .select-wrap > .field-control,
     > input.field-control {
-      background: $surface;
+      background: $filter-field-bg;
       border-color: $line-strong;
+
+      // This selector outranks `.field-control:focus`, so restate the focus fill.
+      &:focus { background: $field-bg-focus; border-color: $accent; }
     }
   }
 
