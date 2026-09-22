@@ -366,9 +366,11 @@ func (s *Server) routes() http.Handler {
 
 	// Backend endpoint latency and percentile metrics.
 	mux.HandleFunc("GET /api/performance", s.auth(s.handlePerformance))
+	mux.HandleFunc("POST /api/performance/ingest", s.handleServicePerformanceIngest)
 	mux.HandleFunc("POST /api/performance/ingest/{siteKey}", s.handlePerformanceIngest)
+	// Legacy site-level performance keys can still be listed and removed, but
+	// new credentials are issued per service.
 	mux.HandleFunc("GET /api/sites/{id}/performance-keys", s.auth(s.handleListPerformanceKeys))
-	mux.HandleFunc("POST /api/sites/{id}/performance-keys", s.auth(s.requireAdmin(s.handleCreatePerformanceKey)))
 	mux.HandleFunc("DELETE /api/sites/{id}/performance-keys/{keyId}", s.auth(s.requireAdmin(s.handleDeletePerformanceKey)))
 	// Backward-compatible singular route; new dashboard flows use the plural
 	// key collection so keys can coexist and be revoked independently.

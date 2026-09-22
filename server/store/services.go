@@ -24,7 +24,7 @@ type Service struct {
 	RevokedAt         int64    `json:"revoked_at"`
 }
 
-func newServiceKey() string { return "tux_log_" + newKey(24) }
+func newServiceKey() string { return "tux_svc_" + newKey(24) }
 
 func hashServiceKey(key string) string {
 	sum := sha256.Sum256([]byte(key))

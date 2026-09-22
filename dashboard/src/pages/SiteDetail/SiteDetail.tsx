@@ -117,7 +117,7 @@ export default function SiteDetail() {
       </nav>
 
       {activeTab === 'site' && (
-        <SiteTab id={id} site={site} detail={detail} isAdmin={isAdmin} onDetailChanged={refreshDetail} onError={setError} />
+        <SiteTab id={id} site={site} isAdmin={isAdmin} onDetailChanged={refreshDetail} />
       )}
 
       {activeTab === 'overview' && (
@@ -130,6 +130,7 @@ export default function SiteDetail() {
         <ServicesTab
           siteId={id}
           isAdmin={isAdmin}
+          legacyPerformanceKeys={detail.performance_keys}
           siteSeverities={(draft?.logs.severities ?? [draft?.logs.minimum_severity ?? 'error']).filter(Boolean)}
         />
       )}

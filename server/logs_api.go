@@ -130,20 +130,14 @@ type serviceLogIngestRequest struct {
 // The generated service key identifies both the site and service; callers may
 // use either the dedicated header or a Bearer token.
 func (s *Server) handleServiceLogIngest(w http.ResponseWriter, r *http.Request) {
-	key := strings.TrimSpace(r.Header.Get("X-TraceUX-Log-Key"))
-	if key == "" {
-		authorization := strings.TrimSpace(r.Header.Get("Authorization"))
-		if strings.HasPrefix(strings.ToLower(authorization), "bearer ") {
-			key = strings.TrimSpace(authorization[len("Bearer "):])
-		}
-	}
+	key := serviceKeyFromRequest(r, "X-TraceUX-Log-Key")
 	service, allowed, valid, err := s.store.ServiceForKey(key)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if !valid {
-		writeErr(w, http.StatusUnauthorized, "invalid log service key")
+		writeErr(w, http.StatusUnauthorized, "invalid service key")
 		return
 	}
 	s.initSecurity()
@@ -185,6 +179,25 @@ func (s *Server) handleServiceLogIngest(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]int{"accepted": accepted, "skipped": skipped})
+}
+
+// serviceKeyFromRequest keeps the generated service credential independent of
+// any one telemetry stream. Stream-specific headers remain accepted while
+// integrations migrate to the shared header.
+func serviceKeyFromRequest(r *http.Request, legacyHeaders ...string) string {
+	if key := strings.TrimSpace(r.Header.Get("X-TraceUX-Service-Key")); key != "" {
+		return key
+	}
+	for _, header := range legacyHeaders {
+		if key := strings.TrimSpace(r.Header.Get(header)); key != "" {
+			return key
+		}
+	}
+	authorization := strings.TrimSpace(r.Header.Get("Authorization"))
+	if strings.HasPrefix(strings.ToLower(authorization), "bearer ") {
+		return strings.TrimSpace(authorization[len("Bearer "):])
+	}
+	return ""
 }
 
 func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {

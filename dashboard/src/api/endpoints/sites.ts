@@ -37,10 +37,6 @@ export const sitesEndpoints = {
       method: 'PUT',
       body: JSON.stringify(settings),
     }),
-  createPerformanceKey: (siteId: number) =>
-    request<{ key_id: number; key_hint: string; created_at: number; performance_key: string }>(`/api/sites/${siteId}/performance-keys`, {
-      method: 'POST',
-    }),
   deletePerformanceKey: (siteId: number, keyId: number) =>
     request<{ ok: boolean }>(`/api/sites/${siteId}/performance-keys/${keyId}`, {
       method: 'DELETE',

@@ -376,9 +376,10 @@ logs why; run a full `VACUUM` to convert it.
 
 Each site opens to a tabbed hub: **Overview** keeps the latest recordings,
 logs, feedback, and summary counts together; **Site** manages the registered
-URL, installation snippet, and backend performance connection; **Recordings**,
-**Feedback**, **Announcements**, **Widget**, and **Logs** keep each part of the
-bundle easy to configure without one long scrolling form.
+URL and installation snippet; **Services** manages the shared logs and
+performance connections; **Recordings**, **Feedback**, **Announcements**,
+**Widget**, and **Logs** keep each part of the bundle easy to configure without
+one long scrolling form.
 
 ## Users & access
 
@@ -499,12 +500,12 @@ Masking: all form inputs are masked by default; any element carrying `trace-ux-m
 
 Logs can be enabled per site from the site's **Logs** configuration. Select any combination of the four levels — debug, info, warnings, and errors — and only those exact levels are stored (for example, info and errors without warnings). Browser rows stay linked to the visitor's recording session. The dashboard's unified **Logs** page opens in a live view of the last 15 minutes, refreshes every 5 seconds, and shows up to 1,000 browser and service rows together. It supports site, service, environment, severity, preset time-window, and custom time filters. Search can target the message, structured `extra` data, or both.
 
-Add backend or external producers from a site's **Services** tab. Each service receives its own generated `tux_log_…` API key, shown in full only when it is created or rotated. Keys are stored as hashes and can be revoked independently. A service inherits the site's selected severity levels by default or can override them. Environment belongs to each event, so the same service key can report from staging and production:
+Add backend or external producers from a site's **Services** tab. Each service receives one generated `tux_svc_…` API key for both logs and performance, shown in full only when it is created or rotated. Keys are stored as hashes and can be revoked independently. A service inherits the site's selected log severity levels by default or can override them. Environment belongs to each event, so the same service key can report from staging and production:
 
 ```bash
 curl -X POST "https://your-server/api/logs/ingest" \
   -H "Content-Type: application/json" \
-  -H "X-TraceUX-Log-Key: YOUR_SERVICE_KEY" \
+  -H "X-TraceUX-Service-Key: YOUR_SERVICE_KEY" \
   -d '{"logs":[{
     "severity":"error",
     "message":"Payment request failed",
@@ -513,7 +514,7 @@ curl -X POST "https://your-server/api/logs/ingest" \
   }]}'
 ```
 
-`Authorization: Bearer YOUR_SERVICE_KEY` is also accepted. `extra` may be any valid JSON value up to 64 KiB and is displayed as expandable formatted JSON. A request may contain up to 1,000 log entries.
+`Authorization: Bearer YOUR_SERVICE_KEY` is also accepted. The older `X-TraceUX-Log-Key` header remains available for compatibility. `extra` may be any valid JSON value up to 64 KiB and is displayed as expandable formatted JSON. A request may contain up to 1,000 log entries.
 
 Log storage has two independent per-site caps: 15 days by default and 1,000,000 rows by default. The oldest rows are removed during the regular retention sweep; either cap can be changed or disabled from the same Logs configuration. Browser logs are also removed automatically when their related recording is removed, while service logs remain independent of recordings. Browser logs are not yet shown inside the replay timeline.
 
@@ -523,18 +524,18 @@ Because browser console output can contain sensitive values, enable this only wh
 
 The **Performance** page shows backend endpoint latency as p50, p95 and p99, with request counts, error rate, a latency trend, and filters for site, environment, service and version. Metrics are stored as minute-level histograms so the dashboard stays small while retaining useful slow-tail measurements.
 
-To connect a backend, open a site and choose **Site → Backend performance → Create key**. The key belongs in the application server that measures request duration; it is not used by the browser tracking snippet and does not instrument backend code by itself. Store the raw value as a backend secret, then send observations to the server over HTTPS — no Google account, OAuth, or Tag Manager is required:
+To connect a backend, open a site and choose **Services**, then create or reuse the service that owns the observations. Store its service key as a backend secret and use the same key for logs and performance. The service key identifies the site and service automatically; it is not used by the browser tracking snippet and does not instrument backend code by itself.
 
 ```bash
-curl -X POST "https://your-server/api/performance/ingest/YOUR_SITE_KEY" \
+curl -X POST "https://your-server/api/performance/ingest" \
   -H "Content-Type: application/json" \
-  -H "X-TraceUX-Performance-Key: YOUR_BACKEND_KEY" \
+  -H "X-TraceUX-Service-Key: YOUR_SERVICE_KEY" \
   -d '{"observations":[
-    {"environment":"production","service":"api","version":"1.4.0","endpoint":"GET /orders","duration_ms":184,"status_code":200}
+    {"environment":"production","version":"1.4.0","endpoint":"GET /orders","duration_ms":184,"status_code":200}
   ]}'
 ```
 
-The backend integration is intentionally server-to-server. The site key identifies the site in the URL; the performance key authenticates the request in `X-TraceUX-Performance-Key` (or `Authorization: Bearer`). TraceUX stores only a hash of each performance key. The full value is shown only at creation, while the Site tab lists active keys using only their first and last four characters. Administrators can create multiple keys and remove them individually. The current endpoint is the stable ingestion contract for the upcoming language-specific backend agent.
+The backend integration is intentionally server-to-server. TraceUX stores only a hash of the service key, shows the full value only at creation or rotation, and takes the performance service dimension from the authenticated service rather than trusting the payload. `Authorization: Bearer YOUR_SERVICE_KEY` is also accepted. The former site-addressed performance endpoint and its existing keys remain valid for backward compatibility, but new integrations should use Services. New sites no longer receive a site-level performance key, and none can be created; any that remain are listed under **Services → Legacy performance keys**, where administrators can remove them once those backends have moved to a service key.
 
 ## Feedback & surveys
 
@@ -618,7 +619,7 @@ visitor journey → session replay → contextual feedback → shipped announcem
 - **`server/`** — Go + `modernc.org/sqlite` (pure Go, no CGO). Events are stored as gzipped blobs per chunk (not one row per event), keeping SQLite fast and the file small. Retention job sweeps expired sessions every 6 h.
 - **`dashboard/`** — Vite + React + `rrweb-player`. Chunks stream back
   decompressed in pages as you watch; site hubs also configure feedback,
-  announcements, widget styles, logs, and performance keys.
+  announcements, widget styles, logs, and service keys for backend telemetry.
 - **`demo/`** — a pretend customer site with the snippet installed, for
   testing replay, feedback, multi-page navigation, and the unified
   announcements widget.

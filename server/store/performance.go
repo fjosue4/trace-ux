@@ -217,6 +217,9 @@ func PerformanceKeyHint(prefix, suffix string) string {
 	return prefix + "…" + suffix
 }
 
+// CreatePerformanceKey adds a legacy site-level key. The dashboard no longer
+// issues these (services own backend credentials); it remains for seeding
+// compatibility coverage of keys created by older releases.
 func (s *Store) CreatePerformanceKey(siteID int64) (PerformanceKeyInfo, string, error) {
 	key := newPerformanceKey()
 	now := time.Now().Unix()

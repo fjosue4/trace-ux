@@ -6,18 +6,23 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"trace-ux/server/store"
 )
 
 func serviceLogRequest(t *testing.T, url, key, body string) *http.Response {
+	return serviceKeyRequest(t, url, key, "X-TraceUX-Log-Key", body)
+}
+
+func serviceKeyRequest(t *testing.T, url, key, header, body string) *http.Response {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-TraceUX-Log-Key", key)
+	req.Header.Set(header, key)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -26,7 +31,7 @@ func serviceLogRequest(t *testing.T, url, key, body string) *http.Response {
 }
 
 func TestServiceLogsInheritOverrideExtraAndRevoke(t *testing.T) {
-	_, ts := newTestServer(t)
+	srv, ts := newTestServer(t)
 	admin := login(t, ts.URL, "admin", "pw")
 
 	resp := doReq(t, http.MethodPost, ts.URL+"/api/sites", admin,
@@ -56,6 +61,25 @@ func TestServiceLogsInheritOverrideExtraAndRevoke(t *testing.T) {
 	if created.APIKey == "" || !created.Service.InheritSeverities {
 		t.Fatalf("created service = %+v, key present=%t", created.Service, created.APIKey != "")
 	}
+	if !strings.HasPrefix(created.APIKey, "tux_svc_") {
+		t.Fatalf("service key prefix = %q, want tux_svc_", created.APIKey)
+	}
+
+	performanceURL := ts.URL + "/api/performance/ingest"
+	resp = serviceKeyRequest(t, performanceURL, created.APIKey, "X-TraceUX-Service-Key", fmt.Sprintf(`{"observations":[
+		{"environment":"production","service":"spoofed-name","version":"1.0.0","endpoint":"POST /charges","duration_ms":42,"status_code":200,"timestamp_ms":%d}
+	]}`, time.Now().UnixMilli()))
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("service performance ingest: got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	performance, err := srv.store.GetPerformance(store.PerformanceFilter{SiteID: site.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if performance.Summary.Requests != 1 || len(performance.Endpoints) != 1 || performance.Endpoints[0].Service != "billing-api" {
+		t.Fatalf("service performance = %+v, want service identity from key", performance)
+	}
 
 	ingestURL := ts.URL + "/api/logs/ingest"
 	resp = serviceLogRequest(t, ingestURL, created.APIKey, `{"logs":[
@@ -82,7 +106,7 @@ func TestServiceLogsInheritOverrideExtraAndRevoke(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	resp = serviceLogRequest(t, ingestURL, created.APIKey,
+	resp = serviceKeyRequest(t, ingestURL, created.APIKey, "X-TraceUX-Service-Key",
 		`{"logs":[{"severity":"info","message":"charge queued","environment":"staging","extra":{"queue":"payments"}}]}`)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("ingest override: got %d", resp.StatusCode)
@@ -107,8 +131,13 @@ func TestServiceLogsInheritOverrideExtraAndRevoke(t *testing.T) {
 	resp.Body.Close()
 	resp = serviceLogRequest(t, ingestURL, created.APIKey,
 		`{"logs":[{"severity":"error","message":"must be rejected"}]}`)
-	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("revoked ingest: got %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = serviceKeyRequest(t, performanceURL, created.APIKey, "X-TraceUX-Service-Key", `{"observations":[]}`)
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("revoked performance ingest: got %d", resp.StatusCode)
 	}
 }

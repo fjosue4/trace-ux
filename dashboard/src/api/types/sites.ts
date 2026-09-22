@@ -13,8 +13,6 @@ export type Site = {
   session_count: number;
   recording_enabled?: boolean;
   settings?: SiteSettings;
-  // Returned only when a site is created or a key is rotated.
-  performance_key?: string;
 };
 
 // Per-site configuration, managed in the dashboard and served to the tracker

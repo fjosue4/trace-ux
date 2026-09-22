@@ -87,29 +87,6 @@ func (s *Server) handleListPerformanceKeys(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, keys)
 }
 
-func (s *Server) handleCreatePerformanceKey(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
-	if err != nil || id <= 0 {
-		writeErr(w, http.StatusBadRequest, "invalid site id")
-		return
-	}
-	info, key, err := s.store.CreatePerformanceKey(id)
-	if err == sql.ErrNoRows {
-		writeErr(w, http.StatusNotFound, "site not found")
-		return
-	}
-	if err != nil {
-		writeErr(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"key_id":          info.ID,
-		"key_hint":        info.KeyHint,
-		"created_at":      info.CreatedAt,
-		"performance_key": key,
-	})
-}
-
 func (s *Server) handleDeletePerformanceKey(w http.ResponseWriter, r *http.Request) {
 	siteID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || siteID <= 0 {
@@ -134,9 +111,9 @@ type performanceIngestRequest struct {
 	Observations []store.PerformanceObservation `json:"observations"`
 }
 
-// handlePerformanceIngest is intentionally server-to-server. The backend key
-// is accepted via X-TraceUX-Performance-Key or Authorization: Bearer and is
-// stored only as a hash on the TraceUX server.
+// handlePerformanceIngest is the legacy site-addressed ingestion route. It is
+// retained so existing performance keys continue working while new producers
+// use the service-key route below.
 func (s *Server) handlePerformanceIngest(w http.ResponseWriter, r *http.Request) {
 	site, err := s.store.GetSiteByKey(r.PathValue("siteKey"))
 	if err != nil {
@@ -170,7 +147,32 @@ func (s *Server) handlePerformanceIngest(w http.ResponseWriter, r *http.Request)
 		writeRateLimited(w, "performance ingest rate limit exceeded")
 		return
 	}
+	s.handlePerformancePayload(w, r, site.ID, "")
+}
 
+// handleServicePerformanceIngest accepts the same generated service key used
+// by log ingestion. The key determines both site and service, so callers cannot
+// accidentally report performance under a different service name.
+func (s *Server) handleServicePerformanceIngest(w http.ResponseWriter, r *http.Request) {
+	key := serviceKeyFromRequest(r, "X-TraceUX-Performance-Key")
+	service, _, valid, err := s.store.ServiceForKey(key)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !valid {
+		writeErr(w, http.StatusUnauthorized, "invalid service key")
+		return
+	}
+	s.initSecurity()
+	if !s.ingestIPLimiter.allow("ip:"+s.clientIP(r)) || !s.ingestSiteLimiter.allow(fmt.Sprintf("performance-service:%d", service.ID)) {
+		writeRateLimited(w, "performance ingest rate limit exceeded")
+		return
+	}
+	s.handlePerformancePayload(w, r, service.SiteID, service.Name)
+}
+
+func (s *Server) handlePerformancePayload(w http.ResponseWriter, r *http.Request, siteID int64, serviceName string) {
 	body, err := readPerformanceBody(w, r)
 	if err != nil {
 		if errors.Is(err, errRequestBodyTooLarge) {
@@ -199,7 +201,12 @@ func (s *Server) handlePerformanceIngest(w http.ResponseWriter, r *http.Request)
 		writeErr(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("observations must be 1-%d", store.MaxPerformanceObservationCount))
 		return
 	}
-	if err := s.store.SavePerformanceObservations(site.ID, payload.Observations); err != nil {
+	if serviceName != "" {
+		for i := range payload.Observations {
+			payload.Observations[i].Service = serviceName
+		}
+	}
+	if err := s.store.SavePerformanceObservations(siteID, payload.Observations); err != nil {
 		if strings.Contains(err.Error(), "must be") {
 			writeErr(w, http.StatusBadRequest, err.Error())
 		} else {
