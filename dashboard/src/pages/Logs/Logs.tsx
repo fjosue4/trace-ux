@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Log } from '../../api';
 import PageHeader from '../../components/ui/PageHeader';
 import Table from '../../components/ui/Table';
 import Notice from '../../components/ui/Notice';
@@ -13,6 +15,7 @@ import { fmtClock } from '../../lib/format';
 import { useLogs } from './hooks/useLogs';
 import { LogsSummary } from './subcomponents/LogsSummary';
 import { LogRow } from './subcomponents/LogRow';
+import { LogDetailModal } from './subcomponents/LogDetailModal';
 import { LogSearchField } from './subcomponents/LogSearchField';
 import { MAX_VISIBLE_LOGS, severityOptions, timeRangeOptions } from './Logs.constants';
 import { SeveritySelection } from './Logs.types';
@@ -50,6 +53,9 @@ export default function Logs() {
     timeWindow,
     summary,
   } = useLogs();
+  // Held as the row object, not an id, so live refreshes that drop the row
+  // from the visible window do not close the modal mid-read.
+  const [openLog, setOpenLog] = useState<Log | null>(null);
 
   return (
     <main className="page">
@@ -192,11 +198,13 @@ export default function Logs() {
             headers={['Time', 'Level', 'Message', 'Extra', 'Service', 'Environment', 'Site', 'Source']}
           >
             {logs.map((log) => (
-              <LogRow key={log.id} log={log} />
+              <LogRow key={log.id} log={log} onOpen={setOpenLog} />
             ))}
           </Table>
         </>
       )}
+
+      <LogDetailModal log={openLog} onClose={() => setOpenLog(null)} />
     </main>
   );
 }

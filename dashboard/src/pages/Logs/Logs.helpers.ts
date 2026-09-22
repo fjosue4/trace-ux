@@ -9,6 +9,20 @@ export function logTimestamp(log: Log): number {
   return Math.floor(log.timestamp_ms / 1000) || log.created_at;
 }
 
+export function logTimestampMs(log: Log): number {
+  return log.timestamp_ms || log.created_at * 1000;
+}
+
+export function formatExtra(extra?: string): { compact: string; pretty: string } | null {
+  if (!extra) return null;
+  try {
+    const parsed = JSON.parse(extra);
+    return { compact: JSON.stringify(parsed), pretty: JSON.stringify(parsed, null, 2) };
+  } catch {
+    return { compact: extra, pretty: extra };
+  }
+}
+
 export function parseDateInput(value: string): number | undefined {
   if (!value) return undefined;
   const parsed = new Date(value).getTime();
