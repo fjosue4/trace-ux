@@ -4,7 +4,7 @@ import {
   SiteSlackIntegration,
   SiteSlackIntegrationUpdate,
   SiteSlackNotificationKind,
-  SlackLogMatchMode,
+  SlackLogMatch,
   SlackRoutingMode,
 } from '../../../../../api';
 import { emptyWebhookDraft, WebhookDraft } from '../../../../../components/integrations/WebhookField';
@@ -21,8 +21,7 @@ export function useSiteSlackIntegration(siteId: number) {
   const [ticketsEnabled, setTicketsEnabled] = useState(false);
   const [logsEnabled, setLogsEnabled] = useState(false);
   const [customEnabled, setCustomEnabled] = useState(false);
-  const [logMatchMode, setLogMatchMode] = useState<SlackLogMatchMode>('contains');
-  const [logMatchValue, setLogMatchValue] = useState('');
+  const [logMatches, setLogMatches] = useState<SlackLogMatch[]>([]);
 
   const [common, setCommon] = useState<WebhookDraft>(emptyWebhookDraft);
   const [tickets, setTickets] = useState<WebhookDraft>(emptyWebhookDraft);
@@ -35,8 +34,7 @@ export function useSiteSlackIntegration(siteId: number) {
     setTicketsEnabled(v.tickets_enabled);
     setLogsEnabled(v.logs_enabled);
     setCustomEnabled(v.custom_enabled);
-    setLogMatchMode(v.log_match_mode);
-    setLogMatchValue(v.log_match_value);
+    setLogMatches(savedLogMatches(v));
     // Drafts always reset to "keep" after a load or save: the server never
     // hands back anything a text field could show.
     setCommon(emptyWebhookDraft);
@@ -75,8 +73,7 @@ export function useSiteSlackIntegration(siteId: number) {
         tickets_enabled: ticketsEnabled,
         logs_enabled: logsEnabled,
         custom_enabled: customEnabled,
-        log_match_mode: logMatchMode,
-        log_match_value: logMatchValue,
+        log_matches: cleanLogMatches(logMatches),
         common_webhook: common.value.trim() || undefined,
         clear_common_webhook: common.clear || undefined,
         tickets_webhook: tickets.value.trim() || undefined,
@@ -117,8 +114,7 @@ export function useSiteSlackIntegration(siteId: number) {
       ticketsEnabled !== integration.tickets_enabled ||
       logsEnabled !== integration.logs_enabled ||
       customEnabled !== integration.custom_enabled ||
-      logMatchMode !== integration.log_match_mode ||
-      logMatchValue !== integration.log_match_value ||
+      JSON.stringify(cleanLogMatches(logMatches)) !== JSON.stringify(cleanLogMatches(savedLogMatches(integration))) ||
       draftChanged(common) ||
       draftChanged(tickets) ||
       draftChanged(logs) ||
@@ -140,10 +136,8 @@ export function useSiteSlackIntegration(siteId: number) {
     setLogsEnabled,
     customEnabled,
     setCustomEnabled,
-    logMatchMode,
-    setLogMatchMode,
-    logMatchValue,
-    setLogMatchValue,
+    logMatches,
+    setLogMatches,
     common,
     setCommon,
     tickets,
@@ -155,4 +149,19 @@ export function useSiteSlackIntegration(siteId: number) {
     save,
     test,
   };
+}
+
+/** The saved rules, reading the single pattern of a server that predates
+ *  rule lists as a one-rule list. */
+function savedLogMatches(v: SiteSlackIntegration): SlackLogMatch[] {
+  if (v.log_matches) return v.log_matches.map((rule) => ({ ...rule, severities: rule.severities ?? [] }));
+  return v.log_match_value ? [{ mode: v.log_match_mode, value: v.log_match_value, severities: [] }] : [];
+}
+
+/** What the server will keep: rows with neither a pattern nor a severity are
+ *  "every log" and would drown out the other rules, so they are dropped. */
+function cleanLogMatches(rules: SlackLogMatch[]): SlackLogMatch[] {
+  return rules
+    .map((rule) => ({ mode: rule.mode, value: rule.value.trim() ? rule.value : '', severities: rule.severities ?? [] }))
+    .filter((rule) => rule.value !== '' || rule.severities.length > 0);
 }

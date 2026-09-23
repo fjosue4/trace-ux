@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"testing"
+
+	"trace-ux/server/store"
 )
 
 func decodeSiteSlackView(t *testing.T, resp *http.Response) siteSlackIntegrationView {
@@ -235,5 +238,72 @@ func TestSiteSlackIntegrationTestEndpointRequiresConfiguredWebhook(t *testing.T)
 	resp := doReq(t, http.MethodPost, siteSlackURL(ts.URL, site.ID)+"/test", admin, `{}`)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("test with nothing configured: got %d, want 400", resp.StatusCode)
+	}
+}
+
+func TestSiteSlackLogMatchesAPI(t *testing.T) {
+	srv, ts := newTestServer(t)
+	site, err := srv.store.CreateSite("Acme", "https://acme.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin := login(t, ts.URL, "admin", "pw")
+	put := func(body string) *http.Response {
+		return doReq(t, http.MethodPut, siteSlackURL(ts.URL, site.ID), admin, body)
+	}
+	decode := func(resp *http.Response) siteSlackIntegrationView {
+		t.Helper()
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("PUT: got %d", resp.StatusCode)
+		}
+		var v siteSlackIntegrationView
+		if err := json.NewDecoder(resp.Body).Decode(&v); err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+
+	v := decode(put(`{"routing_mode":"single","log_matches":[{"mode":"contains","value":"TypeError"},{"mode":"exact","value":"Payment failed","severities":["error"]},{"mode":"contains","value":""},{"mode":"contains","value":"","severities":["warn"]}]}`))
+	if len(v.LogMatches) != 3 || v.LogMatches[1].Value != "Payment failed" || v.LogMatchValue != "TypeError" {
+		t.Fatalf("saved matches = %+v (first %q), want three rules with TypeError first", v.LogMatches, v.LogMatchValue)
+	}
+	if got := v.LogMatches[1].Severities; len(got) != 1 || got[0] != "error" {
+		t.Fatalf("rule severities = %v, want [error]", got)
+	}
+	if got := v.LogMatches[2]; got.Value != "" || len(got.Severities) != 1 || got.Severities[0] != "warn" {
+		t.Fatalf("severity-only rule = %+v, want every warning", got)
+	}
+
+	// Clients that predate rule lists still send the single pair.
+	v = decode(put(`{"routing_mode":"single","log_match_mode":"exact","log_match_value":"Checkout failed"}`))
+	if len(v.LogMatches) != 1 || v.LogMatches[0].Mode != "exact" || v.LogMatches[0].Value != "Checkout failed" {
+		t.Fatalf("legacy single pair saved as %+v, want one exact rule", v.LogMatches)
+	}
+
+	v = decode(put(`{"routing_mode":"single","log_matches":[]}`))
+	if len(v.LogMatches) != 0 {
+		t.Fatalf("empty list saved as %+v, want none", v.LogMatches)
+	}
+
+	var many strings.Builder
+	many.WriteString(`{"routing_mode":"single","log_matches":[`)
+	for i := 0; i <= store.MaxSlackLogMatches; i++ {
+		if i > 0 {
+			many.WriteString(",")
+		}
+		fmt.Fprintf(&many, `{"mode":"contains","value":"p%d"}`, i)
+	}
+	many.WriteString(`]}`)
+	for name, body := range map[string]string{
+		"bad mode": `{"routing_mode":"single","log_matches":[{"mode":"regex","value":"x"}]}`,
+		"too long": `{"routing_mode":"single","log_matches":[{"mode":"contains","value":"` + strings.Repeat("x", store.MaxSlackMatchValueLen+1) + `"}]}`,
+		"too many": many.String(),
+	} {
+		resp := put(body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("%s: got %d, want 400", name, resp.StatusCode)
+		}
 	}
 }

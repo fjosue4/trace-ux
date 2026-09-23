@@ -15,6 +15,7 @@ import App from './App';
 import Login from './pages/Login';
 import Sites from './pages/Sites';
 import SiteDetail from './pages/SiteDetail';
+import Onboarding from './pages/Onboarding';
 import Sessions from './pages/Sessions';
 import Performance from './pages/Performance';
 import Replay from './pages/Replay';
@@ -39,6 +40,7 @@ const router = createBrowserRouter([
       { index: true, element: <Navigate to="/sites" replace /> },
       { path: 'login', element: <Login /> },
       { path: 'sites', element: <Sites /> },
+      { path: 'sites/setup', element: <Onboarding /> },
       { path: 'sites/site/:siteId', element: <SiteDetail /> },
       { path: 'sessions', element: <Sessions /> },
       { path: 'performance', element: <Performance /> },
@@ -47,6 +49,7 @@ const router = createBrowserRouter([
       { path: 'tickets', element: <Tickets /> },
       { path: 'announcements', element: <Announcements /> },
       { path: 'logs', element: <Logs /> },
+      { path: 'logs/log/:logId', element: <Logs /> },
       { path: 'replay/:sessionId', element: <Replay /> },
       { path: 'share/:token', element: <ShareReplay /> },
       { path: 'settings', element: <Settings /> },

@@ -553,6 +553,16 @@ var migrations = []string{
 	CREATE INDEX idx_logs_service_env_time ON logs(service_id, environment, timestamp_ms DESC);
 	CREATE INDEX idx_logs_severity_time ON logs(severity, created_at DESC);
 	`,
+	// v25: Slack log alerts match a list of rules instead of one pattern. The
+	// existing single pattern becomes the first rule; a blank one meant "every
+	// log" and stays an empty list, which still means that. logs_match_mode
+	// and logs_match_value keep mirroring the first rule for older builds.
+	`
+	ALTER TABLE site_slack_integration ADD COLUMN logs_match_rules TEXT NOT NULL DEFAULT '[]';
+	UPDATE site_slack_integration
+		SET logs_match_rules = json_array(json_object('mode', logs_match_mode, 'value', logs_match_value))
+		WHERE logs_match_value != '';
+	`,
 }
 
 func (s *Store) migrate() error {

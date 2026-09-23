@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Log } from '../../api';
 import PageHeader from '../../components/ui/PageHeader';
 import Table from '../../components/ui/Table';
 import Notice from '../../components/ui/Notice';
@@ -16,12 +15,14 @@ import { useLogs } from './hooks/useLogs';
 import { LogsSummary } from './subcomponents/LogsSummary';
 import { LogRow } from './subcomponents/LogRow';
 import { LogDetailModal } from './subcomponents/LogDetailModal';
+import { useLinkedLog } from './hooks/useLinkedLog';
 import { LogSearchField } from './subcomponents/LogSearchField';
 import { MAX_VISIBLE_LOGS, severityOptions, timeRangeOptions } from './Logs.constants';
 import { SeveritySelection } from './Logs.types';
 import './Logs.scss';
 
 export default function Logs() {
+  const [linkCopied, setLinkCopied] = useState(false);
   const {
     sites,
     logs,
@@ -53,9 +54,16 @@ export default function Logs() {
     timeWindow,
     summary,
   } = useLogs();
-  // Held as the row object, not an id, so live refreshes that drop the row
-  // from the visible window do not close the modal mid-read.
-  const [openLog, setOpenLog] = useState<Log | null>(null);
+
+  async function copyLink() {
+    await navigator.clipboard.writeText(window.location.href);
+    setLinkCopied(true);
+    window.setTimeout(() => setLinkCopied(false), 1600);
+  }
+  // The open log lives at /logs/log/<id>, so the address bar is always a
+  // shareable link to it. Held as the row object, so live refreshes that drop
+  // the row from the visible window do not close the modal mid-read.
+  const { openLog, open: openLogDetail, close: closeLogDetail, linkError } = useLinkedLog(logs);
 
   return (
     <main className="page">
@@ -96,6 +104,10 @@ export default function Logs() {
               {lastUpdated > 0 && ` · updated ${fmtClock(Math.floor(lastUpdated / 1000))}`}
             </span>
             {summary.length > 0 && <LogsSummary summary={summary} />}
+            <Button variant="ghost" size="sm" onClick={copyLink}>
+              <Icon name={linkCopied ? 'check' : 'copy'} size={13} />
+              {linkCopied ? 'Copied' : 'Copy link'}
+            </Button>
             <Button variant="ghost" size="sm" onClick={() => setRefreshNonce((value) => value + 1)}>
               Refresh
             </Button>
@@ -157,6 +169,7 @@ export default function Logs() {
       </FilterPanel>
 
       {error && <Notice tone="error">{error}</Notice>}
+      {linkError && <Notice tone="warn">{linkError}</Notice>}
       {!timeWindow.valid && <Notice tone="info">{timeWindow.error}</Notice>}
 
       {sites !== null && sites.length === 0 ? (
@@ -198,13 +211,13 @@ export default function Logs() {
             headers={['Time', 'Level', 'Message', 'Extra', 'Service', 'Environment', 'Site', 'Source']}
           >
             {logs.map((log) => (
-              <LogRow key={log.id} log={log} onOpen={setOpenLog} />
+              <LogRow key={log.id} log={log} onOpen={openLogDetail} />
             ))}
           </Table>
         </>
       )}
 
-      <LogDetailModal log={openLog} onClose={() => setOpenLog(null)} />
+      <LogDetailModal log={openLog} onClose={closeLogDetail} />
     </main>
   );
 }

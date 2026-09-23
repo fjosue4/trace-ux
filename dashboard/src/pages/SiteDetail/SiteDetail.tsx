@@ -32,7 +32,6 @@ export default function SiteDetail() {
   const {
     detail,
     error,
-    setError,
     draft,
     saving,
     saved,

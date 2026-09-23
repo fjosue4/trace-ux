@@ -1,6 +1,7 @@
 package store
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -319,16 +320,42 @@ func (s *Store) SaveServiceLogs(service Service, allowed []string, entries []Ser
 	return accepted, skipped, nil
 }
 
-// ListLogs returns newest logs first. Logs are joined to their session
-// and site so the global Logs page can link each row back to its recording.
-func (s *Store) ListLogs(f LogFilter) ([]Log, error) {
-	query := `SELECT l.id, COALESCE(l.session_id, ''), l.site_id, si.name,
+// logSelect is shared by ListLogs and GetLog so a linked log and a listed
+// log always carry the same fields. Logs are joined to their session and site
+// so the Logs page can link each row back to its recording.
+const logSelect = `SELECT l.id, COALESCE(l.session_id, ''), l.site_id, si.name,
 		COALESCE(l.service_id, 0), COALESCE(sv.name, ''), l.environment, l.timestamp_ms,
 		l.severity, l.message, l.extra, l.url, l.created_at, COALESCE(se.started_at, 0)
 		FROM logs l
 		JOIN sites si ON si.id = l.site_id
 		LEFT JOIN sessions se ON se.id = l.session_id
-		LEFT JOIN services sv ON sv.id = l.service_id
+		LEFT JOIN services sv ON sv.id = l.service_id`
+
+func scanLog(row interface{ Scan(...any) error }) (Log, error) {
+	var item Log
+	err := row.Scan(&item.ID, &item.SessionID, &item.SiteID, &item.SiteName,
+		&item.ServiceID, &item.ServiceName, &item.Environment, &item.TimestampMs,
+		&item.Severity, &item.Message, &item.Extra, &item.URL,
+		&item.CreatedAt, &item.SessionStartedAt)
+	return item, err
+}
+
+// GetLog returns one log by id, or nil when it does not exist (never stored,
+// or removed by retention). Used by direct links to a log.
+func (s *Store) GetLog(id int64) (*Log, error) {
+	item, err := scanLog(s.DB.QueryRow(logSelect+` WHERE l.id = ?`, id))
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+// ListLogs returns newest logs first.
+func (s *Store) ListLogs(f LogFilter) ([]Log, error) {
+	query := logSelect + `
 		WHERE 1=1`
 	args := []any{}
 	if f.SiteID > 0 {
@@ -406,11 +433,8 @@ func (s *Store) ListLogs(f LogFilter) ([]Log, error) {
 	defer rows.Close()
 	out := []Log{}
 	for rows.Next() {
-		var item Log
-		if err := rows.Scan(&item.ID, &item.SessionID, &item.SiteID, &item.SiteName,
-			&item.ServiceID, &item.ServiceName, &item.Environment, &item.TimestampMs,
-			&item.Severity, &item.Message, &item.Extra, &item.URL,
-			&item.CreatedAt, &item.SessionStartedAt); err != nil {
+		item, err := scanLog(rows)
+		if err != nil {
 			return nil, err
 		}
 		out = append(out, item)

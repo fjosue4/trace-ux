@@ -6,7 +6,8 @@ import { resolveTimeWindow } from '../Logs.helpers';
 import { SearchScope, ServiceSelection, SeveritySelection, SiteSelection, TimeRange } from '../Logs.types';
 
 export function useLogs() {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
+  const initialRange = readTimeRange(params.get('range'));
   const [sites, setSites] = useState<Site[] | null>(null);
   const [logs, setLogs] = useState<Log[] | null>(null);
   const [stats, setStats] = useState<LogStats | null>(null);
@@ -15,18 +16,33 @@ export function useLogs() {
   const [lastUpdated, setLastUpdated] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshNonce, setRefreshNonce] = useState(0);
-  const [live, setLive] = useState(true);
-  const [siteSel, setSiteSel] = useState<SiteSelection>(
-    params.get('site') ? Number(params.get('site')) : 'all',
-  );
-  const [severitySel, setSeveritySel] = useState<SeveritySelection>([]);
-  const [serviceSel, setServiceSel] = useState<ServiceSelection>('all');
-  const [environment, setEnvironment] = useState('all');
-  const [search, setSearch] = useState('');
-  const [searchIn, setSearchIn] = useState<SearchScope>('both');
-  const [timeRange, setTimeRange] = useState<TimeRange>('15m');
-  const [customFrom, setCustomFrom] = useState('');
-  const [customTo, setCustomTo] = useState('');
+  const [live, setLive] = useState(initialRange !== 'all');
+  const [siteSel, setSiteSel] = useState<SiteSelection>(() => readIDSelection(params.get('site')));
+  const [severitySel, setSeveritySel] = useState<SeveritySelection>(() => readSeverities(params));
+  const [serviceSel, setServiceSel] = useState<ServiceSelection>(() => readIDSelection(params.get('service')));
+  const [environment, setEnvironment] = useState(params.get('environment') || 'all');
+  const [search, setSearch] = useState(params.get('search') || '');
+  const [searchIn, setSearchIn] = useState<SearchScope>(() => readSearchScope(params.get('search_in')));
+  const [timeRange, setTimeRange] = useState<TimeRange>(initialRange);
+  const [customFrom, setCustomFrom] = useState(params.get('from') || '');
+  const [customTo, setCustomTo] = useState(params.get('to') || '');
+
+  useEffect(() => {
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      setOrDelete(next, 'site', siteSel === 'all' ? '' : String(siteSel));
+      setOrDelete(next, 'service', serviceSel === 'all' ? '' : String(serviceSel));
+      setOrDelete(next, 'environment', environment === 'all' ? '' : environment);
+      next.delete('severity');
+      severitySel.forEach((severity) => next.append('severity', severity));
+      setOrDelete(next, 'search', search.trim());
+      setOrDelete(next, 'search_in', searchIn === 'both' ? '' : searchIn);
+      setOrDelete(next, 'range', timeRange === '15m' ? '' : timeRange);
+      setOrDelete(next, 'from', timeRange === 'custom' ? customFrom : '');
+      setOrDelete(next, 'to', timeRange === 'custom' ? customTo : '');
+      return next;
+    }, { replace: true });
+  }, [siteSel, serviceSel, environment, severitySel, search, searchIn, timeRange, customFrom, customTo, setParams]);
 
   useEffect(() => {
     api
@@ -152,4 +168,30 @@ export function useLogs() {
     timeWindow,
     summary,
   };
+}
+
+function readIDSelection(value: string | null): SiteSelection {
+  const id = Number(value);
+  return value && Number.isInteger(id) && id > 0 ? id : 'all';
+}
+
+function readSeverities(params: URLSearchParams): SeveritySelection {
+  const valid = new Set(['debug', 'info', 'warn', 'error']);
+  return [...new Set(params.getAll('severity').flatMap((value) => value.split(',')))]
+    .filter((value): value is SeveritySelection[number] => valid.has(value));
+}
+
+function readSearchScope(value: string | null): SearchScope {
+  return value === 'message' || value === 'extra' ? value : 'both';
+}
+
+function readTimeRange(value: string | null): TimeRange {
+  return value === '1h' || value === '6h' || value === '24h' || value === '7d' || value === 'custom' || value === 'all'
+    ? value
+    : '15m';
+}
+
+function setOrDelete(params: URLSearchParams, key: string, value: string) {
+  if (value) params.set(key, value);
+  else params.delete(key);
 }
