@@ -13,7 +13,7 @@ import { LogMatchList } from './subcomponents/LogMatchList';
 import { IntegrationsTabProps } from './IntegrationsTab.types';
 import './IntegrationsTab.scss';
 
-// Tickets, browser logs, and flagged custom events all belong to this site,
+// Tickets, logs (browser and service), and flagged custom events all belong to this site,
 // so its Slack webhook(s) are configured here rather than shared across the
 // whole instance. System health has no site to attach to and stays on the
 // System health page instead.
@@ -76,7 +76,7 @@ export function IntegrationsTab({ siteId, isAdmin }: IntegrationsTabProps) {
             <h3>Slack</h3>
           </div>
         </div>
-        <p className="muted small">Send this site's activity to Slack: new tickets, matched browser logs, and flagged custom events.</p>
+        <p className="muted small">Send this site's activity to Slack: new tickets, matched logs, and flagged custom events.</p>
 
         <Field label="Webhook routing" hint="One shared webhook, or a separate webhook per notification type.">
           <Select
@@ -128,12 +128,13 @@ export function IntegrationsTab({ siteId, isAdmin }: IntegrationsTabProps) {
 
       <Card className="site-integrations__card">
         <div className="site-integrations__card-head">
-          <h3>Browser logs</h3>
+          <h3>Logs</h3>
           <Switch checked={logsEnabled} onChange={setLogsEnabled} />
         </div>
         <p className="muted small">
-          Notify for browser logs that already pass this site's own log settings. Those settings are always the
-          first filter; the matches below narrow them further, each by severity, message, or both.
+          Notify for this site's logs, from the browser and from its connected services, that already pass their
+          own log settings. Those settings are always the first filter; the matches below narrow them further, each
+          by severity, message, or both.
         </p>
         {!isSingle && (
           <WebhookField

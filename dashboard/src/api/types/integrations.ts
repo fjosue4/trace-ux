@@ -37,7 +37,7 @@ export type SlackSystemIntegrationUpdate = {
   clear_signing_secret?: boolean;
 };
 
-// Per-site: tickets, browser logs, and flagged custom events all belong to
+// Per-site: tickets, logs, and flagged custom events all belong to
 // one site, so each site configures its own webhook(s) from its own
 // Integrations tab.
 export type SiteSlackIntegration = {

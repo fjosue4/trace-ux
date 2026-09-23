@@ -332,7 +332,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/sites/{id}", s.auth(s.handleGetSite))
 	mux.HandleFunc("PATCH /api/sites/{id}", s.auth(s.requireAdmin(s.handleUpdateSite)))
 	mux.HandleFunc("PUT /api/sites/{id}/settings", s.auth(s.requireAdmin(s.handlePutSiteSettings)))
-	// Per-site Slack integration: tickets, matched browser logs, and flagged
+	// Per-site Slack integration: tickets, matched logs, and flagged
 	// custom events all belong to this site, so the webhook is configured
 	// here rather than shared across the instance.
 	mux.HandleFunc("GET /api/sites/{id}/integrations/slack", s.auth(s.requireAdmin(s.handleGetSiteSlackIntegration)))

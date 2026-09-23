@@ -11,7 +11,7 @@ import (
 //
 // CPU/RAM/disk describe the TraceUX server itself, not any one site, so this
 // stays a single global toggle+webhook. Per-site notifications (tickets,
-// browser logs, custom events) live in site_slack_api.go instead, since each
+// logs, custom events) live in site_slack_api.go instead, since each
 // of those events already belongs to one site.
 //
 // GET/PUT never see or return decryptable Slack secrets: the dashboard gets

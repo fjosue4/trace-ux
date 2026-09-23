@@ -9,7 +9,7 @@ import (
 	"trace-ux/server/store"
 )
 
-// ---- Slack integration settings: per-site (tickets, browser logs, custom events) ----
+// ---- Slack integration settings: per-site (tickets, logs, custom events) ----
 //
 // Each of these events already belongs to one site, so its Slack webhook is
 // configured on that site's own Integrations tab rather than shared across

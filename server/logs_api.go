@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -169,7 +170,7 @@ func (s *Server) handleServiceLogIngest(w http.ResponseWriter, r *http.Request) 
 		writeErr(w, http.StatusBadRequest, fmt.Sprintf("logs must contain 1-%d entries", store.MaxServiceLogBatch))
 		return
 	}
-	accepted, skipped, err := s.store.SaveServiceLogs(service, allowed, payload.Logs)
+	inserted, skipped, err := s.store.SaveServiceLogsReturning(service, allowed, payload.Logs)
 	if err != nil {
 		if strings.Contains(err.Error(), "logs[") {
 			writeErr(w, http.StatusBadRequest, err.Error())
@@ -178,7 +179,15 @@ func (s *Server) handleServiceLogIngest(w http.ResponseWriter, r *http.Request) 
 		}
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]int{"accepted": accepted, "skipped": skipped})
+	// Service logs feed the same per-site Slack log alert as browser logs.
+	if len(inserted) > 0 {
+		if name, err := s.store.SiteName(service.SiteID); err == nil {
+			s.notifySlackLogs(store.Site{ID: service.SiteID, Name: name}, inserted, r)
+		} else {
+			log.Printf("slack logs: site %d: %v", service.SiteID, err)
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"accepted": len(inserted), "skipped": skipped})
 }
 
 // serviceKeyFromRequest keeps the generated service credential independent of

@@ -323,8 +323,18 @@ func buildLogsSlackMessage(siteName string, logs []store.Log, origin string) Not
 	lines := make([]string, 0, len(shown))
 	for _, item := range shown {
 		line := fmt.Sprintf("• *%s* %s", strings.ToUpper(item.Severity), slackMrkdwn(truncateForSlack(item.Message, slackMaxFieldLen)))
+		// Browser and service logs share this alert, so each line says where
+		// it came from.
+		source := "Browser"
+		if item.ServiceName != "" {
+			source = slackMrkdwn(truncateForSlack(item.ServiceName, 120))
+			if item.Environment != "" && item.Environment != "unknown" {
+				source += " · " + slackMrkdwn(truncateForSlack(item.Environment, 60))
+			}
+		}
+		line += "\n  _" + source + "_"
 		if item.URL != "" {
-			line += "\n  " + slackMrkdwn(truncateForSlack(item.URL, 150))
+			line += " · " + slackMrkdwn(truncateForSlack(item.URL, 150))
 		}
 		if item.SessionID != "" {
 			line += fmt.Sprintf(" · <%s/replay/%s|Replay>", origin, urlPathSegment(item.SessionID))
@@ -335,7 +345,7 @@ func buildLogsSlackMessage(siteName string, logs []store.Log, origin string) Not
 		lines = append(lines, fmt.Sprintf("… and %d more", extra))
 	}
 	return NotificationMessage{
-		Header:  "Matching browser logs",
+		Header:  "Matching logs",
 		Message: strings.Join(lines, "\n"),
 		Footer:  fmt.Sprintf("TraceUX · %s · %d log(s)", slackMrkdwn(truncateForSlack(siteName, 120)), len(logs)),
 	}

@@ -263,6 +263,14 @@ func (s *Store) SaveLogs(siteID int64, sessionID string, logs []Log) ([]Log, err
 }
 
 func (s *Store) SaveServiceLogs(service Service, allowed []string, entries []ServiceLogEntry) (accepted, skipped int, err error) {
+	inserted, skipped, err := s.SaveServiceLogsReturning(service, allowed, entries)
+	return len(inserted), skipped, err
+}
+
+// SaveServiceLogsReturning stores a service batch like SaveServiceLogs and
+// returns the rows it kept, so the caller can alert on them the same way it
+// alerts on browser logs.
+func (s *Store) SaveServiceLogsReturning(service Service, allowed []string, entries []ServiceLogEntry) (inserted []Log, skipped int, err error) {
 	allowedSet := make(map[string]bool, len(allowed))
 	for _, severity := range allowed {
 		allowedSet[severity] = true
@@ -271,7 +279,7 @@ func (s *Store) SaveServiceLogs(service Service, allowed []string, entries []Ser
 	nowMs := now.UnixMilli()
 	tx, err := s.DB.Begin()
 	if err != nil {
-		return 0, 0, err
+		return nil, 0, err
 	}
 	defer tx.Rollback()
 	for index, entry := range entries {
@@ -281,21 +289,21 @@ func (s *Store) SaveServiceLogs(service Service, allowed []string, entries []Ser
 			entry.Environment = "unknown"
 		}
 		if !ValidLogSeverity(entry.Severity) {
-			return 0, 0, fmt.Errorf("logs[%d].severity is invalid", index)
+			return nil, 0, fmt.Errorf("logs[%d].severity is invalid", index)
 		}
 		if entry.Message == "" || len(entry.Message) > MaxLogMessageBytes {
-			return 0, 0, fmt.Errorf("logs[%d].message must be 1-%d bytes", index, MaxLogMessageBytes)
+			return nil, 0, fmt.Errorf("logs[%d].message must be 1-%d bytes", index, MaxLogMessageBytes)
 		}
 		if len(entry.Environment) > MaxLogEnvironmentLength {
-			return 0, 0, fmt.Errorf("logs[%d].environment must be at most %d characters", index, MaxLogEnvironmentLength)
+			return nil, 0, fmt.Errorf("logs[%d].environment must be at most %d characters", index, MaxLogEnvironmentLength)
 		}
 		if len(entry.URL) > 4096 {
-			return 0, 0, fmt.Errorf("logs[%d].url is too long", index)
+			return nil, 0, fmt.Errorf("logs[%d].url is too long", index)
 		}
 		extra := ""
 		if len(entry.Extra) > 0 && string(entry.Extra) != "null" {
 			if !json.Valid(entry.Extra) || len(entry.Extra) > MaxLogExtraBytes {
-				return 0, 0, fmt.Errorf("logs[%d].extra must be valid JSON up to %d bytes", index, MaxLogExtraBytes)
+				return nil, 0, fmt.Errorf("logs[%d].extra must be valid JSON up to %d bytes", index, MaxLogExtraBytes)
 			}
 			extra = string(entry.Extra)
 		}
@@ -306,18 +314,33 @@ func (s *Store) SaveServiceLogs(service Service, allowed []string, entries []Ser
 			skipped++
 			continue
 		}
-		if _, err := tx.Exec(`INSERT INTO logs
+		url := strings.TrimSpace(entry.URL)
+		res, err := tx.Exec(`INSERT INTO logs
 			(site_id, service_id, timestamp_ms, severity, message, extra, environment, url, created_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, service.SiteID, service.ID, entry.TimestampMs,
-			entry.Severity, entry.Message, extra, entry.Environment, strings.TrimSpace(entry.URL), now.Unix()); err != nil {
-			return 0, 0, err
+			entry.Severity, entry.Message, extra, entry.Environment, url, now.Unix())
+		if err != nil {
+			return nil, 0, err
 		}
-		accepted++
+		id, _ := res.LastInsertId()
+		inserted = append(inserted, Log{
+			ID:          id,
+			SiteID:      service.SiteID,
+			ServiceID:   service.ID,
+			ServiceName: service.Name,
+			Environment: entry.Environment,
+			TimestampMs: entry.TimestampMs,
+			Severity:    entry.Severity,
+			Message:     entry.Message,
+			Extra:       extra,
+			URL:         url,
+			CreatedAt:   now.Unix(),
+		})
 	}
 	if err := tx.Commit(); err != nil {
-		return 0, 0, err
+		return nil, 0, err
 	}
-	return accepted, skipped, nil
+	return inserted, skipped, nil
 }
 
 // logSelect is shared by ListLogs and GetLog so a linked log and a listed

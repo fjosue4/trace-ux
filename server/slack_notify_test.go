@@ -685,3 +685,47 @@ func TestNotifySlackLogsMatchesAnyRule(t *testing.T) {
 		t.Fatalf("expected the log matching no rule to be filtered out: %s", body)
 	}
 }
+
+// Service logs share the site's Slack log alert with browser logs: the same
+// rules apply, and each line names the service and environment it came from.
+func TestServiceLogIngestNotifiesSlackLogs(t *testing.T) {
+	srv, ts := newTestServer(t)
+	site := mustCreateNotifyTestSite(t, srv)
+	receiver := newSlackReceiver(t, 0)
+	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
+		RoutingMode: store.SlackRoutingSingle,
+		LogMatches:  []store.SlackLogMatch{{Mode: store.SlackLogMatchContains, Value: "Payment"}},
+		LogsEnabled: true,
+	})
+	_, key, err := srv.store.CreateService(site.ID, "billing-api")
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/logs/ingest", strings.NewReader(`{"logs":[
+		{"severity":"error","message":"Payment request failed","environment":"production"},
+		{"severity":"error","message":"Unrelated failure","environment":"production"}
+	]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-TraceUX-Service-Key", key)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("service ingest: got %d", resp.StatusCode)
+	}
+
+	body := waitForSlackDelivery(t, receiver)
+	for _, want := range []string{"Payment request failed", "billing-api", "production", "Matching logs"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("expected %q in the payload: %s", want, body)
+		}
+	}
+	if strings.Contains(body, "Unrelated failure") {
+		t.Fatalf("expected the non-matching service log to be filtered out: %s", body)
+	}
+}

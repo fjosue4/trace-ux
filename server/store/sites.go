@@ -94,6 +94,14 @@ func (s *Store) GetSiteByKey(key string) (Site, error) {
 	return Site{}, err
 }
 
+// SiteName returns just a site's display name, for callers such as service
+// ingest that know the site id but have no reason to load the whole site.
+func (s *Store) SiteName(id int64) (string, error) {
+	var name string
+	err := s.DB.QueryRow(`SELECT name FROM sites WHERE id = ?`, id).Scan(&name)
+	return name, err
+}
+
 func (s *Store) DeleteSite(id int64) error {
 	_, err := s.DB.Exec(`DELETE FROM sites WHERE id = ?`, id)
 	return err
