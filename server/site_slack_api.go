@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,10 +24,12 @@ type siteSlackIntegrationView struct {
 	TicketsEnabled bool             `json:"tickets_enabled"`
 	TicketsWebhook slackWebhookView `json:"tickets_webhook"`
 
-	LogsEnabled   bool             `json:"logs_enabled"`
-	LogsWebhook   slackWebhookView `json:"logs_webhook"`
-	LogMatchMode  string           `json:"log_match_mode"`
-	LogMatchValue string           `json:"log_match_value"`
+	LogsEnabled bool                  `json:"logs_enabled"`
+	LogsWebhook slackWebhookView      `json:"logs_webhook"`
+	LogMatches  []store.SlackLogMatch `json:"log_matches"`
+	// The first rule, for dashboards that predate multiple rules.
+	LogMatchMode  string `json:"log_match_mode"`
+	LogMatchValue string `json:"log_match_value"`
 
 	CustomEnabled bool             `json:"custom_enabled"`
 	CustomWebhook slackWebhookView `json:"custom_webhook"`
@@ -42,6 +45,7 @@ func siteSlackIntegrationViewFrom(si store.SiteSlackIntegration) siteSlackIntegr
 		TicketsWebhook: slackWebhookViewFrom(si.Tickets),
 		LogsEnabled:    si.LogsEnabled,
 		LogsWebhook:    slackWebhookViewFrom(si.Logs),
+		LogMatches:     si.LogMatches,
 		LogMatchMode:   si.LogMatchMode,
 		LogMatchValue:  si.LogMatchValue,
 		CustomEnabled:  si.CustomEnabled,
@@ -88,8 +92,12 @@ type siteSlackIntegrationPutRequest struct {
 	TicketsEnabled bool   `json:"tickets_enabled"`
 	LogsEnabled    bool   `json:"logs_enabled"`
 	CustomEnabled  bool   `json:"custom_enabled"`
-	LogMatchMode   string `json:"log_match_mode"`
-	LogMatchValue  string `json:"log_match_value"`
+	// LogMatches replaces the single pattern. When it is absent, the legacy
+	// log_match_mode/log_match_value pair is read as a one-rule list, so
+	// older dashboards and scripts keep working.
+	LogMatches    *[]store.SlackLogMatch `json:"log_matches,omitempty"`
+	LogMatchMode  string                 `json:"log_match_mode"`
+	LogMatchValue string                 `json:"log_match_value"`
 
 	// Blank means "keep the current secret"; the corresponding clear_* flag
 	// is the only way to remove one.
@@ -114,18 +122,35 @@ func (s *Server) handlePutSiteSlackIntegration(w http.ResponseWriter, r *http.Re
 		return
 	}
 	body.RoutingMode = strings.TrimSpace(body.RoutingMode)
-	body.LogMatchMode = strings.TrimSpace(body.LogMatchMode)
 
 	if !store.ValidSlackRoutingMode(body.RoutingMode) {
 		writeErr(w, http.StatusBadRequest, "invalid routing mode")
 		return
 	}
-	if !store.ValidSlackLogMatchMode(body.LogMatchMode) {
-		writeErr(w, http.StatusBadRequest, "invalid log match mode")
-		return
+	var requestedMatches []store.SlackLogMatch
+	if body.LogMatches != nil {
+		requestedMatches = *body.LogMatches
+	} else {
+		mode := strings.TrimSpace(body.LogMatchMode)
+		if mode == "" {
+			mode = store.SlackLogMatchContains
+		}
+		requestedMatches = []store.SlackLogMatch{{Mode: mode, Value: body.LogMatchValue}}
 	}
-	if len(body.LogMatchValue) > store.MaxSlackMatchValueLen {
-		writeErr(w, http.StatusBadRequest, "log match pattern is too long")
+	for _, rule := range requestedMatches {
+		mode := strings.TrimSpace(rule.Mode)
+		if mode != "" && !store.ValidSlackLogMatchMode(mode) {
+			writeErr(w, http.StatusBadRequest, "invalid log match mode")
+			return
+		}
+		if len(rule.Value) > store.MaxSlackMatchValueLen {
+			writeErr(w, http.StatusBadRequest, "log match pattern is too long")
+			return
+		}
+	}
+	logMatches, err := store.NormalizeSlackLogMatches(requestedMatches)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, fmt.Sprintf("at most %d log matches are allowed", store.MaxSlackLogMatches))
 		return
 	}
 
@@ -182,8 +207,7 @@ func (s *Server) handlePutSiteSlackIntegration(w http.ResponseWriter, r *http.Re
 		TicketsEnabled: body.TicketsEnabled,
 		LogsEnabled:    body.LogsEnabled,
 		CustomEnabled:  body.CustomEnabled,
-		LogMatchMode:   body.LogMatchMode,
-		LogMatchValue:  body.LogMatchValue,
+		LogMatches:     logMatches,
 		Common:         commonUpdate,
 		Tickets:        ticketsUpdate,
 		Logs:           logsUpdate,

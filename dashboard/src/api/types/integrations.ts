@@ -1,5 +1,17 @@
 export type SlackRoutingMode = 'single' | 'per_notification';
+import { LogSeverity } from './logs';
+
 export type SlackLogMatchMode = 'contains' | 'exact';
+
+/** One Slack log alert rule. A log is sent when it matches any rule: its
+ *  severity is one of `severities` (absent or empty = any) and the pattern
+ *  matches (blank = any message). No rules at all sends every log that passes
+ *  the site's own log settings. */
+export type SlackLogMatch = {
+  mode: SlackLogMatchMode;
+  value: string;
+  severities?: LogSeverity[];
+};
 
 export type SlackWebhookView = {
   configured: boolean;
@@ -38,6 +50,8 @@ export type SiteSlackIntegration = {
 
   logs_enabled: boolean;
   logs_webhook: SlackWebhookView;
+  log_matches?: SlackLogMatch[];
+  /** First rule only; kept for servers that predate rule lists. */
   log_match_mode: SlackLogMatchMode;
   log_match_value: string;
 
@@ -57,8 +71,7 @@ export type SiteSlackIntegrationUpdate = {
   tickets_enabled: boolean;
   logs_enabled: boolean;
   custom_enabled: boolean;
-  log_match_mode: SlackLogMatchMode;
-  log_match_value: string;
+  log_matches: SlackLogMatch[];
 
   common_webhook?: string;
   tickets_webhook?: string;

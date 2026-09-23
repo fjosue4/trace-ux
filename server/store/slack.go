@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"encoding/json"
 	"strings"
 	"time"
 )
@@ -17,7 +18,66 @@ const (
 	// + AES-GCM tag): comfortably larger than any real incoming-webhook URL.
 	MaxSlackWebhookCiphertextLen = 700
 	MaxSlackMatchValueLen        = 500
+	// MaxSlackLogMatches bounds the rule list a site can store; every
+	// captured log is checked against it on ingest.
+	MaxSlackLogMatches = 50
 )
+
+// SlackLogMatch is one rule for which captured logs are posted to Slack. A log
+// is posted when it matches any rule; an empty list posts every log that
+// passes the site's severity settings. Within a rule, Severities (empty = any)
+// and the pattern (blank = any message) must both match.
+type SlackLogMatch struct {
+	Mode       string   `json:"mode"`
+	Value      string   `json:"value"`
+	Severities []string `json:"severities,omitempty"`
+}
+
+// NormalizeSlackLogMatches trims each rule, puts its severities in canonical
+// order, drops rules that would match every log (no pattern and no
+// severities: they would make the other rules meaningless), and removes
+// duplicate rules. It rejects unknown modes or severities, over-long patterns
+// and oversized lists.
+func NormalizeSlackLogMatches(rules []SlackLogMatch) ([]SlackLogMatch, error) {
+	out := make([]SlackLogMatch, 0, len(rules))
+	seen := make(map[string]bool, len(rules))
+	for _, rule := range rules {
+		rule.Mode = strings.TrimSpace(rule.Mode)
+		if rule.Mode == "" {
+			rule.Mode = SlackLogMatchContains
+		}
+		if !ValidSlackLogMatchMode(rule.Mode) {
+			return nil, errBadJSON
+		}
+		if len(rule.Value) > MaxSlackMatchValueLen {
+			return nil, errBadJSON
+		}
+		severities, err := normalizeLogSeverities(rule.Severities)
+		if err != nil {
+			return nil, errBadJSON
+		}
+		rule.Severities = nil
+		if len(severities) > 0 {
+			rule.Severities = severities
+		}
+		if strings.TrimSpace(rule.Value) == "" {
+			rule.Value = ""
+			if len(rule.Severities) == 0 {
+				continue
+			}
+		}
+		key := rule.Mode + "\x00" + rule.Value + "\x00" + strings.Join(rule.Severities, ",")
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, rule)
+	}
+	if len(out) > MaxSlackLogMatches {
+		return nil, errBadJSON
+	}
+	return out, nil
+}
 
 func ValidSlackRoutingMode(v string) bool {
 	return v == SlackRoutingSingle || v == SlackRoutingPerNotification
@@ -143,6 +203,9 @@ type SiteSlackIntegration struct {
 	LogsEnabled    bool
 	CustomEnabled  bool
 
+	// LogMatches is the rule list; LogMatchMode/LogMatchValue mirror its first
+	// rule for API clients and builds that predate multiple rules.
+	LogMatches    []SlackLogMatch
 	LogMatchMode  string
 	LogMatchValue string
 
@@ -173,8 +236,7 @@ type SiteSlackIntegrationUpdate struct {
 	TicketsEnabled bool
 	LogsEnabled    bool
 	CustomEnabled  bool
-	LogMatchMode   string
-	LogMatchValue  string
+	LogMatches     []SlackLogMatch
 
 	Common  SlackWebhookUpdate
 	Tickets SlackWebhookUpdate
@@ -183,13 +245,14 @@ type SiteSlackIntegrationUpdate struct {
 }
 
 func (s *Store) GetSiteSlackIntegration(siteID int64) (SiteSlackIntegration, error) {
-	si := SiteSlackIntegration{SiteID: siteID, RoutingMode: SlackRoutingSingle, LogMatchMode: SlackLogMatchContains}
+	si := SiteSlackIntegration{SiteID: siteID, RoutingMode: SlackRoutingSingle, LogMatchMode: SlackLogMatchContains, LogMatches: []SlackLogMatch{}}
 	var common, tickets, logs, custom []byte
+	var rules string
 	row := s.DB.QueryRow(`SELECT routing_mode,
 		common_ciphertext, common_fingerprint, common_hint,
 		tickets_enabled, tickets_ciphertext, tickets_fingerprint, tickets_hint,
 		logs_enabled, logs_ciphertext, logs_fingerprint, logs_hint,
-		logs_match_mode, logs_match_value,
+		logs_match_mode, logs_match_value, logs_match_rules,
 		custom_enabled, custom_ciphertext, custom_fingerprint, custom_hint,
 		updated_at
 		FROM site_slack_integration WHERE site_id = ?`, siteID)
@@ -197,7 +260,7 @@ func (s *Store) GetSiteSlackIntegration(siteID int64) (SiteSlackIntegration, err
 		&common, &si.Common.Fingerprint, &si.Common.Hint,
 		&si.TicketsEnabled, &tickets, &si.Tickets.Fingerprint, &si.Tickets.Hint,
 		&si.LogsEnabled, &logs, &si.Logs.Fingerprint, &si.Logs.Hint,
-		&si.LogMatchMode, &si.LogMatchValue,
+		&si.LogMatchMode, &si.LogMatchValue, &rules,
 		&si.CustomEnabled, &custom, &si.Custom.Fingerprint, &si.Custom.Hint,
 		&si.UpdatedAt,
 	)
@@ -210,6 +273,14 @@ func (s *Store) GetSiteSlackIntegration(siteID int64) (SiteSlackIntegration, err
 		}
 		return SiteSlackIntegration{}, err
 	}
+	if rules != "" {
+		if err := json.Unmarshal([]byte(rules), &si.LogMatches); err != nil {
+			return SiteSlackIntegration{}, err
+		}
+	}
+	if si.LogMatches == nil {
+		si.LogMatches = []SlackLogMatch{}
+	}
 	si.Common.Ciphertext = common
 	si.Tickets.Ciphertext = tickets
 	si.Logs.Ciphertext = logs
@@ -218,18 +289,29 @@ func (s *Store) GetSiteSlackIntegration(siteID int64) (SiteSlackIntegration, err
 }
 
 func (s *Store) UpdateSiteSlackIntegration(u SiteSlackIntegrationUpdate) (SiteSlackIntegration, error) {
-	if !ValidSlackRoutingMode(u.RoutingMode) || !ValidSlackLogMatchMode(u.LogMatchMode) {
+	if !ValidSlackRoutingMode(u.RoutingMode) {
 		return SiteSlackIntegration{}, errBadJSON
 	}
-	if len(u.LogMatchValue) > MaxSlackMatchValueLen {
-		return SiteSlackIntegration{}, errBadJSON
+	rules, err := NormalizeSlackLogMatches(u.LogMatches)
+	if err != nil {
+		return SiteSlackIntegration{}, err
+	}
+	encodedRules, err := json.Marshal(rules)
+	if err != nil {
+		return SiteSlackIntegration{}, err
+	}
+	// The legacy single-pattern columns mirror the first rule, so a rollback
+	// to a build without rule lists keeps alerting on it.
+	firstMode, firstValue := SlackLogMatchContains, ""
+	if len(rules) > 0 {
+		firstMode, firstValue = rules[0].Mode, rules[0].Value
 	}
 	now := time.Now().Unix()
 
 	set := []string{"routing_mode=?", "tickets_enabled=?", "logs_enabled=?", "custom_enabled=?",
-		"logs_match_mode=?", "logs_match_value=?", "updated_at=?"}
+		"logs_match_mode=?", "logs_match_value=?", "logs_match_rules=?", "updated_at=?"}
 	args := []any{u.RoutingMode, u.TicketsEnabled, u.LogsEnabled, u.CustomEnabled,
-		u.LogMatchMode, u.LogMatchValue, now}
+		firstMode, firstValue, string(encodedRules), now}
 
 	if err := applySlackWebhookUpdate(&set, &args, "common", u.Common); err != nil {
 		return SiteSlackIntegration{}, err

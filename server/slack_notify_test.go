@@ -343,7 +343,6 @@ func TestNotifySlackTicketDeliversWhenEnabled(t *testing.T) {
 	receiver := newSlackReceiver(t, 0)
 	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
 		RoutingMode:    store.SlackRoutingSingle,
-		LogMatchMode:   store.SlackLogMatchContains,
 		TicketsEnabled: true,
 	})
 	req := httptest.NewRequest(http.MethodPost, "https://dash.example.com/api/tickets", nil)
@@ -362,7 +361,6 @@ func TestNotifySlackTicketSkippedWhenDisabled(t *testing.T) {
 	receiver := newSlackReceiver(t, 0)
 	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
 		RoutingMode:    store.SlackRoutingSingle,
-		LogMatchMode:   store.SlackLogMatchContains,
 		TicketsEnabled: false, // disabled despite having a webhook configured
 	})
 	req := httptest.NewRequest(http.MethodPost, "https://dash.example.com/api/tickets", nil)
@@ -387,7 +385,6 @@ func TestNotifySlackTicketUsesTheTicketsSiteNotAnotherSite(t *testing.T) {
 	// notifyingSite, which has nothing configured, so nothing should send.
 	setSiteSlackIntegrationForTest(t, srv, otherSite.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
 		RoutingMode:    store.SlackRoutingSingle,
-		LogMatchMode:   store.SlackLogMatchContains,
 		TicketsEnabled: true,
 	})
 	req := httptest.NewRequest(http.MethodPost, "https://dash.example.com/api/tickets", nil)
@@ -405,10 +402,9 @@ func TestNotifySlackLogsAppliesMatcher(t *testing.T) {
 	site := mustCreateNotifyTestSite(t, srv)
 	receiver := newSlackReceiver(t, 0)
 	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
-		RoutingMode:   store.SlackRoutingSingle,
-		LogMatchMode:  store.SlackLogMatchContains,
-		LogMatchValue: "Payment",
-		LogsEnabled:   true,
+		RoutingMode: store.SlackRoutingSingle,
+		LogMatches:  []store.SlackLogMatch{{Mode: store.SlackLogMatchContains, Value: "Payment"}},
+		LogsEnabled: true,
 	})
 	req := httptest.NewRequest(http.MethodGet, "https://dash.example.com/api/ingest/x", nil)
 	logs := []store.Log{
@@ -431,10 +427,9 @@ func TestNotifySlackLogsNoMatchSendsNothing(t *testing.T) {
 	site := mustCreateNotifyTestSite(t, srv)
 	receiver := newSlackReceiver(t, 0)
 	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
-		RoutingMode:   store.SlackRoutingSingle,
-		LogMatchMode:  store.SlackLogMatchExact,
-		LogMatchValue: "Specific message",
-		LogsEnabled:   true,
+		RoutingMode: store.SlackRoutingSingle,
+		LogMatches:  []store.SlackLogMatch{{Mode: store.SlackLogMatchExact, Value: "Specific message"}},
+		LogsEnabled: true,
 	})
 	req := httptest.NewRequest(http.MethodGet, "https://dash.example.com/api/ingest/x", nil)
 	srv.notifySlackLogs(site, []store.Log{{Message: "Something else", Severity: "error"}}, req)
@@ -481,7 +476,6 @@ func TestNotifySlackCustomEventsOnlyNotifiesFlaggedEvents(t *testing.T) {
 	receiver := newSlackReceiver(t, 0)
 	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
 		RoutingMode:   store.SlackRoutingSingle,
-		LogMatchMode:  store.SlackLogMatchContains,
 		CustomEnabled: true,
 	})
 	req := httptest.NewRequest(http.MethodGet, "https://dash.example.com/api/ingest/x", nil)
@@ -506,7 +500,6 @@ func TestNotifySlackCustomEventsSkippedWhenDisabled(t *testing.T) {
 	receiver := newSlackReceiver(t, 0)
 	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
 		RoutingMode:   store.SlackRoutingSingle,
-		LogMatchMode:  store.SlackLogMatchContains,
 		CustomEnabled: false, // disabled despite having a webhook configured
 	})
 	req := httptest.NewRequest(http.MethodGet, "https://dash.example.com/api/ingest/x", nil)
@@ -525,7 +518,6 @@ func TestNotifySlackCustomEventsNoFlaggedEventsSendsNothing(t *testing.T) {
 	receiver := newSlackReceiver(t, 0)
 	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
 		RoutingMode:   store.SlackRoutingSingle,
-		LogMatchMode:  store.SlackLogMatchContains,
 		CustomEnabled: true,
 	})
 	req := httptest.NewRequest(http.MethodGet, "https://dash.example.com/api/ingest/x", nil)
@@ -544,7 +536,6 @@ func TestNotifySlackCustomEventsCooldownIsPerUserAndError(t *testing.T) {
 	receiver := newSlackReceiver(t, 0)
 	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
 		RoutingMode:   store.SlackRoutingSingle,
-		LogMatchMode:  store.SlackLogMatchContains,
 		CustomEnabled: true,
 	})
 	req := httptest.NewRequest(http.MethodGet, "https://dash.example.com/api/ingest/x", nil)
@@ -604,7 +595,6 @@ func TestIngestCustomNotifySendsSessionLinkToSlack(t *testing.T) {
 
 	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
 		RoutingMode:   store.SlackRoutingSingle,
-		LogMatchMode:  store.SlackLogMatchContains,
 		CustomEnabled: true,
 	})
 	if resp := postJSON(t, ts.URL+"/api/ingest/"+site.SiteKey,
@@ -636,5 +626,62 @@ func TestOriginForDerivesFromRequestWithoutPublicURL(t *testing.T) {
 	req.Host = "dash.example.com"
 	if got := srv.originFor(req); got != "http://dash.example.com" {
 		t.Fatalf("originFor = %q, want derived from the request", got)
+	}
+}
+
+func TestSlackLogMatchesAny(t *testing.T) {
+	rules := []store.SlackLogMatch{
+		{Mode: store.SlackLogMatchContains, Value: "TypeError"},
+		{Mode: store.SlackLogMatchExact, Value: "Payment failed", Severities: []string{"error"}},
+		{Mode: store.SlackLogMatchContains, Value: "", Severities: []string{"warn"}},
+	}
+	for _, c := range []struct {
+		name     string
+		rules    []store.SlackLogMatch
+		severity string
+		message  string
+		want     bool
+	}{
+		{"no rules matches every log", nil, "info", "anything", true},
+		{"pattern rule matches at any severity", rules, "info", "Uncaught TypeError: x", true},
+		{"severity-limited rule matches its level", rules, "error", "Payment failed", true},
+		{"severity-limited rule ignores other levels", rules, "info", "Payment failed", false},
+		{"blank pattern with a level matches every log at it", rules, "warn", "Slow render", true},
+		{"exact rule needs the whole message", rules, "error", "Payment failed: declined", false},
+		{"no rule matches", rules, "error", "NetworkError", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := slackLogMatchesAny(c.rules, c.severity, c.message); got != c.want {
+				t.Fatalf("slackLogMatchesAny(%v, %q, %q) = %v, want %v", c.rules, c.severity, c.message, got, c.want)
+			}
+		})
+	}
+}
+
+func TestNotifySlackLogsMatchesAnyRule(t *testing.T) {
+	srv, _ := newTestServer(t)
+	site := mustCreateNotifyTestSite(t, srv)
+	receiver := newSlackReceiver(t, 0)
+	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
+		RoutingMode: store.SlackRoutingSingle,
+		LogMatches: []store.SlackLogMatch{
+			{Mode: store.SlackLogMatchContains, Value: "Payment"},
+			{Mode: store.SlackLogMatchContains, Value: "TypeError"},
+		},
+		LogsEnabled: true,
+	})
+	req := httptest.NewRequest(http.MethodGet, "https://dash.example.com/api/ingest/x", nil)
+	srv.notifySlackLogs(site, []store.Log{
+		{Message: "Payment failed", Severity: "error", SessionID: "s1"},
+		{Message: "Uncaught TypeError: cart is undefined", Severity: "error", SessionID: "s1"},
+		{Message: "Unrelated info", Severity: "error", SessionID: "s1"},
+	}, req)
+
+	body := waitForSlackDelivery(t, receiver)
+	if !strings.Contains(body, "Payment failed") || !strings.Contains(body, "TypeError") {
+		t.Fatalf("expected a log for each rule in the payload: %s", body)
+	}
+	if strings.Contains(body, "Unrelated info") {
+		t.Fatalf("expected the log matching no rule to be filtered out: %s", body)
 	}
 }

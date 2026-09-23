@@ -7,6 +7,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -499,10 +500,28 @@ func urlPathSegment(value string) string {
 	return b.String()
 }
 
-// slackLogMatches applies the configured log matcher. An empty pattern
-// matches everything that already passed the site's severity allow-list,
-// which is enough to receive every captured error without a second rule
-// language for "all of them".
+// slackLogMatchesAny reports whether a log should be posted: it matches any
+// of the site's rules. No rules means every log that already passed the
+// site's severity allow-list, which is enough to receive every captured error
+// without a separate "all of them" setting. A rule matches when the log's
+// severity is one of its severities (none listed = any) and its pattern
+// matches the message.
+func slackLogMatchesAny(rules []store.SlackLogMatch, severity, message string) bool {
+	if len(rules) == 0 {
+		return true
+	}
+	for _, rule := range rules {
+		if len(rule.Severities) > 0 && !slices.Contains(rule.Severities, severity) {
+			continue
+		}
+		if slackLogMatches(rule.Mode, rule.Value, message) {
+			return true
+		}
+	}
+	return false
+}
+
+// slackLogMatches applies one rule. A blank pattern matches everything.
 func slackLogMatches(mode, pattern, message string) bool {
 	if pattern == "" {
 		return true
@@ -533,7 +552,7 @@ func (s *Server) notifySlackLogs(site store.Site, logs []store.Log, r *http.Requ
 	}
 	matched := make([]store.Log, 0, len(logs))
 	for _, l := range logs {
-		if slackLogMatches(integ.LogMatchMode, integ.LogMatchValue, l.Message) {
+		if slackLogMatchesAny(integ.LogMatches, l.Severity, l.Message) {
 			matched = append(matched, l)
 		}
 	}

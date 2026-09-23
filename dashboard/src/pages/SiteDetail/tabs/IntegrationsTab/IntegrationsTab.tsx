@@ -4,11 +4,12 @@ import Notice from '../../../../components/ui/Notice';
 import Loading from '../../../../components/ui/Loading';
 import Switch from '../../../../components/ui/Switch';
 import { Icon } from '../../../../components/ui/Icon';
-import { Field, Input, Select } from '../../../../components/ui/fields';
+import { Field, Select } from '../../../../components/ui/fields';
 import { WebhookField } from '../../../../components/integrations/WebhookField';
 import { SlackRequestUrl } from '../../../../components/integrations/SlackRequestUrl';
-import { SlackLogMatchMode, SlackRoutingMode } from '../../../../api';
+import { SlackRoutingMode } from '../../../../api';
 import { useSiteSlackIntegration } from './hooks/useSiteSlackIntegration';
+import { LogMatchList } from './subcomponents/LogMatchList';
 import { IntegrationsTabProps } from './IntegrationsTab.types';
 import './IntegrationsTab.scss';
 
@@ -33,10 +34,8 @@ export function IntegrationsTab({ siteId, isAdmin }: IntegrationsTabProps) {
     setLogsEnabled,
     customEnabled,
     setCustomEnabled,
-    logMatchMode,
-    setLogMatchMode,
-    logMatchValue,
-    setLogMatchValue,
+    logMatches,
+    setLogMatches,
     common,
     setCommon,
     tickets,
@@ -133,8 +132,8 @@ export function IntegrationsTab({ siteId, isAdmin }: IntegrationsTabProps) {
           <Switch checked={logsEnabled} onChange={setLogsEnabled} />
         </div>
         <p className="muted small">
-          Notify for browser logs that already pass this site's own log settings — the severity selection there is
-          always the first filter, this only narrows it further.
+          Notify for browser logs that already pass this site's own log settings. Those settings are always the
+          first filter; the matches below narrow them further, each by severity, message, or both.
         </p>
         {!isSingle && (
           <WebhookField
@@ -145,24 +144,7 @@ export function IntegrationsTab({ siteId, isAdmin }: IntegrationsTabProps) {
             onChange={setLogs}
           />
         )}
-        {logsEnabled && (
-          <div className="site-integrations__grid">
-            <Field label="Match mode">
-              <Select
-                ariaLabel="Log match mode"
-                value={logMatchMode}
-                onChange={(v) => setLogMatchMode(v as SlackLogMatchMode)}
-                options={[
-                  { value: 'contains', label: 'Contains' },
-                  { value: 'exact', label: 'Exact match' },
-                ]}
-              />
-            </Field>
-            <Field label="Message pattern" hint="Blank matches every log that passes the site's severity settings.">
-              <Input value={logMatchValue} onChange={(e) => setLogMatchValue(e.target.value)} placeholder="e.g. TypeError" />
-            </Field>
-          </div>
-        )}
+        {logsEnabled && <LogMatchList rules={logMatches} onChange={setLogMatches} />}
         {logsEnabled && (
           <div className="site-integrations__row">
             <Button type="button" variant="secondary" size="sm" disabled={testingKind !== null} onClick={() => test('logs')}>
@@ -179,7 +161,7 @@ export function IntegrationsTab({ siteId, isAdmin }: IntegrationsTabProps) {
           <p className="muted small">
             Notify for custom events this page explicitly flags with <code>notify: true</code> —{' '}
             <code>track(name, trackId, {'{'} notify: true {'}'})</code> or a <code>trace-ux-track-notify="true"</code>{' '}
-            click. Independent of the match pattern above: there is no matcher here, every flagged event notifies.
+            click. Independent of the log matches above: there is no matcher here, every flagged event notifies.
           </p>
           {!isSingle && (
             <WebhookField

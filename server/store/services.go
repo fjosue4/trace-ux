@@ -49,7 +49,10 @@ func normalizeServiceName(name string) (string, error) {
 	return name, nil
 }
 
-func normalizeServiceSeverities(values []string) ([]string, error) {
+// normalizeLogSeverities validates a severity selection (known levels, no
+// repeats) and returns it in canonical order. Shared by service log levels
+// and Slack log match rules.
+func normalizeLogSeverities(values []string) ([]string, error) {
 	if !ValidLogSeverities(values) {
 		return nil, errors.New("invalid severities")
 	}
@@ -135,7 +138,7 @@ func (s *Store) UpdateService(siteID, serviceID int64, name string, inherit bool
 	if err != nil {
 		return Service{}, err
 	}
-	severities, err = normalizeServiceSeverities(severities)
+	severities, err = normalizeLogSeverities(severities)
 	if err != nil {
 		return Service{}, err
 	}
