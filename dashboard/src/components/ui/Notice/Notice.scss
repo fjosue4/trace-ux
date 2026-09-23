@@ -59,6 +59,8 @@
   &--success { background: $success-soft; color: $success; border-color: color-mix(in srgb, #{$success} 25%, transparent); }
   &--error { background: $danger-soft; color: $danger; border-color: color-mix(in srgb, #{$danger} 25%, transparent); }
   &--info { background: $accent-soft; color: $accent; border-color: color-mix(in srgb, #{$accent} 22%, transparent); }
+  // Something to act on that is not a failure, e.g. "no events yet".
+  &--warn { background: $warn-soft; color: $warn; border-color: color-mix(in srgb, #{$warn} 28%, transparent); }
 }
 
 @media (max-width: 600px) {

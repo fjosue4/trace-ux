@@ -8,7 +8,7 @@ import Modal from '../../../components/ui/Modal';
 import { Icon } from '../../../components/ui/Icon';
 import { formatExtra, logTimestampMs, severityTone } from '../Logs.helpers';
 
-type CopyTarget = 'message' | 'extra' | 'log';
+type CopyTarget = 'message' | 'extra' | 'log' | 'link';
 
 // Full view of one log row: the table truncates message and extra, so this is
 // the only place either is shown complete.
@@ -70,6 +70,9 @@ export function LogDetailModal({ log, onClose }: { log: Log | null; onClose: () 
               <Icon name="play" size={12} /> Open replay
             </Link>
           )}
+          <Button variant="secondary" size="sm" onClick={() => copy('link', `${window.location.origin}/logs/log/${log.id}`)}>
+            <Icon name={copied === 'link' ? 'check' : 'copy'} size={13} /> {copied === 'link' ? 'Copied' : 'Copy link'}
+          </Button>
           <Button variant="secondary" size="sm" onClick={copyWholeLog}>
             <Icon name={copied === 'log' ? 'check' : 'copy'} size={13} /> {copied === 'log' ? 'Copied' : 'Copy log as JSON'}
           </Button>

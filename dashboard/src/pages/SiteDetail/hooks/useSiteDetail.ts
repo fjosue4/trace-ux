@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AnnouncementAppearance, api, FeedbackTrigger, Log, SiteDetail as SiteDetailData, SiteSettings, SurveyQuestion } from '../../../api';
-import { SiteTab, WidgetSettingsModalKind } from '../SiteDetail.types';
+import { SiteTab, siteTabs, WidgetSettingsModalKind } from '../SiteDetail.types';
 
 export function useSiteDetail(id: number) {
   const [detail, setDetail] = useState<SiteDetailData | null>(null);
@@ -52,7 +52,9 @@ export function useSiteDetail(id: number) {
   }, [id, load]);
 
   useEffect(() => {
-    setActiveTab('overview');
+    // `?tab=site` (used when skipping onboarding) opens that tab directly.
+    const requested = new URLSearchParams(window.location.search).get('tab');
+    setActiveTab(siteTabs.some((tab) => tab.id === requested) ? (requested as SiteTab) : 'overview');
     setWidgetSettingsModal(null);
   }, [id]);
 
@@ -65,8 +67,10 @@ export function useSiteDetail(id: number) {
     }
   }
 
-  async function saveSettings() {
-    if (!draft) return;
+  // Resolves true once the server has accepted the draft, so a caller such as
+  // the onboarding wizard can move on only after a successful save.
+  async function saveSettings(): Promise<boolean> {
+    if (!draft) return false;
     setSaving(true);
     setSaved(false);
     try {
@@ -78,8 +82,10 @@ export function useSiteDetail(id: number) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
       load();
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save the configuration.');
+      return false;
     } finally {
       setSaving(false);
     }

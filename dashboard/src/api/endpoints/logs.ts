@@ -22,6 +22,10 @@ export const logsEndpoints = {
     return request<Log[]>(`/api/logs?${q.toString()}`);
   },
 
+  // One log by id, for direct links. Independent of the list's filters and
+  // time window, so a shared link opens even when the log is older.
+  getLog: (id: number) => request<Log>(`/api/logs/${id}`),
+
   logOptions: (siteId?: number | null) => {
     const q = new URLSearchParams();
     if (siteId) q.set('site_id', String(siteId));

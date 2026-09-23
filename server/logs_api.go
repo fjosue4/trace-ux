@@ -214,6 +214,26 @@ func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, logs)
 }
 
+// handleGetLog serves one log for a direct link (/logs/log/<id>). It uses the
+// same auth as the list: anyone who can see the Logs page can open a log.
+func (s *Server) handleGetLog(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeErr(w, http.StatusBadRequest, "invalid log id")
+		return
+	}
+	item, err := s.store.GetLog(id)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if item == nil {
+		writeErr(w, http.StatusNotFound, "log not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
 func (s *Server) handleLogStats(w http.ResponseWriter, r *http.Request) {
 	f, err := parseLogFilter(r)
 	if err != nil {

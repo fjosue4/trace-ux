@@ -1,0 +1,275 @@
+// Guided site setup: a step rail beside one step card.
+@use 'abstracts' as *;
+
+.onboarding__layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+/* ---------------------------------------------------------------- rail */
+
+.onboarding__rail {
+  position: sticky;
+  top: 1.25rem;
+
+  ol {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+}
+
+.onboarding__rail-step {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.5rem 0.6rem;
+  border: 0;
+  border-radius: $radius-sm;
+  background: none;
+  color: $muted;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color $duration-fast $ease-out, color $duration-fast $ease-out;
+
+  &:hover:not(:disabled) { background: $surface-2; color: $ink; }
+  &:disabled { cursor: default; }
+  &:disabled:not(.is-current) { opacity: 0.55; }
+  &:focus-visible { outline: 2px solid $accent; outline-offset: -2px; }
+
+  &.is-current { background: $surface-2; color: $ink; }
+  &.is-done { color: $ink-2; }
+}
+
+.onboarding__rail-mark {
+  display: grid;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 1px solid $line-strong;
+  border-radius: 50%;
+  color: $muted;
+  font-size: 0.72rem;
+
+  .is-current & { border-color: $accent; color: $accent; }
+  .is-done & { border-color: $accent; background: $accent; color: $on-accent; }
+  .is-skipped & { border-style: dashed; }
+}
+
+// The number is its own block so its box can be trimmed to the digit's cap
+// height and baseline; the circle's grid then centres the glyph itself rather
+// than a line box, which sits digits visibly high.
+.onboarding__rail-num {
+  display: block;
+  line-height: 1;
+  text-box: trim-both cap alphabetic;
+}
+
+.onboarding__rail-label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+
+  small { color: $muted; font-size: 0.7rem; font-weight: 500; }
+}
+
+/* ---------------------------------------------------------------- card */
+
+.card.onboarding__card { padding: 0; overflow: visible; }
+
+.onboarding__step {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  padding: 1.5rem 1.6rem 0;
+}
+
+.onboarding__head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+
+  h2 { font-size: 1.3rem; color: $ink; letter-spacing: -0.015em; }
+  p { max-width: 68ch; margin: 0; font-size: 0.92rem; line-height: 1.6; }
+}
+
+.onboarding__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: $accent;
+  font-size: 0.7rem;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.onboarding__body { min-width: 0; }
+
+// Tab components are built for the hub's config card; inside the step card
+// they keep their layout but drop that card's own chrome.
+.hub-config.onboarding__embed {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+}
+
+// Services inside a step: the step heading already names and explains it, so
+// the card's own title goes, its chrome flattens into the step card, and the
+// empty state shrinks to one line instead of a tall placeholder.
+.onboarding__body {
+  .services-intro {
+    padding: 0;
+    border: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .services-intro__head { justify-content: flex-start; }
+  .services-intro__head > div:first-child { display: none; }
+  .services-create { width: min(100%, 420px); }
+
+  .empty {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 0.85rem;
+    padding: 0.85rem 1rem;
+    text-align: left;
+    background: $surface-2;
+  }
+
+  .empty__icon { width: 36px; height: 36px; flex: none; margin: 0; }
+  .empty__title { margin: 0; font-size: 0.92rem; }
+  .empty__desc { margin: 0.1rem 0 0; max-width: none; font-size: 0.84rem; }
+}
+
+// The install check result sits under the snippet with a little air.
+.onboarding__body .notice,
+.onboarding__install-hint { margin-top: 0.9rem; }
+
+.onboarding__install-hint--live { display: flex; align-items: center; gap: 0.55rem; color: $ink-2; }
+
+.onboarding__spinner {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: none;
+  border: 2px solid $accent-soft;
+  border-top-color: $accent;
+  border-radius: 50%;
+  animation: onboarding-spin 0.8s linear infinite;
+}
+
+@keyframes onboarding-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding__spinner { animation-duration: 2.8s; }
+}
+
+.onboarding__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  margin: 0.4rem -1.6rem 0;
+  padding: 1rem 1.6rem;
+  border-top: 1px solid $line;
+}
+
+.onboarding__note { margin-right: auto; }
+
+/* ---------------------------------------------------------------- create */
+
+.onboarding__create {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.onboarding__create-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  max-width: 760px;
+}
+
+/* ---------------------------------------------------------------- done */
+
+.onboarding__summary {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid $line;
+  border-radius: $radius;
+  list-style: none;
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.7rem 0.85rem;
+
+    & + li { border-top: 1px solid $line; }
+  }
+}
+
+.onboarding__summary-mark {
+  display: grid;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 50%;
+  background: $surface-2;
+  color: $muted;
+
+  .is-done & { background: $accent-soft; color: $accent; }
+}
+
+.onboarding__summary-label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+
+  strong { color: $ink; font-size: 0.9rem; }
+  small { color: $muted; font-size: 0.76rem; }
+
+  .is-done & small { color: $accent; }
+}
+
+/* ---------------------------------------------------------------- narrow */
+
+@media (max-width: 900px) {
+  .onboarding__layout { grid-template-columns: 1fr; }
+
+  .onboarding__rail {
+    position: static;
+
+    ol { flex-direction: row; overflow-x: auto; gap: 0.3rem; padding-bottom: 0.2rem; }
+  }
+
+  .onboarding__rail-step { flex: none; width: auto; }
+  .onboarding__rail-label small { display: none; }
+}
+
+@media (max-width: 640px) {
+  .onboarding__step { padding: 1.1rem 1rem 0; }
+  .onboarding__footer { margin: 0.4rem -1rem 0; padding: 0.85rem 1rem; }
+  .onboarding__create-fields { grid-template-columns: 1fr; }
+  .onboarding__rail-label { display: none; }
+}

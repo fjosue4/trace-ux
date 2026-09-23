@@ -1,5 +1,5 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useUser } from '../../App';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
@@ -7,7 +7,6 @@ import Notice from '../../components/ui/Notice';
 import Loading from '../../components/ui/Loading';
 import EmptyState from '../../components/ui/EmptyState';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
-import AddSiteModal from '../../components/sites/AddSiteModal';
 import { Icon } from '../../components/ui/Icon';
 import SiteRow from '../../components/sites/SiteRow';
 import { useSites } from './hooks/useSites';
@@ -15,18 +14,24 @@ import './Sites.scss';
 
 export default function Sites() {
   const navigate = useNavigate();
-  const { sites, error, load, pendingDelete, setPendingDelete, deleting, confirmDelete } = useSites();
-  const [adding, setAdding] = useState(false);
+  const { user } = useUser();
+  const isAdmin = user.role === 'admin';
+  const { sites, error, pendingDelete, setPendingDelete, deleting, confirmDelete } = useSites();
+  // Adding a site always goes through the guided setup; its first step offers
+  // "Create and set up later" for anyone who wants to skip the guide.
+  const addSite = () => navigate(sites?.length === 0 ? '/sites/setup?first=1' : '/sites/setup');
 
   return (
     <main className="page">
       <PageHeader
         title="Sites"
         actions={
-          <Button onClick={() => setAdding(true)}>
-            <Icon name="plus" size={14} />
-            Add site
-          </Button>
+          isAdmin && (
+            <Button onClick={addSite}>
+              <Icon name="plus" size={14} />
+              Add site
+            </Button>
+          )
         }
       />
 
@@ -36,13 +41,19 @@ export default function Sites() {
         <Loading />
       ) : sites.length === 0 ? (
         <EmptyState
-          title="No sites yet"
-          description="Create a site, paste the snippet into your website, and sessions will appear here."
+          title={isAdmin ? 'Welcome to TraceUX' : 'No sites yet'}
+          description={
+            isAdmin
+              ? 'Set up your first site step by step: the snippet, recordings, the visitor widget, logs, backend services, Slack alerts, and your team. Skip any step and come back to it later.'
+              : 'An administrator has not added a site yet. Sessions will appear here once one is set up.'
+          }
           action={
-            <Button onClick={() => setAdding(true)}>
-              <Icon name="plus" size={14} />
-              Add your first site
-            </Button>
+            isAdmin && (
+              <Button onClick={addSite}>
+                <Icon name="plus" size={14} />
+                Set up your first site
+              </Button>
+            )
           }
         />
       ) : (
@@ -63,16 +74,6 @@ export default function Sites() {
         onClose={() => setPendingDelete(null)}
       />
 
-      <AddSiteModal
-        open={adding}
-        origin={location.origin}
-        onClose={() => setAdding(false)}
-        onCreated={load}
-        onConfigureSite={(site) => {
-          setAdding(false);
-          navigate(`/sites/site/${site.id}`);
-        }}
-      />
     </main>
   );
 }

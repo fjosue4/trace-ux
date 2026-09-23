@@ -362,6 +362,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/logs", s.auth(s.handleListLogs))
 	mux.HandleFunc("GET /api/logs/stats", s.auth(s.handleLogStats))
 	mux.HandleFunc("GET /api/logs/options", s.auth(s.handleLogOptions))
+	mux.HandleFunc("GET /api/logs/{id}", s.auth(s.handleGetLog))
 	mux.HandleFunc("POST /api/logs/ingest", s.handleServiceLogIngest)
 
 	// Backend endpoint latency and percentile metrics.
