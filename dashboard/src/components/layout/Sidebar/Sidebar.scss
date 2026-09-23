@@ -23,6 +23,7 @@
   &__logo { width: 112px; height: auto; }
 
   &__nav { display: flex; flex-direction: column; gap: 0.12rem; }
+  &__mobile-nav { display: none; }
 
   &__link {
     display: flex;
@@ -125,19 +126,19 @@
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 860px) {
   .sidebar {
     align-items: center;
     flex-wrap: wrap;
     border-radius: $radius;
 
     &__brand { padding-left: 0.35rem; }
-    &__nav {
+    &__nav--desktop { display: none; }
+    &__mobile-nav {
       width: 100%;
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(6, minmax(0, 1fr));
       gap: 0.3rem;
-      overflow: visible;
       order: 3;
 
       > div { min-width: 0; }
@@ -152,6 +153,61 @@
       font-size: 0;
 
       svg { width: 18px; height: 18px; }
+
+      &.is-active::before {
+        left: 10px;
+        right: 10px;
+        top: auto;
+        bottom: -1px;
+        width: auto;
+        height: 2px;
+        border-radius: 2px 2px 0 0;
+      }
+    }
+    &__mobile-more { position: relative; min-width: 0; }
+    &__more-trigger {
+      width: 100%;
+      border: 0;
+      appearance: none;
+      background: transparent;
+      color: $muted;
+      font: inherit;
+      cursor: pointer;
+
+      &:hover,
+      &.is-open { background: transparent; color: $ink; }
+    }
+    &__mobile-menu {
+      position: absolute;
+      z-index: 1000;
+      top: calc(100% + 0.45rem);
+      right: 0;
+      width: max-content;
+      min-width: 190px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 5px;
+      background: $popover-bg;
+      border: 1px solid $line-strong;
+      border-radius: $radius;
+      box-shadow: $shadow-md;
+      transform-origin: top right;
+    }
+    &__mobile-menu-link {
+      display: grid;
+      grid-template-columns: 20px minmax(0, 1fr) 16px;
+      align-items: center;
+      gap: 0.65rem;
+      min-height: 40px;
+      padding: 0.55rem 0.7rem;
+      color: $ink;
+      border-radius: $radius-sm;
+      font-size: 0.88rem;
+      font-weight: 600;
+
+      &:hover { background: $surface-3; }
+      &.is-active { color: $accent; background: $accent-soft; }
     }
     &__footer { margin-left: auto; padding: 0; }
     &__theme {

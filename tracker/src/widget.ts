@@ -461,6 +461,9 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     launcher.classList.remove('launcher--icon');
     launcherIcon.replaceChildren(svg(builtInIcon));
     if (!launcher.contains(launcherLabel)) launcherIcon.after(launcherLabel);
+    // The pill is wider than the round mark, so a launcher parked against the
+    // right edge has to be pulled back inside the viewport.
+    restorePlacement();
   };
 
   if (hasCustomIcon) {
@@ -468,6 +471,8 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     const img = el('img');
     img.src = host.origin + (ap.icon_url as string);
     img.alt = '';
+    // Otherwise dragging the launcher drags a ghost of the image instead.
+    img.draggable = false;
     // A custom icon that fails to load must not leave an empty circle.
     img.addEventListener('error', useDefaultMark);
     launcherIcon.appendChild(img);
@@ -542,6 +547,313 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   toast.setAttribute('role', 'status');
   root.appendChild(toast);
 
+  // ---- dragging the launcher ----
+  // The visitor can move the launcher anywhere on screen, but never off it:
+  // every position is clamped to the viewport, both while dragging and again
+  // whenever the viewport or the launcher's own size changes. A press only
+  // becomes a drag once it travels DRAG_THRESHOLD px, and a drag never opens
+  // the panel — the click it would produce is swallowed.
+  //
+  // Until the first drag nothing here writes a style, so the configured corner
+  // or side anchor stays entirely CSS-driven.
+  const EDGE = 8;
+  const GAP = 12;
+  const DRAG_THRESHOLD = 6;
+  const PANEL_MAX_HEIGHT = 660;
+  const positionStorageKey = `trace_ux_widget_position_${host.siteKey}`;
+
+  // Where the launcher sits, as a fraction of the room it has on each axis. A
+  // fraction rather than pixels so a launcher left in the bottom-right corner
+  // is still in that corner after a resize or on the next, narrower page view.
+  let placed: { rx: number; ry: number } | null = null;
+  try {
+    const stored = JSON.parse(localStorage.getItem(positionStorageKey) || 'null') as { x?: unknown; y?: unknown } | null;
+    if (stored && typeof stored.x === 'number' && typeof stored.y === 'number' && Number.isFinite(stored.x) && Number.isFinite(stored.y)) {
+      placed = { rx: clamp(stored.x, 0, 1), ry: clamp(stored.y, 0, 1) };
+    }
+  } catch {
+    /* a remembered position is a convenience; the default anchor still works */
+  }
+  // The launcher's current top-left in viewport px, once it has been placed.
+  let launcherAt: { x: number; y: number } | null = null;
+
+  type SurfaceMotion = { origin: string; from: string; to: string };
+  // Once the launcher moves, the panel and the toast open next to wherever it
+  // is, so their transform origin and the direction they grow from follow it.
+  const surfaceMotion = new Map<HTMLElement, SurfaceMotion>();
+  const defaultOrigins = new Map<HTMLElement, string>([
+    [panel, panel.style.transformOrigin],
+    [toast, toast.style.transformOrigin],
+  ]);
+
+  function clamp(value: number, min: number, max: number): number {
+    return Math.min(Math.max(value, min), Math.max(min, max));
+  }
+
+  /** The visible viewport. clientWidth leaves out a vertical scrollbar, which
+   *  innerWidth counts; the min() keeps a quirks-mode page, where clientHeight
+   *  is the whole document, from reporting a viewport taller than the window. */
+  function viewportSize() {
+    const de = document.documentElement;
+    return {
+      w: Math.min(innerWidth, de.clientWidth || innerWidth),
+      h: Math.min(innerHeight, de.clientHeight || innerHeight),
+    };
+  }
+
+  function launcherRoom() {
+    const vp = viewportSize();
+    return {
+      vp,
+      rangeX: Math.max(0, vp.w - launcher.offsetWidth - EDGE * 2),
+      rangeY: Math.max(0, vp.h - launcher.offsetHeight - EDGE * 2),
+    };
+  }
+
+  function clampLauncher(x: number, y: number) {
+    const { rangeX, rangeY } = launcherRoom();
+    return { x: clamp(x, EDGE, EDGE + rangeX), y: clamp(y, EDGE, EDGE + rangeY) };
+  }
+
+  function setLauncherAt(x: number, y: number) {
+    launcherAt = { x, y };
+    const s = launcher.style;
+    s.left = `${x}px`;
+    s.top = `${y}px`;
+    // Physical insets and margins override every anchor rule in the CSS,
+    // including the mid-edge tab's auto-margin centring.
+    s.right = 'auto';
+    s.bottom = 'auto';
+    s.margin = '0';
+  }
+
+  function rememberPlacement(x: number, y: number) {
+    const { rangeX, rangeY } = launcherRoom();
+    placed = {
+      rx: rangeX > 0 ? clamp((x - EDGE) / rangeX, 0, 1) : 0,
+      ry: rangeY > 0 ? clamp((y - EDGE) / rangeY, 0, 1) : 0,
+    };
+    try {
+      localStorage.setItem(positionStorageKey, JSON.stringify({ x: placed.rx, y: placed.ry }));
+    } catch {
+      /* storage is optional; the launcher still stays where it was dropped */
+    }
+  }
+
+  /** Re-derives the launcher's pixel position from its remembered fraction, so
+   *  a resize, an unread badge or a wider label can never push it off screen. */
+  function restorePlacement() {
+    if (!placed || press?.dragging || destroyed) return;
+    const { rangeX, rangeY } = launcherRoom();
+    setLauncherAt(EDGE + placed.rx * rangeX, EDGE + placed.ry * rangeY);
+    placeOpenSurfaces();
+  }
+
+  /** Positions the panel or toast against the moved launcher, inside the
+   *  viewport. A pill launcher opens the surface above or below itself, toward
+   *  the larger side; the vertical mid-edge tab opens it beside itself. */
+  function placeSurface(node: HTMLElement) {
+    const s = node.style;
+    const vp = viewportSize();
+    // Small screens keep the full-width bottom sheet from the stylesheet.
+    if (!launcherAt || vp.w <= 560) {
+      s.left = s.right = s.top = s.bottom = s.margin = s.maxHeight = '';
+      s.transformOrigin = defaultOrigins.get(node) || '';
+      surfaceMotion.delete(node);
+      return;
+    }
+    const { x, y } = launcherAt;
+    const lw = launcher.offsetWidth;
+    const lh = launcher.offsetHeight;
+    const onRight = x + lw / 2 > vp.w / 2;
+    const pw = node.offsetWidth;
+    s.margin = '0';
+    s.right = 'auto';
+    let motion: SurfaceMotion;
+    if (lh > lw) {
+      s.bottom = 'auto';
+      s.left = `${clamp(onRight ? x - GAP - pw : x + lw + GAP, EDGE, vp.w - pw - EDGE)}px`;
+      s.maxHeight = `${Math.min(PANEL_MAX_HEIGHT, vp.h - EDGE * 2)}px`;
+      const ph = node.offsetHeight;
+      s.top = `${clamp(y + lh / 2 - ph / 2, EDGE, vp.h - ph - EDGE)}px`;
+      const shift = onRight ? 1 : -1;
+      motion = {
+        origin: onRight ? 'right center' : 'left center',
+        from: `translateX(${10 * shift}px) scale(.96)`,
+        to: `translateX(${8 * shift}px) scale(.96)`,
+      };
+    } else {
+      s.left = `${clamp(onRight ? x + lw - pw : x, EDGE, vp.w - pw - EDGE)}px`;
+      // Anchoring the edge nearest the launcher means content that grows later
+      // extends away from it rather than over it.
+      const above = y + lh / 2 > vp.h / 2;
+      if (above) {
+        s.top = 'auto';
+        s.bottom = `${vp.h - y + GAP}px`;
+        s.maxHeight = `${Math.max(0, Math.min(PANEL_MAX_HEIGHT, y - GAP - EDGE))}px`;
+      } else {
+        s.bottom = 'auto';
+        s.top = `${y + lh + GAP}px`;
+        s.maxHeight = `${Math.max(0, Math.min(PANEL_MAX_HEIGHT, vp.h - (y + lh + GAP) - EDGE))}px`;
+      }
+      const shift = above ? 1 : -1;
+      motion = {
+        origin: `${above ? 'bottom' : 'top'} ${onRight ? 'right' : 'left'}`,
+        from: `translateY(${10 * shift}px) scale(.96)`,
+        to: `translateY(${8 * shift}px) scale(.96)`,
+      };
+    }
+    surfaceMotion.set(node, motion);
+    s.transformOrigin = motion.origin;
+  }
+
+  function placeOpenSurfaces() {
+    if (!panel.hidden) placeSurface(panel);
+    if (!toast.hidden) placeSurface(toast);
+  }
+
+  type Press = {
+    id: number;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+    x: number;
+    y: number;
+    lastX: number;
+    lastY: number;
+    lastT: number;
+    vx: number;
+    vy: number;
+    dragging: boolean;
+  };
+  let press: Press | null = null;
+  let suppressClick = false;
+  let suppressTimer: ReturnType<typeof setTimeout> | undefined;
+  let dragFrame = 0;
+  let glide: ReturnType<typeof animate> | null = null;
+
+  launcher.addEventListener('pointerdown', (e) => {
+    if (!e.isPrimary || e.button !== 0) return;
+    suppressClick = false;
+    // Catching the launcher mid-glide freezes it where it is: stop() commits
+    // the in-flight position before the rect below is read.
+    glide?.stop();
+    glide = null;
+    const rect = launcher.getBoundingClientRect();
+    press = {
+      id: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: rect.left,
+      originY: rect.top,
+      x: rect.left,
+      y: rect.top,
+      lastX: e.clientX,
+      lastY: e.clientY,
+      lastT: e.timeStamp,
+      vx: 0,
+      vy: 0,
+      dragging: false,
+    };
+    try {
+      launcher.setPointerCapture(e.pointerId);
+    } catch {
+      /* without capture a fast drag can outrun the launcher; it still works */
+    }
+  });
+
+  launcher.addEventListener('pointermove', (e) => {
+    const p = press;
+    if (!p || e.pointerId !== p.id) return;
+    const dx = e.clientX - p.startX;
+    const dy = e.clientY - p.startY;
+    if (!p.dragging) {
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+      p.dragging = true;
+      launcher.classList.add('launcher--dragging');
+      animate(launcher, { transform: 'scale(1.06)' }, { duration: dur(0.18), ease: EASE_OUT });
+    }
+    const dt = e.timeStamp - p.lastT;
+    if (dt > 0) {
+      p.vx = 0.7 * ((e.clientX - p.lastX) / dt) + 0.3 * p.vx;
+      p.vy = 0.7 * ((e.clientY - p.lastY) / dt) + 0.3 * p.vy;
+    }
+    p.lastX = e.clientX;
+    p.lastY = e.clientY;
+    p.lastT = e.timeStamp;
+    const next = clampLauncher(p.originX + dx, p.originY + dy);
+    p.x = next.x;
+    p.y = next.y;
+    if (!dragFrame) {
+      dragFrame = requestAnimationFrame(() => {
+        dragFrame = 0;
+        if (!press || destroyed) return;
+        setLauncherAt(press.x, press.y);
+        placeOpenSurfaces();
+      });
+    }
+  });
+
+  const endPress = (e: PointerEvent) => {
+    const p = press;
+    if (!p || e.pointerId !== p.id) return;
+    press = null;
+    try {
+      launcher.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+    if (!p.dragging) return;
+
+    // The release that ends a drag would otherwise land as a click and toggle
+    // the panel. A mouse fires that click straight after pointerup; a touch
+    // can fire it a moment later, so the flag waits briefly and the next press
+    // clears it early.
+    suppressClick = true;
+    clearTimeout(suppressTimer);
+    suppressTimer = setTimeout(() => { suppressClick = false; }, 400);
+
+    cancelAnimationFrame(dragFrame);
+    dragFrame = 0;
+    launcher.classList.remove('launcher--dragging');
+    animate(launcher, { transform: 'none' }, { duration: dur(0.34), ease: EASE_POP });
+
+    // A flick carries the launcher a little further, still clamped on screen.
+    // A pointer that had come to rest before letting go does not throw it.
+    // The carry is capped so a hard flick glides rather than flies across the page.
+    const moving = e.type === 'pointerup' && e.timeStamp - p.lastT < 80;
+    const THROW_MS = 90;
+    const MAX_THROW = 120;
+    let tx = moving ? p.vx * THROW_MS : 0;
+    let ty = moving ? p.vy * THROW_MS : 0;
+    const throwLength = Math.hypot(tx, ty);
+    if (throwLength > MAX_THROW) {
+      tx *= MAX_THROW / throwLength;
+      ty *= MAX_THROW / throwLength;
+    }
+    const end = clampLauncher(p.x + tx, p.y + ty);
+    setLauncherAt(end.x, end.y);
+    rememberPlacement(end.x, end.y);
+    placeOpenSurfaces();
+    if (!reducedMotion() && Math.hypot(end.x - p.x, end.y - p.y) >= 1) {
+      glide = animate(
+        launcher,
+        { left: [`${p.x}px`, `${end.x}px`], top: [`${p.y}px`, `${end.y}px`] },
+        { duration: 0.42, ease: EASE_OUT },
+      );
+    }
+  };
+  launcher.addEventListener('pointerup', endPress);
+  launcher.addEventListener('pointercancel', endPress);
+
+  const onResize = () => {
+    if (destroyed) return;
+    restorePlacement();
+    placeOpenSurfaces();
+  };
+  addEventListener('resize', onResize);
+
   // ---- animation helpers ----
   // A bottom-corner panel rises; a mid-edge one comes out of the side. Moving
   // the wrong axis reads as the panel detaching from its launcher rather than
@@ -557,14 +869,14 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   function animateIn(node: HTMLElement) {
     return animate(
       node,
-      { opacity: [0, 1], transform: [OPEN_FROM, 'none'] },
+      { opacity: [0, 1], transform: [surfaceMotion.get(node)?.from ?? OPEN_FROM, 'none'] },
       { duration: dur(0.26), ease: EASE_OUT },
     );
   }
   function animateOut(node: HTMLElement) {
     return animate(
       node,
-      { opacity: [1, 0], transform: ['none', CLOSE_TO] },
+      { opacity: [1, 0], transform: ['none', surfaceMotion.get(node)?.to ?? CLOSE_TO] },
       { duration: dur(0.15), ease: EASE_IN },
     );
   }
@@ -582,6 +894,9 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     body.classList.toggle('body--ticket-thread', next.classList.contains('ticket-view--thread'));
     body.replaceChildren(next);
     body.scrollTop = 0;
+    // Beside a moved mid-edge tab the panel is centred by its own height,
+    // which the new view just changed.
+    if (panelOpen && launcherAt) placeSurface(panel);
     animate(
       next,
       { opacity: [0, 1], transform: [`scale(${dir === 1 ? 0.975 : 1.02})`, 'none'] },
@@ -613,6 +928,8 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     const ticketsUnread = unreadTicketCount();
     ticketsCount.hidden = ticketsUnread === 0;
     ticketsCount.textContent = String(ticketsUnread);
+    // A badge appearing widens the launcher; keep a moved one on screen.
+    restorePlacement();
   }
 
   function moveTabMarker(animated = true) {
@@ -842,6 +1159,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     const next = buildTicketsView();
     body.classList.toggle('body--ticket-thread', next.classList.contains('ticket-view--thread'));
     body.replaceChildren(next);
+    if (launcherAt) placeSurface(panel);
 
     if (!focusName) return;
     const restored = body.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${focusName}"]`);
@@ -1440,6 +1758,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     panel.hidden = false;
     launcher.setAttribute('aria-expanded', 'true');
     showSection(section);
+    placeSurface(panel);
     if (sections.length > 1) requestAnimationFrame(() => moveTabMarker(false));
     animateIn(panel);
     animate(launcher, { transform: ['none', 'scale(.94)', 'none'] }, { duration: dur(0.22), ease: EASE_OUT });
@@ -1454,7 +1773,14 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     });
   }
 
-  launcher.addEventListener('click', () => {
+  launcher.addEventListener('click', (e) => {
+    // The release at the end of a drag is not a click on the launcher.
+    if (suppressClick) {
+      suppressClick = false;
+      clearTimeout(suppressTimer);
+      e.stopPropagation();
+      return;
+    }
     trackWidgetClick(panelOpen ? 'launcher:close' : 'launcher:open');
     panelOpen ? closePanel() : openPanel();
   });
@@ -1521,6 +1847,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     wrap.append(header, open);
     toast.replaceChildren(wrap);
     toast.hidden = false;
+    placeSurface(toast);
     playNotificationSound();
     clearTimeout(toastTimer);
     animateIn(toast);
@@ -1866,6 +2193,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 
   // ---- go ----
   document.body.appendChild(container);
+  restorePlacement();
   animate(
     launcher,
     { opacity: [0, 1], transform: ['translateY(12px) scale(.9)', 'none'] },
@@ -1887,12 +2215,16 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       clearTimeout(ticketTimer);
       clearTimeout(toastTimer);
       clearTimeout(widgetSocketRetryTimer);
+      clearTimeout(suppressTimer);
+      cancelAnimationFrame(dragFrame);
+      glide?.stop();
       widgetSocketRetryTimer = undefined;
       widgetSocket?.close();
       widgetSocket = null;
       document.removeEventListener('click', onDocClick);
       document.removeEventListener('keydown', onKeydown);
       document.removeEventListener('visibilitychange', onVisibility);
+      removeEventListener('resize', onResize);
       container.remove();
     },
   };

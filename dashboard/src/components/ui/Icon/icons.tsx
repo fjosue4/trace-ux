@@ -121,6 +121,13 @@ export const GLYPHS: Record<IconName, ReactNode> = {
       <path d="m20 20-4-4" />
     </>
   ),
+  more: (
+    <>
+      <circle cx="5" cy="12" r="1" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1" fill="currentColor" stroke="none" />
+    </>
+  ),
   lifebuoy: (
     <path d="m18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 1 1-18 0a9 9 0 0 1 18 0m-5 0a4 4 0 1 1-8 0a4 4 0 0 1 8 0" />
   ),

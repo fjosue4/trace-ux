@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { spring, stagger } from '../../../lib/motion';
 import Badge from '../../ui/Badge';
@@ -6,10 +6,29 @@ import Button from '../../ui/Button';
 import Logo from '../../ui/Logo';
 import { ThemeToggle } from './subcomponents/ThemeToggle';
 import { NavItem } from './subcomponents/NavItem';
-import { SidebarProps } from './Sidebar.types';
+import { MobileNavMenu, pathMatches } from './subcomponents/MobileNavMenu';
+import { SidebarNavItem, SidebarProps } from './Sidebar.types';
 import './Sidebar.scss';
 
 export default function Sidebar({ user, onLogout }: SidebarProps) {
+  const location = useLocation();
+  const navItems: SidebarNavItem[] = [
+    { to: '/sites', icon: 'globe', label: 'Sites' },
+    { to: '/sessions', icon: 'film', label: 'Sessions' },
+    { to: '/performance', icon: 'activity', label: 'Performance' },
+    { to: '/feedback', icon: 'message', label: 'Feedback' },
+    { to: '/tickets', icon: 'lifebuoy', label: 'Tickets' },
+    { to: '/announcements', icon: 'megaphone', label: 'Announcements' },
+    { to: '/logs', icon: 'code', label: 'Logs' },
+    ...(user.role === 'admin' ? [{ to: '/system-health', icon: 'bolt' as const, label: 'System health' }] : []),
+    { to: '/settings', icon: 'settings', label: 'Settings' },
+  ];
+  const primaryMobileItems = navItems.slice(0, 4);
+  const secondaryItems = navItems.slice(4);
+  const activeSecondary = secondaryItems.find((item) => pathMatches(location.pathname, item.to));
+  const mobileFeatured = activeSecondary ?? secondaryItems[0];
+  const mobileMenuItems = secondaryItems.filter((item) => item.to !== mobileFeatured?.to);
+
   return (
     <motion.aside className="sidebar" initial={{ opacity: 0, x: -18 }} animate={{ opacity: 1, x: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 26 }}>
       <motion.div whileHover={{ x: 2 }} transition={spring}>
@@ -18,19 +37,15 @@ export default function Sidebar({ user, onLogout }: SidebarProps) {
         </NavLink>
       </motion.div>
 
-      <motion.nav className="sidebar__nav" variants={stagger} initial="hidden" animate="visible">
-        <NavItem to="/sites" icon="globe" label="Sites" />
-        <NavItem to="/sessions" icon="film" label="Sessions" />
-        <NavItem to="/performance" icon="activity" label="Performance" />
-        <NavItem to="/feedback" icon="message" label="Feedback" />
-        <NavItem to="/tickets" icon="lifebuoy" label="Tickets" />
-        <NavItem to="/announcements" icon="megaphone" label="Announcements" />
-        <NavItem to="/logs" icon="code" label="Logs" />
-        {user.role === 'admin' && (
-          <NavItem to="/system-health" icon="bolt" label="System health" />
-        )}
-        <NavItem to="/settings" icon="settings" label="Settings" />
+      <motion.nav className="sidebar__nav sidebar__nav--desktop" variants={stagger} initial="hidden" animate="visible">
+        {navItems.map((item) => <NavItem key={item.to} {...item} />)}
       </motion.nav>
+
+      <nav className="sidebar__mobile-nav" aria-label="Primary navigation">
+        {primaryMobileItems.map((item) => <NavItem key={item.to} {...item} />)}
+        {mobileFeatured && <NavItem key={mobileFeatured.to} {...mobileFeatured} />}
+        <MobileNavMenu items={mobileMenuItems} />
+      </nav>
 
       <div className="sidebar__footer">
         {/* Above the theme toggle, so "which build is this?" is answerable

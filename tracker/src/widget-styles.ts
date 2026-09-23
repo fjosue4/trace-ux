@@ -30,6 +30,17 @@ export function widgetCSS(): string {
   cursor: pointer;
   box-shadow: 0 1px 2px rgba(0,0,0,.16), 0 8px 24px -6px rgba(0,0,0,.28);
   will-change: transform;
+  /* The launcher can be dragged: a touch on it moves it instead of scrolling
+     the page, and a drag never selects the label or long-press menus it. */
+  touch-action: none;
+  user-select: none; -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: box-shadow .18s ease;
+}
+.launcher img { -webkit-user-drag: none; pointer-events: none; }
+.launcher--dragging {
+  cursor: grabbing;
+  box-shadow: 0 2px 6px rgba(0,0,0,.18), 0 18px 40px -8px rgba(0,0,0,.4);
 }
 .launcher:focus-visible { outline: 2px solid var(--w-button-bg); outline-offset: 3px; }
 .launcher__icon { display: grid; place-items: center; width: 20px; height: 20px; flex: none; }

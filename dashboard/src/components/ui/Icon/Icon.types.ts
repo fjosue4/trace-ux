@@ -27,6 +27,7 @@ export type IconName =
   | 'gear'
   | 'filter'
   | 'search'
+  | 'more'
   | 'lifebuoy'
   | 'integrations'
   | 'slack';
