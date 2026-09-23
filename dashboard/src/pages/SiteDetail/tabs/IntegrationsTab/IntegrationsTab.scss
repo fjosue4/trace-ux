@@ -90,14 +90,10 @@
   bottom: 1.1rem;
   display: flex;
   justify-content: center;
-  padding: 0.35rem;
-  border: 1px solid $line;
-  border-radius: $radius-pill;
-  background: $surface;
-  box-shadow: $shadow-md;
   transform: translateX(-50%);
 
-  .btn { min-width: 10rem; }
+  // The button floats on its own; the shadow lifts it off the page content.
+  .btn { min-width: 10rem; box-shadow: $shadow-md; }
 }
 
 @media (max-width: 700px) {
