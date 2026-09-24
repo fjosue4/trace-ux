@@ -54,11 +54,12 @@ type WidgetAppearance struct {
 // mounts one widget when Enabled is true and shows the tab strip when more
 // than one available section is enabled.
 type WidgetConfig struct {
-	Enabled         bool   `json:"enabled"`
-	UpdatesEnabled  bool   `json:"updates_enabled"`
-	FeedbackEnabled bool   `json:"feedback_enabled"`
-	TicketsEnabled  bool   `json:"tickets_enabled"`
-	Position        string `json:"position"` // right | left
+	Enabled         bool     `json:"enabled"`
+	UpdatesEnabled  bool     `json:"updates_enabled"`
+	FeedbackEnabled bool     `json:"feedback_enabled"`
+	TicketsEnabled  bool     `json:"tickets_enabled"`
+	SectionOrder    []string `json:"section_order"`
+	Position        string   `json:"position"` // right | left
 	// Anchor is deliberately a SECOND field rather than extra values in
 	// Position. A tracker built before side anchors existed does
 	// `cfg.position === 'left' ? 'left' : 'right'`, so a value of
@@ -221,6 +222,7 @@ func buildWidgetConfig(site store.Site, iconURL string) WidgetConfig {
 		UpdatesEnabled:       s.UpdatesEnabled,
 		FeedbackEnabled:      s.FeedbackEnabled,
 		TicketsEnabled:       s.TicketsEnabled,
+		SectionOrder:         s.WidgetSectionOrder,
 		Position:             position,
 		Anchor:               anchor,
 		Title:                firstNonEmpty(site.Name, "Help & updates"),

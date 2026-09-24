@@ -256,7 +256,33 @@ export function widgetCSS(): string {
 .back:focus-visible { outline: 2px solid var(--w-accent); outline-offset: 2px; }
 .back svg { width: 13px; height: 13px; }
 .detail__title { margin: 8px 0 0; font-size: 18px; font-weight: 680; line-height: 1.28; letter-spacing: -0.02em; }
-.detail__body { margin: 12px 0 0; font-size: 13.5px; line-height: 1.62; color: var(--w-muted); white-space: pre-wrap; }
+.detail__body { margin: 12px 0 0; font-size: 13.5px; line-height: 1.62; color: var(--w-muted); overflow-wrap: anywhere; }
+.detail__body > :first-child { margin-top: 0; }
+.detail__body > :last-child { margin-bottom: 0; }
+.detail__body p { margin: 9px 0; }
+.detail__body h1,
+.detail__body h2,
+.detail__body h3,
+.detail__body h4 { margin: 16px 0 7px; color: var(--w-panel-text); line-height: 1.3; letter-spacing: -.01em; }
+.detail__body h1 { font-size: 17px; }
+.detail__body h2 { font-size: 15.5px; }
+.detail__body h3,
+.detail__body h4 { font-size: 14px; }
+.detail__body ul,
+.detail__body ol { margin: 9px 0; padding-left: 21px; }
+.detail__body li + li { margin-top: 4px; }
+.detail__body blockquote { margin: 11px 0; padding: 2px 0 2px 12px; border-left: 3px solid var(--w-accent); color: var(--w-quiet); }
+.detail__body blockquote p { margin: 0; }
+.detail__body code { padding: 2px 4px; border-radius: 4px; background: var(--w-hover); color: var(--w-panel-text); font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.detail__body pre { margin: 11px 0; overflow-x: auto; padding: 10px 11px; border: 1px solid var(--w-line); border-radius: 8px; background: var(--w-hover); }
+.detail__body pre code { padding: 0; background: none; }
+.detail__body a { color: var(--w-accent); text-decoration: underline; text-underline-offset: 2px; }
+.detail__body img { display: block; width: auto; max-width: 100%; max-height: 480px; margin: 11px auto; border-radius: 8px; object-fit: contain; }
+.detail__body hr { margin: 15px 0; border: 0; border-top: 1px solid var(--w-line); }
+.detail__body table { width: 100%; margin: 11px 0; border-collapse: collapse; font-size: 12px; }
+.detail__body th,
+.detail__body td { padding: 6px 7px; border: 1px solid var(--w-line); text-align: left; }
+.detail__body th { color: var(--w-panel-text); background: var(--w-hover); }
 .detail__link {
   display: inline-flex; align-items: center; gap: 5px; margin-top: 14px;
   color: var(--w-accent); font-size: 13px; font-weight: 620; text-decoration: none;

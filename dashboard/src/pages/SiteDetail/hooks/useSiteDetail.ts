@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnnouncementAppearance, api, FeedbackTrigger, FrequentError, SiteDetail as SiteDetailData, SiteSettings, SurveyQuestion } from '../../../api';
 import { SiteTab, siteTabs, WidgetSettingsModalKind } from '../SiteDetail.types';
 
@@ -23,6 +23,14 @@ export function useSiteDetail(id: number) {
     ].filter(Boolean) as string[];
     return on.length === 1 ? on[0] : 'Help & updates';
   })();
+
+  // Unsaved when the draft differs from what the server last returned. Keys
+  // are sorted first because a patch can add a field in a different position
+  // than the server serialises it, which must not count as a change.
+  const dirty = useMemo(() => {
+    if (!draft || !detail?.site.settings) return false;
+    return stableJSON(draft) !== stableJSON(detail.site.settings);
+  }, [draft, detail]);
 
   // Re-read the site without touching `draft`. Anything that saves something
   // other than the settings — an icon, the URL, the recording switch — has to
@@ -139,6 +147,7 @@ export function useSiteDetail(id: number) {
     error,
     setError,
     draft,
+    dirty,
     saving,
     saved,
     frequentErrors,
@@ -158,4 +167,12 @@ export function useSiteDetail(id: number) {
     patchWidgetPosition,
     patchTrigger,
   };
+}
+
+function stableJSON(value: unknown): string {
+  return JSON.stringify(value, (_key, item) =>
+    item && typeof item === 'object' && !Array.isArray(item)
+      ? Object.fromEntries(Object.entries(item as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
+      : item,
+  );
 }

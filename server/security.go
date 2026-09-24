@@ -149,7 +149,7 @@ func (s *Server) contentSecurityPolicy() string {
 			scriptSrc = scriptSrcDirective(*s.cfg)
 		}
 		s.csp = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; " +
-			scriptSrc + "; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+			scriptSrc + "; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http:; " +
 			"font-src 'self' data:; connect-src 'self'; form-action 'self'"
 	})
 	return s.csp

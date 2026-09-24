@@ -177,6 +177,7 @@ func (s *Server) handlePutSiteSettings(w http.ResponseWriter, r *http.Request) {
 	for key, target := range map[string]any{
 		"widget_position":         &settings.WidgetPosition,
 		"widget_enabled":          &settings.WidgetEnabled,
+		"widget_section_order":    &settings.WidgetSectionOrder,
 		"updates_enabled":         &settings.UpdatesEnabled,
 		"updates_position":        &settings.UpdatesPosition,
 		"feedback_enabled":        &settings.FeedbackEnabled,

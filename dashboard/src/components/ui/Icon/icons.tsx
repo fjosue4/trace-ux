@@ -57,6 +57,18 @@ export const GLYPHS: Record<IconName, ReactNode> = {
   ),
   code: <path d="m8 7-5 5 5 5M16 7l5 5-5 5" />,
   x: <path d="M18 6 6 18M6 6l12 12" />,
+  grip: (
+    <>
+      <circle cx="9" cy="6" r="1" />
+      <circle cx="15" cy="6" r="1" />
+      <circle cx="9" cy="12" r="1" />
+      <circle cx="15" cy="12" r="1" />
+      <circle cx="9" cy="18" r="1" />
+      <circle cx="15" cy="18" r="1" />
+    </>
+  ),
+  chevronUp: <path d="m6 15 6-6 6 6" />,
+  chevronDown: <path d="m6 9 6 6 6-6" />,
   warn: (
     <>
       <path d="M12 3 2.5 20h19L12 3z" />

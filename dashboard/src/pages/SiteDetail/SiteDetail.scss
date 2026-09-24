@@ -238,7 +238,6 @@ a.hub-row:hover { background: $surface-2; text-decoration: none; }
   color: $muted;
   white-space: nowrap;
 }
-.hub-config__save { margin-top: 0.9rem; }
 
 .color-input {
   width: 100%;
@@ -485,6 +484,13 @@ a.hub-row:hover { background: $surface-2; text-decoration: none; }
     background: $surface;
     cursor: pointer;
   }
+
+  &__error {
+    grid-column: 1 / -1;
+    color: $danger;
+    font-size: .68rem;
+    line-height: 1.35;
+  }
 }
 
 /* ---- widget launcher icon uploader (Widget tab) ---- */
@@ -564,6 +570,13 @@ a.hub-row:hover { background: $surface-2; text-decoration: none; }
 }
 
 /* ---- Widget tab: one row per section, with settings behind the gear ---- */
+.widget-master-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
 .widget-sections {
   display: flex;
   flex-wrap: wrap;
@@ -577,13 +590,13 @@ a.hub-row:hover { background: $surface-2; text-decoration: none; }
 .widget-section {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: .5rem;
   flex: 1 1 220px;
   min-width: 220px;
   padding: .15rem .25rem .15rem .35rem;
 
-  .switch { min-width: 0; flex: 1; }
+  .switch { min-width: 0; flex: none; }
 
   &__settings {
     flex: none;
@@ -592,6 +605,58 @@ a.hub-row:hover { background: $surface-2; text-decoration: none; }
 
     &:hover { border-color: $line-strong !important; color: $accent; }
   }
+}
+.widget-order-modal { width: min(500px, calc(100vw - 2rem)); }
+.widget-order-modal__intro { margin: 0 0 .85rem; }
+.widget-order-list {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+.widget-order-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: .75rem;
+  padding: .7rem .75rem;
+  border: 1px solid $line;
+  border-radius: $radius-sm;
+  background: $surface-2;
+  cursor: grab;
+  user-select: none;
+  touch-action: none; // a touch drag reorders instead of scrolling the modal
+  transition: border-color .15s ease, background-color .15s ease;
+
+  &:hover { border-color: $line-strong; }
+  &:hover .widget-order-row__handle { color: $ink; }
+  // The lifted row stays fully opaque; motion adds the scale and shadow.
+  &.is-dragging {
+    cursor: grabbing;
+    border-color: $accent;
+    background: var(--surface-3, #{$surface-2});
+  }
+
+  &__handle {
+    display: grid;
+    place-items: center;
+    color: $muted;
+    transition: color .15s ease;
+  }
+  &__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  &__status {
+    min-width: 34px;
+    padding: .15rem .42rem;
+    border-radius: 999px;
+    background: var(--surface-3, #{$surface});
+    color: $muted;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+
+    &.is-on { background: rgba(69, 202, 116, .13); color: $accent; }
+  }
+  &__actions { display: flex; gap: .2rem; }
+  &__actions .icon-btn:disabled { opacity: .3; cursor: default; }
 }
 .widget-preview-main { margin-top: 1rem; }
 @media (max-width: 520px) {

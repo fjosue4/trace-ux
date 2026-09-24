@@ -6,12 +6,12 @@
 // carries a tab strip; when it enables only one, the tab strip is omitted and
 // the panel opens straight into whichever section exists.
 //
-// Everything visitor-facing is built with createElement/textContent rather
-// than innerHTML — announcement titles, bodies and labels are operator-authored
-// text arriving over the wire, and the widget renders them inside the host
-// page's document.
+// Visitor-facing content uses createElement/textContent. Announcement bodies
+// are the one rich-text exception: Markdown is parsed with raw HTML/images
+// disabled and then allow-list sanitized before insertion into the host page.
 import { animate } from 'motion/mini';
 import notificationSoundURL from './assets/notification.mp3';
+import { markdownToPlainText, renderMarkdownHTML } from './markdown';
 import { widgetCSS } from './widget-styles';
 
 export type WidgetAppearanceCfg = {
@@ -33,6 +33,7 @@ export type WidgetCfg = {
   updates_enabled: boolean;
   feedback_enabled: boolean;
   tickets_enabled: boolean;
+  section_order?: Section[];
   position?: string;
   anchor?: string; // bottom | middle
   title?: string;
@@ -269,11 +270,15 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   // Sent as its own field, not as extra values in `position`, so a tracker
   // older than side anchors reads the side it understands and ignores this.
   const anchor = cfg.anchor === 'middle' ? 'middle' : 'bottom';
-  const sections: SectionDefinition[] = [
-    cfg.updates_enabled && { id: 'updates', label: cfg.updates_label || "What's new", build: buildUpdatesList },
-    cfg.tickets_enabled && { id: 'tickets', label: cfg.tickets_label || 'Support', build: buildTicketsView },
-    cfg.feedback_enabled && { id: 'feedback', label: cfg.feedback_label || 'Feedback', build: buildFeedback },
-  ].filter(Boolean) as SectionDefinition[];
+  const defaultSectionOrder: Section[] = ['updates', 'tickets', 'feedback'];
+  const requestedOrder = [...(cfg.section_order || []), ...defaultSectionOrder];
+  const sectionOrder = requestedOrder.filter((id, index) => defaultSectionOrder.includes(id) && requestedOrder.indexOf(id) === index);
+  const sectionDefinitions: Record<Section, SectionDefinition | null> = {
+    updates: cfg.updates_enabled ? { id: 'updates', label: cfg.updates_label || "What's new", build: buildUpdatesList } : null,
+    tickets: cfg.tickets_enabled ? { id: 'tickets', label: cfg.tickets_label || 'Support', build: buildTicketsView } : null,
+    feedback: cfg.feedback_enabled ? { id: 'feedback', label: cfg.feedback_label || 'Feedback', build: buildFeedback } : null,
+  };
+  const sections = sectionOrder.map((id) => sectionDefinitions[id]).filter(Boolean) as SectionDefinition[];
   if (!sections.length) return null;
 
   // Visitor key: stable per browser + site, used for likes/reads/comments.
@@ -975,7 +980,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       item.appendChild(top);
 
       item.appendChild(el('h3', 'item__title', a.title));
-      const excerpt = (a.summary || a.body || '').trim();
+      const excerpt = (a.summary || markdownToPlainText(a.body) || '').trim();
       if (excerpt) item.appendChild(el('p', 'item__excerpt', excerpt));
 
       const meta = el('div', 'item__meta');
@@ -1008,7 +1013,14 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     detail.appendChild(el('div', 'eyebrow', a.release_label || 'Update'));
     detail.appendChild(el('h3', 'detail__title', a.title));
     const bodyText = (a.body || a.summary || '').trim();
-    if (bodyText) detail.appendChild(el('p', 'detail__body', bodyText));
+    if (bodyText) {
+      const announcementBody = el('div', 'detail__body');
+      announcementBody.innerHTML = renderMarkdownHTML(bodyText);
+      announcementBody.querySelectorAll<HTMLAnchorElement>('a').forEach((link) => {
+        markWidgetAction(link, `announcement:${a.id}:link`);
+      });
+      detail.appendChild(announcementBody);
+    }
 
     const href = a.link_url ? safeHref(a.link_url) : null;
     if (href) {
@@ -1854,7 +1866,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   }
 
   function showToast(a: Announcement) {
-    const excerpt = (a.summary || a.body || '').trim();
+    const excerpt = (a.summary || markdownToPlainText(a.body) || '').trim();
     showPreviewToast(a.release_label || 'New update', a.title, excerpt, 'Read update', () => {
       hideToast();
       openPanel('updates');

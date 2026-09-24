@@ -30,6 +30,9 @@ export type IconName =
   | 'more'
   | 'lifebuoy'
   | 'integrations'
-  | 'slack';
+  | 'slack'
+  | 'grip'
+  | 'chevronUp'
+  | 'chevronDown';
 
 export type IconProps = { name: IconName; size?: number };

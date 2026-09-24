@@ -185,6 +185,7 @@ type SiteSettings struct {
 	// field the first time its settings were parsed. nil means "derive from
 	// the sections", which is exactly how the widget behaved before.
 	WidgetEnabled         *bool                   `json:"widget_enabled,omitempty"`
+	WidgetSectionOrder    []string                `json:"widget_section_order,omitempty"`
 	UpdatesEnabled        bool                    `json:"updates_enabled"`
 	UpdatesPosition       string                  `json:"updates_position"`
 	UpdatesAppearance     *AnnouncementAppearance `json:"updates_appearance,omitempty"`
@@ -221,6 +222,7 @@ func DefaultSiteSettings() SiteSettings {
 	return SiteSettings{
 		WidgetPosition:        "right",
 		WidgetEnabled:         boolPtr(true),
+		WidgetSectionOrder:    []string{"updates", "tickets", "feedback"},
 		UpdatesEnabled:        true,
 		UpdatesPosition:       "right",
 		FeedbackEnabled:       true,
@@ -270,6 +272,7 @@ func ParseSiteSettings(configText string) SiteSettings {
 		s.UpdatesPosition = "right"
 	}
 	NormalizeWidgetPosition(&s)
+	normalizeWidgetSectionOrder(&s)
 	if s.SurveyID == "" {
 		s.SurveyID = "default"
 	}
@@ -291,6 +294,23 @@ func ParseSiteSettings(configText string) SiteSettings {
 	NormalizeLogSettings(&s.Logs)
 	sanitizeAppearance(&s)
 	return s
+}
+
+var defaultWidgetSectionOrder = []string{"updates", "tickets", "feedback"}
+
+// normalizeWidgetSectionOrder preserves every recognised stored choice once
+// and appends anything missing. That lets older rows acquire new sections
+// without discarding the order an operator already chose.
+func normalizeWidgetSectionOrder(s *SiteSettings) {
+	seen := map[string]bool{}
+	order := make([]string, 0, len(defaultWidgetSectionOrder))
+	for _, id := range append(s.WidgetSectionOrder, defaultWidgetSectionOrder...) {
+		if (id == "updates" || id == "tickets" || id == "feedback") && !seen[id] {
+			seen[id] = true
+			order = append(order, id)
+		}
+	}
+	s.WidgetSectionOrder = order
 }
 
 // NormalizeWidgetPosition settles the single corner the launcher anchors to.
@@ -377,6 +397,18 @@ func ValidateSiteSettings(s SiteSettings) error {
 	case "", "right", "left", "middle-right", "middle-left":
 	default:
 		return fmt.Errorf("widget_position must be right, left, middle-right or middle-left")
+	}
+	if len(s.WidgetSectionOrder) > 0 {
+		seen := map[string]bool{}
+		for _, id := range s.WidgetSectionOrder {
+			if (id != "updates" && id != "tickets" && id != "feedback") || seen[id] {
+				return fmt.Errorf("widget_section_order must contain updates, tickets and feedback once each")
+			}
+			seen[id] = true
+		}
+		if len(seen) != len(defaultWidgetSectionOrder) {
+			return fmt.Errorf("widget_section_order must contain updates, tickets and feedback once each")
+		}
 	}
 	if s.UpdatesPosition != "right" && s.UpdatesPosition != "left" {
 		return fmt.Errorf("updates_position must be right or left")
