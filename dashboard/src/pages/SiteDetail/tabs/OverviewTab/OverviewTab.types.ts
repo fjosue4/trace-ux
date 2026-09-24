@@ -1,9 +1,10 @@
-import { Log, SiteDetail as SiteDetailData } from '../../../../api';
+import { FrequentError, SiteDetail as SiteDetailData } from '../../../../api';
 
 export type OverviewTabProps = {
   site: SiteDetailData['site'];
   sessions: SiteDetailData['sessions'];
   feedback: SiteDetailData['feedback'];
   stats: SiteDetailData['stats'];
-  latestLogs: Log[];
+  frequentErrors: FrequentError[];
+  frequentErrorsFromMs: number;
 };

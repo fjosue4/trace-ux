@@ -360,6 +360,8 @@ func (s *Server) routes() http.Handler {
 	// Logs captured from tracked sites. Every row is linked to a
 	// recording through its session_id.
 	mux.HandleFunc("GET /api/logs", s.auth(s.handleListLogs))
+	mux.HandleFunc("GET /api/logs/frequent-errors", s.auth(s.handleFrequentErrors))
+	mux.HandleFunc("GET /api/logs/frequent-errors/{id}/occurrences", s.auth(s.handleFrequentErrorOccurrences))
 	mux.HandleFunc("GET /api/logs/stats", s.auth(s.handleLogStats))
 	mux.HandleFunc("GET /api/logs/options", s.auth(s.handleLogOptions))
 	mux.HandleFunc("GET /api/logs/{id}", s.auth(s.handleGetLog))

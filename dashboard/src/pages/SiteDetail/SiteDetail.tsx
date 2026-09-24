@@ -35,7 +35,8 @@ export default function SiteDetail() {
     draft,
     saving,
     saved,
-    latestLogs,
+    frequentErrors,
+    frequentErrorsFromMs,
     activeTab,
     setActiveTab,
     widgetSettingsModal,
@@ -120,7 +121,14 @@ export default function SiteDetail() {
       )}
 
       {activeTab === 'overview' && (
-        <OverviewTab site={site} sessions={detail.sessions} feedback={detail.feedback} stats={detail.stats} latestLogs={latestLogs} />
+        <OverviewTab
+          site={site}
+          sessions={detail.sessions}
+          feedback={detail.feedback}
+          stats={detail.stats}
+          frequentErrors={frequentErrors}
+          frequentErrorsFromMs={frequentErrorsFromMs}
+        />
       )}
 
       {activeTab === 'integrations' && <IntegrationsTab siteId={id} isAdmin={isAdmin} />}
