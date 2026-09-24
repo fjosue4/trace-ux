@@ -1,5 +1,7 @@
+import { useId } from 'react';
 import Card from '../../../../components/ui/Card';
 import Button from '../../../../components/ui/Button';
+import FloatingSave from '../../../../components/ui/FloatingSave';
 import Notice from '../../../../components/ui/Notice';
 import Loading from '../../../../components/ui/Loading';
 import Switch from '../../../../components/ui/Switch';
@@ -18,6 +20,7 @@ import './IntegrationsTab.scss';
 // whole instance. System health has no site to attach to and stays on the
 // System health page instead.
 export function IntegrationsTab({ siteId, isAdmin }: IntegrationsTabProps) {
+  const formId = useId();
   const {
     integration,
     loading,
@@ -68,7 +71,7 @@ export function IntegrationsTab({ siteId, isAdmin }: IntegrationsTabProps) {
   const isSingle = routingMode === 'single';
 
   return (
-    <form className="stack site-integrations" onSubmit={save}>
+    <form id={formId} className="stack site-integrations" onSubmit={save}>
       <Card className="site-integrations__card">
         <div className="site-integrations__card-head">
           <div className="site-integrations__card-title">
@@ -186,13 +189,7 @@ export function IntegrationsTab({ siteId, isAdmin }: IntegrationsTabProps) {
       {notice && <Notice tone="success">{notice}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
 
-      {dirty && (
-        <div className="site-integrations__save">
-          <Button type="submit" disabled={busy} title="Save unsaved changes">
-            {busy ? 'Saving…' : 'Save configuration'}
-          </Button>
-        </div>
-      )}
+      <FloatingSave visible={dirty} busy={busy} label="Save configuration" form={formId} />
     </form>
   );
 }

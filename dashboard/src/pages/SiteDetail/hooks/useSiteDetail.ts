@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { AnnouncementAppearance, api, FeedbackTrigger, Log, SiteDetail as SiteDetailData, SiteSettings, SurveyQuestion } from '../../../api';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AnnouncementAppearance, api, FeedbackTrigger, FrequentError, SiteDetail as SiteDetailData, SiteSettings, SurveyQuestion } from '../../../api';
 import { SiteTab, siteTabs, WidgetSettingsModalKind } from '../SiteDetail.types';
 
 export function useSiteDetail(id: number) {
@@ -8,7 +8,8 @@ export function useSiteDetail(id: number) {
   const [draft, setDraft] = useState<SiteSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [latestLogs, setLatestLogs] = useState<Log[]>([]);
+  const [frequentErrors, setFrequentErrors] = useState<FrequentError[]>([]);
+  const [frequentErrorsFromMs, setFrequentErrorsFromMs] = useState(0);
   const [activeTab, setActiveTab] = useState<SiteTab>('overview');
   const [widgetSettingsModal, setWidgetSettingsModal] = useState<WidgetSettingsModalKind>(null);
 
@@ -22,6 +23,14 @@ export function useSiteDetail(id: number) {
     ].filter(Boolean) as string[];
     return on.length === 1 ? on[0] : 'Help & updates';
   })();
+
+  // Unsaved when the draft differs from what the server last returned. Keys
+  // are sorted first because a patch can add a field in a different position
+  // than the server serialises it, which must not count as a change.
+  const dirty = useMemo(() => {
+    if (!draft || !detail?.site.settings) return false;
+    return stableJSON(draft) !== stableJSON(detail.site.settings);
+  }, [draft, detail]);
 
   // Re-read the site without touching `draft`. Anything that saves something
   // other than the settings — an icon, the URL, the recording switch — has to
@@ -44,7 +53,9 @@ export function useSiteDetail(id: number) {
         setDraft(d.site.settings ?? null);
       })
       .catch(() => setError('Could not load this site.'));
-    api.listLogs({ siteId: id, limit: 5 }).then(setLatestLogs).catch(() => setLatestLogs([]));
+    const fromMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    setFrequentErrorsFromMs(fromMs);
+    api.frequentErrors({ siteId: id, fromMs, limit: 5 }).then(setFrequentErrors).catch(() => setFrequentErrors([]));
   }, [id]);
 
   useEffect(() => {
@@ -136,9 +147,11 @@ export function useSiteDetail(id: number) {
     error,
     setError,
     draft,
+    dirty,
     saving,
     saved,
-    latestLogs,
+    frequentErrors,
+    frequentErrorsFromMs,
     activeTab,
     setActiveTab,
     widgetSettingsModal,
@@ -154,4 +167,12 @@ export function useSiteDetail(id: number) {
     patchWidgetPosition,
     patchTrigger,
   };
+}
+
+function stableJSON(value: unknown): string {
+  return JSON.stringify(value, (_key, item) =>
+    item && typeof item === 'object' && !Array.isArray(item)
+      ? Object.fromEntries(Object.entries(item as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
+      : item,
+  );
 }

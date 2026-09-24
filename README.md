@@ -567,6 +567,8 @@ Turning **recordings off** for a site stops the capture of visitor event streams
 Publish product communication without sending visitors to a separate changelog:
 
 - **Draft, preview, publish, and archive** announcements from the dashboard.
+- Write announcement details in **Markdown** with headings, emphasis, lists,
+  quotes, links, images, code, and tables; raw HTML stays disabled.
 - Add a release label, short summary, detailed body, and an optional safe
   http(s) link.
 - Deliver published announcements through the site's **What's new** tab.

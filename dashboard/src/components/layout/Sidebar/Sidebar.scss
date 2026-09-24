@@ -2,7 +2,7 @@
 @use 'abstracts' as *;
 
 .sidebar {
-  width: 236px;
+  width: $sidebar-width;
   flex: none;
   position: sticky;
   top: 0;
@@ -97,7 +97,7 @@
 }
 
 /* Narrow screens: the panel docks as a horizontal strip on top. */
-@media (max-width: 860px) {
+@media (max-width: $sidebar-collapse) {
   .sidebar {
     width: auto;
     height: auto;
@@ -126,7 +126,7 @@
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: $sidebar-collapse) {
   .sidebar {
     align-items: center;
     flex-wrap: wrap;

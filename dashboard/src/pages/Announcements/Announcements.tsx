@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Announcement } from '../../api';
 import { useUser } from '../../App';
 import { fmtTime } from '../../lib/format';
+import { markdownToPlainText, renderMarkdownHTML } from '../../lib/markdown';
 import PageHeader from '../../components/ui/PageHeader';
 import Button from '../../components/ui/Button';
 import Card from '../../components/ui/Card';
@@ -19,6 +20,7 @@ import './Announcements.scss';
 export default function Announcements() {
   const { user } = useUser();
   const [engaging, setEngaging] = useState<Announcement | null>(null);
+  const [previewing, setPreviewing] = useState<Announcement | null>(null);
   const {
     sites,
     siteId,
@@ -71,14 +73,22 @@ export default function Announcements() {
         <div className="announcement-grid">
           {shown.map((a) => (
             <Card key={a.id} className="announcement-card">
-              <div className="announcement-card__top">
-                <div>
-                  <span className="announcement-kicker">{a.release_label || 'Announcement'}</span>
-                  <h2>{a.title}</h2>
+              <button
+                type="button"
+                className="announcement-card__preview"
+                onClick={() => setPreviewing(a)}
+                aria-label={`Preview ${a.title}`}
+              >
+                <div className="announcement-card__top">
+                  <div>
+                    <span className="announcement-kicker">{a.release_label || 'Announcement'}</span>
+                    <h2>{a.title}</h2>
+                  </div>
+                  <Badge tone={a.status === 'published' ? 'accent' : 'neutral'}>{a.status}</Badge>
                 </div>
-                <Badge tone={a.status === 'published' ? 'accent' : 'neutral'}>{a.status}</Badge>
-              </div>
-              <p>{a.summary || a.body}</p>
+                <p className="announcement-card__excerpt">{a.summary || markdownToPlainText(a.body) || 'No announcement details yet.'}</p>
+                <span className="announcement-card__preview-label">Open formatted preview →</span>
+              </button>
               <button type="button" className="announcement-stats" onClick={() => setEngaging(a)}>
                 <span>{a.reads} reads</span>
                 <span>{a.reactions} likes</span>
@@ -102,6 +112,39 @@ export default function Announcements() {
         </div>
       )}
       <EngagementModal announcement={engaging} onClose={() => setEngaging(null)} />
+      <Modal
+        className="announcement-preview-modal"
+        open={previewing !== null}
+        onClose={() => setPreviewing(null)}
+        title="Announcement preview"
+        footer={<Button variant="secondary" onClick={() => setPreviewing(null)}>Close</Button>}
+      >
+        {previewing && (
+          <div className="announcement-full-preview">
+            <div className="announcement-full-preview__meta">
+              <span>Visitor view</span>
+              <Badge tone={previewing.status === 'published' ? 'accent' : 'neutral'}>{previewing.status}</Badge>
+            </div>
+            <article className="announcement-preview__card">
+              <small>{previewing.release_label || 'Announcement'}</small>
+              <strong>{previewing.title}</strong>
+              {(previewing.body || previewing.summary) ? (
+                <div
+                  className="announcement-preview__body announcement-preview__markdown"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdownHTML(previewing.body || previewing.summary) }}
+                />
+              ) : (
+                <p>No announcement details yet.</p>
+              )}
+              {previewing.link_url && (
+                <a className="announcement-preview__link" href={previewing.link_url} target="_blank" rel="noopener noreferrer">
+                  Learn more ↗
+                </a>
+              )}
+            </article>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         className="announcement-editor-modal"
@@ -136,8 +179,11 @@ export default function Announcements() {
               <textarea className="field-control" value={form.summary} maxLength={300} onChange={(e) => setForm({ ...form, summary: e.currentTarget.value })} placeholder="A concise overview for the feed." />
             </label>
             <label>
-              Details
-              <textarea className="field-control announcement-form__body" value={form.body} maxLength={10000} onChange={(e) => setForm({ ...form, body: e.currentTarget.value })} placeholder="Explain the update in plain text." />
+              <span className="announcement-form__label-row">
+                <span>Details</span>
+                <span className="announcement-form__markdown-hint">Markdown supported</span>
+              </span>
+              <textarea className="field-control announcement-form__body" value={form.body} maxLength={10000} onChange={(e) => setForm({ ...form, body: e.currentTarget.value })} placeholder="Explain the update with **bold text**, lists, links, or code." />
             </label>
             <div className="announcement-form__internal">
               <div className="announcement-form__section-head">
@@ -175,8 +221,13 @@ export default function Announcements() {
             <div className="announcement-preview__card">
               <small>{form.release_label || 'Announcement'}</small>
               <strong>{form.title || 'Announcement title'}</strong>
-              <p>{form.summary || form.body || 'Your summary will appear here.'}</p>
-              {form.body && form.summary && <div className="announcement-preview__body">{form.body}</div>}
+              {form.summary ? <p>{form.summary}</p> : !form.body && <p>Your summary will appear here.</p>}
+              {form.body && (
+                <div
+                  className="announcement-preview__body announcement-preview__markdown"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdownHTML(form.body) }}
+                />
+              )}
               {form.link_url && <span className="announcement-preview__link">Learn more ↗</span>}
             </div>
           </aside>

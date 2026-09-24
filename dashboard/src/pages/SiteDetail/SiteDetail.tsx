@@ -4,6 +4,7 @@ import { useUser } from '../../App';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import FloatingSave from '../../components/ui/FloatingSave';
 import Notice from '../../components/ui/Notice';
 import Loading from '../../components/ui/Loading';
 import Switch from '../../components/ui/Switch';
@@ -33,9 +34,11 @@ export default function SiteDetail() {
     detail,
     error,
     draft,
+    dirty,
     saving,
     saved,
-    latestLogs,
+    frequentErrors,
+    frequentErrorsFromMs,
     activeTab,
     setActiveTab,
     widgetSettingsModal,
@@ -120,7 +123,14 @@ export default function SiteDetail() {
       )}
 
       {activeTab === 'overview' && (
-        <OverviewTab site={site} sessions={detail.sessions} feedback={detail.feedback} stats={detail.stats} latestLogs={latestLogs} />
+        <OverviewTab
+          site={site}
+          sessions={detail.sessions}
+          feedback={detail.feedback}
+          stats={detail.stats}
+          frequentErrors={frequentErrors}
+          frequentErrorsFromMs={frequentErrorsFromMs}
+        />
       )}
 
       {activeTab === 'integrations' && <IntegrationsTab siteId={id} isAdmin={isAdmin} />}
@@ -162,11 +172,7 @@ export default function SiteDetail() {
 
           {saved && <Notice tone="success">Configuration saved — live for new visitors immediately.</Notice>}
 
-          <div className="hub-config__save">
-            <Button onClick={saveSettings} disabled={saving}>
-              {saving ? 'Saving…' : 'Save configuration'}
-            </Button>
-          </div>
+          <FloatingSave visible={dirty} busy={saving} label="Save configuration" onSave={saveSettings} />
         </Card>
       )}
 

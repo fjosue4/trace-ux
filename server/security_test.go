@@ -56,6 +56,9 @@ func TestContentSecurityPolicyHashesInlineScripts(t *testing.T) {
 	if strings.Contains(scriptSrc, "unsafe-eval") {
 		t.Fatalf("script-src allows unsafe-eval: %q", scriptSrc)
 	}
+	if !strings.Contains(csp, "img-src 'self' data: https: http:;") {
+		t.Fatalf("CSP = %q, want remote announcement images to be allowed", csp)
+	}
 }
 
 // A dashboard build we cannot read must not silently ship a policy that blocks

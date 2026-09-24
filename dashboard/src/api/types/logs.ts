@@ -37,6 +37,13 @@ export type LogStats = {
   error: number;
 };
 
+export type FrequentError = {
+  representative_id: number;
+  message: string;
+  count: number;
+  last_seen_ms: number;
+};
+
 export type LogQuery = {
   siteId?: number | null;
   serviceId?: number | null;

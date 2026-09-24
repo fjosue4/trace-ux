@@ -1,11 +1,17 @@
+import { CSSProperties, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { FrequentError } from '../../../../api';
 import { fmtDuration, fmtTime, stripProto, truncate } from '../../../../lib/format';
 import Card from '../../../../components/ui/Card';
 import EmptyState from '../../../../components/ui/EmptyState';
 import { Icon } from '../../../../components/ui/Icon';
 import { OverviewTabProps } from './OverviewTab.types';
+import { FrequentErrorModal } from './FrequentErrorModal';
 
-export function OverviewTab({ site, sessions, feedback, stats, latestLogs }: OverviewTabProps) {
+export function OverviewTab({ site, sessions, feedback, stats, frequentErrors, frequentErrorsFromMs }: OverviewTabProps) {
+  const [selectedError, setSelectedError] = useState<FrequentError | null>(null);
+  const highestErrorCount = frequentErrors[0]?.count ?? 1;
+
   return (
     <>
       <div className="hub-stats">
@@ -54,30 +60,33 @@ export function OverviewTab({ site, sessions, feedback, stats, latestLogs }: Ove
         </div>
 
         <div className="hub-col">
-          <h2>Latest logs</h2>
-          {latestLogs.length === 0 ? (
+          <h2>Top errors <span className="hub-col__range">Last 7 days</span></h2>
+          {frequentErrors.length === 0 ? (
             <EmptyState
-              title="No logs yet"
-              description="Enable browser logs or connect a service to see recent output here."
+              title="No errors in the last 7 days"
+              description="Errors captured from the browser and connected services will appear here."
             />
           ) : (
             <div className="hub-list">
-              {latestLogs.map((log) => (
-                <div key={log.id} className="hub-row">
-                  <span className={`hub-row__icon hub-row__icon--log hub-row__icon--${log.severity}`}>{log.severity.slice(0, 3).toUpperCase()}</span>
+              {frequentErrors.map((error) => (
+                <button
+                  type="button"
+                  key={error.representative_id}
+                  className="hub-row hub-row--button hub-row--frequency"
+                  onClick={() => setSelectedError(error)}
+                  aria-label={`Show ${error.count} occurrences of ${error.message}`}
+                  style={{ '--error-frequency': `${(error.count / highestErrorCount) * 100}%` } as CSSProperties}
+                >
+                  <span className="hub-row__icon hub-row__icon--log hub-row__icon--error">ERR</span>
                   <span className="hub-row__body">
-                    <span className="hub-row__title">{truncate(log.message, 52)}</span>
+                    <span className="hub-row__title">{truncate(error.message, 52)}</span>
                     <span className="muted small">
-                      {log.service_name || 'Browser'}{log.environment ? ` · ${log.environment}` : ''} · {fmtTime(Math.floor(log.timestamp_ms / 1000))}
-                      {log.extra ? ` · ${truncate(log.extra, 42)}` : ''}
+                      Last seen {fmtTime(Math.floor(error.last_seen_ms / 1000))}
                     </span>
                   </span>
-                  {log.session_id && (
-                    <Link to={`/replay/${log.session_id}`} className="icon-btn" title="Open replay">
-                      <Icon name="play" size={13} />
-                    </Link>
-                  )}
-                </div>
+                  <span className="hub-row__count" title={`${error.count} occurrences`}>{error.count.toLocaleString()}</span>
+                  <span className="hub-row__arrow" aria-hidden="true">→</span>
+                </button>
               ))}
             </div>
           )}
@@ -117,6 +126,12 @@ export function OverviewTab({ site, sessions, feedback, stats, latestLogs }: Ove
           <Link to="/feedback" className="muted small">All feedback →</Link>
         </div>
       </div>
+
+      <FrequentErrorModal
+        error={selectedError}
+        fromMs={frequentErrorsFromMs}
+        onClose={() => setSelectedError(null)}
+      />
     </>
   );
 }

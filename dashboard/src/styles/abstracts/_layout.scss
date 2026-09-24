@@ -1,0 +1,5 @@
+// App shell measurements shared by the sidebar and anything that has to line
+// up with the content column beside it (e.g. the floating save button).
+$sidebar-width: 236px;
+// At and below this width the sidebar docks as a strip on top of the page.
+$sidebar-collapse: 860px;

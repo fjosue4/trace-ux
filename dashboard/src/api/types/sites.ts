@@ -46,6 +46,8 @@ export type FeedbackTrigger = {
   actions?: string[]; // trace-ux-track-id names / window.TraceUX.track names
 };
 
+export type WidgetSection = 'updates' | 'tickets' | 'feedback';
+
 export type SiteSettings = {
   // The corner the single launcher anchors to. updates_position and
   // feedback_position predate the merge of the two widgets; the server mirrors
@@ -55,6 +57,7 @@ export type SiteSettings = {
   // widget showed whenever any section was on — so read it as
   // `widget_enabled ?? (updates_enabled || tickets_enabled || feedback_enabled)`.
   widget_enabled?: boolean;
+  widget_section_order?: WidgetSection[];
   updates_enabled?: boolean;
   updates_position?: string;
   updates_appearance?: AnnouncementAppearance;

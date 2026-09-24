@@ -222,6 +222,16 @@ type LogStats struct {
 	Error int64 `json:"error"`
 }
 
+// FrequentError is one exact error message ranked by how often it occurred.
+// RepresentativeID identifies the group without putting a potentially large
+// log message in a query string when the dashboard requests its occurrences.
+type FrequentError struct {
+	RepresentativeID int64  `json:"representative_id"`
+	Message          string `json:"message"`
+	Count            int64  `json:"count"`
+	LastSeenMs       int64  `json:"last_seen_ms"`
+}
+
 // SaveLogs stores logs for a session. client_seq makes tracker retries
 // idempotent without exposing the deduplication key in dashboard responses.
 // It returns the subset of logs that were newly inserted -- as opposed to
@@ -430,6 +440,90 @@ func (s *Store) ListLogs(f LogFilter) ([]Log, error) {
 		query += ` AND l.session_id = ?`
 		args = append(args, f.SessionID)
 	}
+	if f.FromMs > 0 {
+		query += ` AND l.timestamp_ms >= ?`
+		args = append(args, f.FromMs)
+	}
+	if f.ToMs > 0 {
+		query += ` AND l.timestamp_ms <= ?`
+		args = append(args, f.ToMs)
+	}
+	if f.BeforeID > 0 {
+		query += ` AND l.id < ?`
+		args = append(args, f.BeforeID)
+	}
+	limit := f.Limit
+	if limit <= 0 || limit > MaxLogListLimit {
+		limit = MaxLogListLimit
+	}
+	query += ` ORDER BY l.id DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := s.DB.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Log{}
+	for rows.Next() {
+		item, err := scanLog(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+// FrequentErrors returns exact error messages ordered by occurrence count.
+func (s *Store) FrequentErrors(f LogFilter) ([]FrequentError, error) {
+	query := `SELECT MAX(l.id), l.message, COUNT(*), MAX(l.timestamp_ms)
+		FROM logs l WHERE l.severity = ?`
+	args := []any{LogSeverityError}
+	if f.SiteID > 0 {
+		query += ` AND l.site_id = ?`
+		args = append(args, f.SiteID)
+	}
+	if f.FromMs > 0 {
+		query += ` AND l.timestamp_ms >= ?`
+		args = append(args, f.FromMs)
+	}
+	if f.ToMs > 0 {
+		query += ` AND l.timestamp_ms <= ?`
+		args = append(args, f.ToMs)
+	}
+	limit := f.Limit
+	if limit <= 0 || limit > MaxLogListLimit {
+		limit = 5
+	}
+	query += ` GROUP BY l.message ORDER BY COUNT(*) DESC, MAX(l.timestamp_ms) DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := s.DB.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []FrequentError{}
+	for rows.Next() {
+		var item FrequentError
+		if err := rows.Scan(&item.RepresentativeID, &item.Message, &item.Count, &item.LastSeenMs); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+// FrequentErrorOccurrences returns the newest occurrences that exactly match
+// the representative error's site and message. The representative id acts as
+// a compact, safe group key for messages that may be several megabytes long.
+func (s *Store) FrequentErrorOccurrences(representativeID int64, f LogFilter) ([]Log, error) {
+	query := logSelect + `
+		WHERE l.severity = ?
+		AND l.site_id = (SELECT site_id FROM logs WHERE id = ? AND severity = ?)
+		AND l.message = (SELECT message FROM logs WHERE id = ? AND severity = ?)`
+	args := []any{LogSeverityError, representativeID, LogSeverityError, representativeID, LogSeverityError}
 	if f.FromMs > 0 {
 		query += ` AND l.timestamp_ms >= ?`
 		args = append(args, f.FromMs)

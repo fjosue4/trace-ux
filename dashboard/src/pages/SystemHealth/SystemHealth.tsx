@@ -1,6 +1,8 @@
+import { useId } from 'react';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
+import FloatingSave from '../../components/ui/FloatingSave';
 import Notice from '../../components/ui/Notice';
 import Loading from '../../components/ui/Loading';
 import Badge from '../../components/ui/Badge';
@@ -17,6 +19,7 @@ import { pctLabel } from './SystemHealth.constants';
 import './SystemHealth.scss';
 
 export default function SystemHealth() {
+  const formId = useId();
   const { health, error, stamp } = useSystemHealth();
   const {
     integration: slackIntegration,
@@ -153,7 +156,7 @@ export default function SystemHealth() {
         </div>
       </Card>
 
-      <form className="system-health__form" onSubmit={saveSlack}>
+      <form id={formId} className="system-health__form" onSubmit={saveSlack}>
         <Card className="health-alerts">
           <div className="health-alerts__head">
             <div className="health-alerts__title">
@@ -203,13 +206,7 @@ export default function SystemHealth() {
 
         {slackNotice && <Notice tone="success">{slackNotice}</Notice>}
         {slackError && <Notice tone="error">{slackError}</Notice>}
-        {slackDirty && (
-          <div className="system-health__save">
-            <Button type="submit" disabled={slackBusy} title="Save unsaved changes">
-              {slackBusy ? 'Saving…' : 'Save changes'}
-            </Button>
-          </div>
-        )}
+        <FloatingSave visible={slackDirty} busy={slackBusy} form={formId} />
       </form>
     </main>
   );

@@ -10,6 +10,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -182,6 +183,27 @@ func TestWidgetConfigHonorsMasterSwitchAndLegacySites(t *testing.T) {
 	}
 	if strings.Contains(string(encoded), `"widget_enabled"`) {
 		t.Fatalf("legacy settings should omit widget_enabled, got %s", encoded)
+	}
+}
+
+func TestWidgetConfigPreservesSiteSectionOrder(t *testing.T) {
+	want := []string{"tickets", "feedback", "updates"}
+	settings := store.ParseSiteSettings(`{"widget_section_order":["tickets","feedback","updates"]}`)
+	cfg := buildWidgetConfig(store.Site{Name: "Acme", Settings: settings}, "")
+	if !reflect.DeepEqual(cfg.SectionOrder, want) {
+		t.Fatalf("section order = %v, want %v", cfg.SectionOrder, want)
+	}
+
+	legacy := store.ParseSiteSettings(`{"updates_enabled":true}`)
+	defaultOrder := []string{"updates", "tickets", "feedback"}
+	if !reflect.DeepEqual(legacy.WidgetSectionOrder, defaultOrder) {
+		t.Fatalf("legacy section order = %v, want %v", legacy.WidgetSectionOrder, defaultOrder)
+	}
+
+	invalid := store.DefaultSiteSettings()
+	invalid.WidgetSectionOrder = []string{"tickets", "tickets", "updates"}
+	if err := store.ValidateSiteSettings(invalid); err == nil {
+		t.Fatal("duplicate widget section order passed validation")
 	}
 }
 

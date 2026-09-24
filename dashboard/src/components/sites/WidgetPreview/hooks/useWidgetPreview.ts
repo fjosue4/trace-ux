@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { WidgetSection } from '../../../../api';
 import { PreviewSection, WidgetPreviewProps } from '../WidgetPreview.types';
 
 export function useWidgetPreview({ draft, launcherPlaceholder }: Pick<WidgetPreviewProps, 'draft' | 'launcherPlaceholder'>) {
@@ -18,11 +19,15 @@ export function useWidgetPreview({ draft, launcherPlaceholder }: Pick<WidgetPrev
   const radius = configured.radius || legacy.radius || 18;
   const maxWidth = configured.max_width || 440;
 
-  const sections = ([
-    draft.updates_enabled && { id: 'updates' as const, label: "What's new" },
-    draft.tickets_enabled && { id: 'tickets' as const, label: 'Support' },
-    draft.feedback_enabled && { id: 'feedback' as const, label: 'Feedback' },
-  ].filter(Boolean) as { id: PreviewSection; label: string }[]);
+  const defaultOrder: WidgetSection[] = ['updates', 'tickets', 'feedback'];
+  const requestedOrder = [...(draft.widget_section_order ?? []), ...defaultOrder];
+  const sectionOrder = requestedOrder.filter((id, index) => defaultOrder.includes(id) && requestedOrder.indexOf(id) === index);
+  const available: Record<WidgetSection, { id: PreviewSection; label: string } | null> = {
+    updates: draft.updates_enabled ? { id: 'updates', label: "What's new" } : null,
+    tickets: draft.tickets_enabled ? { id: 'tickets', label: 'Support' } : null,
+    feedback: draft.feedback_enabled ? { id: 'feedback', label: 'Feedback' } : null,
+  };
+  const sections = sectionOrder.map((id) => available[id]).filter(Boolean) as { id: PreviewSection; label: string }[];
   const shown = sections[0]?.id;
   const visible = draft.widget_enabled ?? sections.length > 0;
   const hidden = !visible || sections.length === 0;

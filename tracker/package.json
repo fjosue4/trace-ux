@@ -1,6 +1,6 @@
 {
   "name": "@trace-ux/tracker",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "description": "TraceUX session replay, logs, events, and optional in-product widget for HTML, GTM, npm, and React",
   "keywords": [
     "session-replay",
@@ -82,6 +82,8 @@
   },
   "dependencies": {
     "@rrweb/record": "^2.1.1",
+    "dompurify": "^3.4.16",
+    "marked": "^15.0.12",
     "motion": "^13.2.0"
   },
   "peerDependencies": {

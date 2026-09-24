@@ -223,6 +223,39 @@ func (s *Server) handleListLogs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, logs)
 }
 
+func (s *Server) handleFrequentErrors(w http.ResponseWriter, r *http.Request) {
+	f, err := parseLogFilter(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	errors, err := s.store.FrequentErrors(f)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, errors)
+}
+
+func (s *Server) handleFrequentErrorOccurrences(w http.ResponseWriter, r *http.Request) {
+	representativeID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil || representativeID <= 0 {
+		writeErr(w, http.StatusBadRequest, "invalid representative log id")
+		return
+	}
+	f, err := parseLogFilter(r)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	logs, err := s.store.FrequentErrorOccurrences(representativeID, f)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, logs)
+}
+
 // handleGetLog serves one log for a direct link (/logs/log/<id>). It uses the
 // same auth as the list: anyone who can see the Logs page can open a log.
 func (s *Server) handleGetLog(w http.ResponseWriter, r *http.Request) {

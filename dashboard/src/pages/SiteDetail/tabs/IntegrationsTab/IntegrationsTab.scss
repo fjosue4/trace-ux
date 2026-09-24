@@ -83,19 +83,6 @@
 .log-matches__remove { width: 36px; padding: 0; justify-content: center; }
 .log-matches__add { align-self: flex-start; }
 
-.site-integrations__save {
-  position: fixed;
-  z-index: 20;
-  left: 50%;
-  bottom: 1.1rem;
-  display: flex;
-  justify-content: center;
-  transform: translateX(-50%);
-
-  // The button floats on its own; the shadow lifts it off the page content.
-  .btn { min-width: 10rem; box-shadow: $shadow-md; }
-}
-
 @media (max-width: 700px) {
   .site-integrations__grid { grid-template-columns: 1fr; }
   .log-matches__row {

@@ -1,0 +1,26 @@
+@use 'abstracts' as *;
+
+// Centred at the bottom of the page's content area. The wrapper is only a positioner:
+// the button floats on its own, with the shadow lifting it off the content.
+.floating-save {
+  position: fixed;
+  z-index: 20;
+  bottom: 1.1rem;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+
+  // Beside the sidebar, centre over the content column rather than the whole
+  // window, or the button reads as off-centre against the page it saves.
+  @media (min-width: $sidebar-collapse + 1px) {
+    left: $sidebar-width;
+  }
+
+  .btn {
+    min-width: 10rem;
+    box-shadow: $shadow-md;
+    pointer-events: auto;
+  }
+}

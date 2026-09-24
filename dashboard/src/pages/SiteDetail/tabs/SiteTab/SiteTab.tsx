@@ -1,5 +1,6 @@
 import Card from '../../../../components/ui/Card';
 import Button from '../../../../components/ui/Button';
+import FloatingSave from '../../../../components/ui/FloatingSave';
 import Notice from '../../../../components/ui/Notice';
 import { Icon } from '../../../../components/ui/Icon';
 import { Field, Input } from '../../../../components/ui/fields';
@@ -52,16 +53,14 @@ export function SiteTab({ id, site, isAdmin, onDetailChanged }: SiteTabProps) {
                 </Field>
               </div>
               {detailsError && <Notice tone="error">{detailsError}</Notice>}
-              <div className="site-details__actions">
-                {dirty && (
+              {dirty && (
+                <div className="site-details__actions">
                   <Button type="button" variant="ghost" size="sm" onClick={reset} disabled={saving}>
-                    Cancel
+                    Discard changes
                   </Button>
-                )}
-                <Button type="submit" variant="secondary" size="sm" disabled={!dirty || saving}>
-                  {saving ? 'Saving\u2026' : 'Save changes'}
-                </Button>
-              </div>
+                </div>
+              )}
+              <FloatingSave visible={dirty} busy={saving} onSave={save} />
             </>
           ) : (
             <dl className="site-details__readonly">
