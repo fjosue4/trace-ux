@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { stagger } from '../../../lib/motion';
 import { formatCountry } from '../../../lib/format';
@@ -7,7 +8,17 @@ import FilterPanel from '../../ui/FilterPanel';
 import { BROWSER_OPTIONS, DEVICE_OPTIONS, LENGTH_OPTIONS, OS_OPTIONS } from './FiltersBar.constants';
 import { FiltersBarProps } from './FiltersBar.types';
 
-export default function FiltersBar({ filter, onChange, extra, countries = [] }: FiltersBarProps) {
+type TextFilter = 'identity' | 'url' | 'action';
+
+export default function FiltersBar({ filter, onChange, extra, countries = [], onPendingChange }: FiltersBarProps) {
+  const [pending, setPending] = useState<Record<TextFilter, boolean>>({ identity: false, url: false, action: false });
+  const pendingFor = useCallback(
+    (field: TextFilter) => (next: boolean) => setPending((current) => (current[field] === next ? current : { ...current, [field]: next })),
+    [],
+  );
+  const anyPending = pending.identity || pending.url || pending.action;
+  useEffect(() => onPendingChange?.(anyPending), [anyPending, onPendingChange]);
+
   const countryOptions: SelectOption[] = [
     { value: '', label: 'Any country' },
     ...countries.map((country) => ({ value: country, label: formatCountry(country) })),
@@ -58,6 +69,7 @@ export default function FiltersBar({ filter, onChange, extra, countries = [] }: 
           title="Matches the userId, clientId or remoteId attached to the session"
           value={filter.identity || ''}
           onDebouncedChange={(value) => onChange({ identity: value || undefined })}
+          onPendingChange={pendingFor('identity')}
         />
 
         <DebouncedTextInput
@@ -66,6 +78,7 @@ export default function FiltersBar({ filter, onChange, extra, countries = [] }: 
           title="Matches the entry/exit URL and every page the session navigated through"
           value={filter.url || ''}
           onDebouncedChange={(value) => onChange({ url: value || undefined })}
+          onPendingChange={pendingFor('url')}
         />
 
         <DebouncedTextInput
@@ -74,6 +87,7 @@ export default function FiltersBar({ filter, onChange, extra, countries = [] }: 
           title="Matches custom events, page visits, and browser logs recorded in the session"
           value={filter.action || ''}
           onDebouncedChange={(value) => onChange({ action: value || undefined })}
+          onPendingChange={pendingFor('action')}
         />
       </FilterPanel>
     </motion.div>

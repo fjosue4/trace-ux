@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { eventWithTime } from '@rrweb/types';
 import { api, CustomEvent, Feedback, Log, Session, SessionPage, Ticket } from '../../../api';
 import { loadCSSAssets, rehydrateCSS } from '../../../lib/cssAssets';
 import { ReplayPlayerHandle } from '../../../components/replay/ReplayPlayer';
+import { forgetCachedSession } from '../../Sessions/hooks/useSessions';
 
 type Meta = {
   session: Session;
@@ -14,9 +15,17 @@ type Meta = {
   feedback: Feedback[];
 };
 
+// Opened from the sessions list, the way back returns to that list with its
+// filters; opened from anywhere else, it falls back to the unfiltered list.
+function sessionsListFrom(state: unknown): string {
+  const from = (state as { from?: unknown } | null)?.from;
+  return typeof from === 'string' && from.startsWith('/sessions') ? from : '/sessions';
+}
+
 export function useReplay() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
+  const backTo = sessionsListFrom(useLocation().state);
   const [params] = useSearchParams();
   const autoplay = params.get('autoplay') === '1';
   const [meta, setMeta] = useState<Meta | null>(null);
@@ -378,7 +387,8 @@ export function useReplay() {
     setDeleting(true);
     try {
       await api.deleteSession(sessionId);
-      navigate('/sessions');
+      forgetCachedSession(sessionId);
+      navigate(backTo);
     } catch (e) {
       setDeleteError(e instanceof Error ? e.message : 'Could not delete the recording.');
     } finally {
@@ -388,6 +398,7 @@ export function useReplay() {
   }
 
   return {
+    backTo,
     meta,
     events,
     error,

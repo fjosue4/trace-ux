@@ -7,6 +7,8 @@ import { Icon } from '../../../components/ui/Icon';
 type SessionRowProps = {
   session: Session;
   showSite: boolean;
+  // Where the replay's back link should return, filters included.
+  from: string;
   onOpen: () => void;
 };
 
@@ -14,7 +16,7 @@ function visitorOf(s: Session) {
   return s.user_id || s.remote_id || s.client_id || '';
 }
 
-export function SessionRow({ session: s, showSite, onOpen }: SessionRowProps) {
+export function SessionRow({ session: s, showSite, from, onOpen }: SessionRowProps) {
   return (
     <tr className="is-clickable" onClick={onOpen}>
       <td>
@@ -69,6 +71,7 @@ export function SessionRow({ session: s, showSite, onOpen }: SessionRowProps) {
       <td onClick={(e) => e.stopPropagation()}>
         <Link
           to={`/replay/${s.id}?autoplay=1`}
+          state={{ from }}
           className="btn btn--primary btn--sm play-btn"
           aria-label={`Play session from ${fmtTime(s.started_at)}`}
           title="Play recording"

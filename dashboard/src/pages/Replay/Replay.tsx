@@ -16,6 +16,7 @@ export default function Replay() {
   const { user } = useUser();
   const isAdmin = user.role === 'admin';
   const {
+    backTo,
     meta,
     events,
     error,
@@ -60,7 +61,7 @@ export default function Replay() {
     <main className="page page--wide">
       <PageHeader
         leading={
-          <Link to="/sessions" className="btn btn--secondary btn--sm">
+          <Link to={backTo} className="btn btn--secondary btn--sm">
             ← All sessions
           </Link>
         }

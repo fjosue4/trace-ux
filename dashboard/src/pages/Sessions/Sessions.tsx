@@ -1,4 +1,5 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/ui/PageHeader';
 import Table from '../../components/ui/Table';
 import Notice from '../../components/ui/Notice';
@@ -15,8 +16,12 @@ import './Sessions.scss';
 // site or in aggregate. /sessions?site=N deep-links preselect the site.
 export default function Sessions() {
   const navigate = useNavigate();
-  const { sites, sessions, countries, error, selected, setSelected, filter, set, stats } = useSessions();
+  const location = useLocation();
+  const { sites, sessions, countries, error, selected, setSelected, filter, set, stats, searching } = useSessions();
+  const [typing, setTyping] = useState(false);
   const showSite = selected === 'all';
+  // The replay's back link returns here with the same filters applied.
+  const from = `${location.pathname}${location.search}`;
 
   return (
     <main className="page">
@@ -42,6 +47,7 @@ export default function Sessions() {
       <FiltersBar
         filter={filter}
         onChange={set}
+        onPendingChange={setTyping}
         countries={countries}
         extra={
           <Select
@@ -69,8 +75,10 @@ export default function Sessions() {
             </Link>
           }
         />
-      ) : sessions === null ? (
-        <Loading />
+      ) : sessions === null || searching || typing ? (
+        // Old rows are never left on screen during a search: they read as the
+        // answer to the new query when they are not.
+        <Loading label={sessions === null ? 'Loading…' : 'Searching sessions…'} />
       ) : sessions.length === 0 ? (
         <EmptyState
           title="No sessions match"
@@ -92,7 +100,7 @@ export default function Sessions() {
           }
         >
           {sessions.map((s) => (
-            <SessionRow key={s.id} session={s} showSite={showSite} onOpen={() => navigate(`/replay/${s.id}`)} />
+            <SessionRow key={s.id} session={s} showSite={showSite} from={from} onOpen={() => navigate(`/replay/${s.id}`, { state: { from } })} />
           ))}
         </Table>
       )}
