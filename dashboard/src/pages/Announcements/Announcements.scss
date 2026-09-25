@@ -178,6 +178,13 @@
     font-size: .68rem;
     font-weight: 600;
   }
+
+  &__field-hint {
+    color: $muted;
+    font-size: .72rem;
+    font-weight: 400;
+    line-height: 1.4;
+  }
 }
 
 .announcement-preview {

@@ -4,6 +4,7 @@ import { Announcement, api, Site } from '../../../api';
 type AnnouncementHeaderRow = { key: string; value: string };
 
 type AnnouncementForm = {
+  site_id: number | null;
   title: string;
   summary: string;
   body: string;
@@ -15,6 +16,7 @@ type AnnouncementForm = {
 const emptyHeader = (): AnnouncementHeaderRow => ({ key: '', value: '' });
 
 const blank: AnnouncementForm = {
+  site_id: null,
   title: '',
   summary: '',
   body: '',
@@ -49,10 +51,7 @@ export function useAnnouncements() {
   const load = () => api.listAnnouncements(siteId).then(setItems).catch(() => setError('Could not load announcements.'));
 
   useEffect(() => {
-    api.listSites().then((s) => {
-      setSites(s);
-      if (s[0]) setSiteId(s[0].id);
-    });
+    api.listSites().then(setSites).catch(() => setError('Could not load sites.'));
   }, []);
 
   useEffect(() => {
@@ -67,6 +66,7 @@ export function useAnnouncements() {
     setForm(
       item
         ? {
+            site_id: item.site_id,
             title: item.title,
             summary: item.summary,
             body: item.body,
@@ -74,17 +74,25 @@ export function useAnnouncements() {
             link_url: item.link_url,
             internal_headers: headerRows(item.internal_headers),
           }
-        : { ...blank, internal_headers: [emptyHeader()] },
+        : { ...blank, site_id: siteId, internal_headers: [emptyHeader()] },
     );
   }
 
   async function save() {
-    if (!siteId || !form.title.trim()) return;
+    if (!form.site_id || !form.title.trim()) return;
+    const destinationSiteId = form.site_id;
     setBusy(true);
     setError('');
     try {
-      const payload = { ...form, internal_headers: headerMap(form.internal_headers) };
-      if (editing === 'new') await api.createAnnouncement({ site_id: siteId, ...payload });
+      const payload = {
+        title: form.title,
+        summary: form.summary,
+        body: form.body,
+        release_label: form.release_label,
+        link_url: form.link_url,
+        internal_headers: headerMap(form.internal_headers),
+      };
+      if (editing === 'new') await api.createAnnouncement({ ...payload, site_id: destinationSiteId });
       else if (editing) await api.updateAnnouncement(editing.id, payload);
       setEditing(null);
       await load();

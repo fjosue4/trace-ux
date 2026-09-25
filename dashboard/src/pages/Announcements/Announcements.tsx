@@ -48,14 +48,14 @@ export default function Announcements() {
       <PageHeader
         title="Announcements"
         subtitle="Publish feature releases, maintenance notices, and product news to your visitors."
-        actions={user.role === 'admin' ? <Button onClick={() => open()} disabled={!siteId}>New announcement</Button> : undefined}
+        actions={user.role === 'admin' ? <Button onClick={() => open()} disabled={sites.length === 0}>New announcement</Button> : undefined}
       />
       <FilterPanel title="Filter announcements">
         <Select
           ariaLabel="Site"
           value={String(siteId || '')}
-          onChange={(v) => setSiteId(Number(v))}
-          options={sites.map((s) => ({ value: String(s.id), label: s.name }))}
+          onChange={(v) => setSiteId(v ? Number(v) : null)}
+          options={[{ value: '', label: 'All sites' }, ...sites.map((s) => ({ value: String(s.id), label: s.name }))]}
         />
         <Select
           ariaLabel="Status"
@@ -81,7 +81,9 @@ export default function Announcements() {
               >
                 <div className="announcement-card__top">
                   <div>
-                    <span className="announcement-kicker">{a.release_label || 'Announcement'}</span>
+                    <span className="announcement-kicker">
+                      {[a.site_name, a.release_label || 'Announcement'].filter(Boolean).join(' · ')}
+                    </span>
                     <h2>{a.title}</h2>
                   </div>
                   <Badge tone={a.status === 'published' ? 'accent' : 'neutral'}>{a.status}</Badge>
@@ -154,12 +156,28 @@ export default function Announcements() {
         footer={
           <>
             <Button variant="secondary" onClick={() => setEditing(null)}>Cancel</Button>
-            <Button onClick={save} disabled={busy || !form.title.trim()}>{busy ? 'Saving…' : 'Save draft'}</Button>
+            <Button onClick={save} disabled={busy || !form.site_id || !form.title.trim()}>{busy ? 'Saving…' : 'Save draft'}</Button>
           </>
         }
       >
         <div className="announcement-editor">
           <div className="announcement-form">
+            <label>
+              Site
+              <Select
+                ariaLabel="Announcement site"
+                value={form.site_id ? String(form.site_id) : ''}
+                onChange={(value) => setForm({ ...form, site_id: value ? Number(value) : null })}
+                options={[
+                  { value: '', label: 'Select a site' },
+                  ...sites.map((site) => ({ value: String(site.id), label: site.name })),
+                ]}
+                disabled={editing !== 'new'}
+              />
+              <span className="announcement-form__field-hint">
+                {editing === 'new' ? 'Confirm which site will receive this announcement.' : 'The site cannot be changed after the draft is created.'}
+              </span>
+            </label>
             <label>
               Title
               <Input value={form.title} maxLength={160} onChange={(e) => setForm({ ...form, title: e.currentTarget.value })} placeholder="What’s new?" />
