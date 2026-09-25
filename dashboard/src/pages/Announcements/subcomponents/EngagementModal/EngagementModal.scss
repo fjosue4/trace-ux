@@ -1,79 +1,191 @@
 @use 'abstracts' as *;
 
-.engagement-modal {
-  .engagement-section {
-    & + .engagement-section { margin-top: 1.5rem; }
+.engagement-panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1rem;
+  min-height: 0;
+}
 
-    h3 {
-      display: flex;
-      align-items: center;
-      gap: .4rem;
-      margin: 0 0 .6rem;
-      font-size: .78rem;
-      font-weight: 700;
-      letter-spacing: .06em;
-      text-transform: uppercase;
-      color: $muted;
-    }
-  }
+.engagement-stat strong { font-variant-numeric: tabular-nums; }
 
-  .engagement-count {
-    padding: .05rem .4rem;
-    border-radius: $radius-pill;
-    background: $surface-2;
-    color: $ink-2;
-    font-size: .7rem;
-    font-variant-numeric: tabular-nums;
-  }
+// The same bordered well the log details use for message and extra.
+.engagement-box {
+  flex: 1;
+  min-height: 220px;
+  max-height: 58vh;
+  margin: 0;
+  padding: 0.35rem 0;
+  overflow: auto;
+  list-style: none;
+  border: 1px solid $line;
+  border-radius: $radius;
+  background: $surface-2;
+}
 
-  .engagement-empty {
-    margin: 0;
+.engagement-comment,
+.engagement-audience__row {
+  padding: 0.7rem 0.9rem;
+
+  & + & { border-top: 1px solid $line; }
+}
+
+.engagement-comment__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.engagement-comment__body {
+  margin: 0.55rem 0 0 2.6rem;
+  color: $ink;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.engagement-audience__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.engagement-person {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.engagement-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.95rem;
+  height: 1.95rem;
+  border-radius: 50%;
+  background: $accent-soft;
+  color: $accent;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+
+  &.is-anonymous {
+    background: $surface-3;
     color: $muted;
-    font-size: .8rem;
   }
+}
 
-  .engagement-list {
-    display: flex;
-    flex-direction: column;
-    gap: .1rem;
-    margin: 0;
-    padding: 0;
-    list-style: none;
+.engagement-person__text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.engagement-person__name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  color: $ink;
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.engagement-person__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.engagement-person__key {
+  flex: none;
+  padding: 0.02rem 0.35rem;
+  border-radius: $radius-sm;
+  background: $surface-3;
+  color: $muted;
+  font: 500 0.68rem #{$font-mono};
+}
+
+.engagement-person__detail {
+  overflow: hidden;
+  color: $muted;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.engagement-audience__tags {
+  display: inline-flex;
+  gap: 0.3rem;
+}
+
+.engagement-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: $radius-pill;
+  background: $info-soft;
+  color: $info;
+  font-size: 0.68rem;
+  font-weight: 600;
+
+  &--like {
+    background: $warn-soft;
+    color: $warn;
   }
+}
 
-  .engagement-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
-    align-items: center;
-    gap: .5rem .75rem;
-    padding: .55rem 0;
-    border-bottom: 1px solid $line;
+.engagement-ticket { flex: none; }
+.engagement-ticket--icon { width: 30px; padding: 0; justify-content: center; }
 
-    &:last-child { border-bottom: 0; }
+.engagement-filter {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid $line;
+  border-radius: $radius-pill;
+  background: $surface-2;
+}
 
-    // Wrap rather than clip: an identifier cut off mid-string tells the reader
-    // less than nothing, and this column holds keys as well as names.
-    &__who {
-      min-width: 0;
-      font-size: .82rem;
-      font-weight: 600;
-      line-height: 1.35;
-      overflow-wrap: anywhere;
-    }
+.engagement-filter__option {
+  padding: 0.18rem 0.65rem;
+  border: 0;
+  border-radius: $radius-pill;
+  background: transparent;
+  color: $muted;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background $duration-fast $ease-out, color $duration-fast $ease-out;
 
-    &__when {
-      color: $muted;
-      font-size: .72rem;
-      font-variant-numeric: tabular-nums;
-    }
+  &:hover { color: $ink; }
 
-    &__body {
-      grid-column: 1 / -1;
-      margin: 0;
-      color: $ink-2;
-      font-size: .84rem;
-      line-height: 1.55;
-      white-space: pre-wrap;
-    }
+  &.is-active {
+    background: $surface;
+    color: $ink;
+    box-shadow: $shadow-sm;
   }
+}
+
+@media (max-width: 860px) {
+  .engagement-panes { grid-template-columns: 1fr; }
+  .engagement-box { min-height: 140px; max-height: 40vh; }
+}
+
+@media (max-width: 520px) {
+  .engagement-stat__of,
+  .engagement-ticket__label { display: none; }
+  .engagement-comment__head .engagement-ticket { width: 30px; padding: 0; justify-content: center; }
+  .engagement-audience__row { grid-template-columns: minmax(0, 1fr) auto; }
+  .engagement-audience__tags { grid-column: 1 / -1; grid-row: 2; padding-left: 2.6rem; }
+  .engagement-comment__body { margin-left: 0; }
 }

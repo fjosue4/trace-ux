@@ -193,74 +193,11 @@
 }
 
 // Detail modal: wider than the default dialog so message and extra sit side by side.
-.modal.log-detail {
-  display: flex;
-  flex-direction: column;
-  width: min(1080px, 100%);
-  max-height: calc(100vh - 3rem);
-
-  .modal__body {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    min-height: 0;
-    overflow: auto;
-  }
-
-  .modal__footer { align-items: center; }
-}
-
-.log-detail__meta {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, auto));
-  justify-content: start;
-  gap: 0.6rem 1.8rem;
-  margin: 0;
-  padding: 0.85rem 1rem;
-  border: 1px solid $line;
-  border-radius: $radius;
-  background: $surface-2;
-
-  div { min-width: 0; }
-  dd {
-    margin: 0.25rem 0 0;
-    overflow: hidden;
-    color: $ink;
-    font-size: 0.85rem;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-}
-
-.log-detail__meta dt,
-.log-detail__label {
-  color: $muted;
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .log-detail__panes {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 1rem;
   min-height: 0;
-}
-
-.log-detail__pane {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-  min-width: 0;
-}
-
-.log-detail__pane-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-  min-height: 30px;
 }
 
 .log-detail__message,
@@ -278,16 +215,6 @@
   font: 0.78rem/1.6 #{$font-mono};
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-}
-
-.log-detail__empty {
-  flex: 1;
-  display: grid;
-  place-items: center;
-  min-height: 220px;
-  margin: 0;
-  border: 1px dashed $line;
-  border-radius: $radius;
 }
 
 .log-detail__copy-error { margin-right: auto; color: $danger; }
@@ -326,7 +253,6 @@
 }
 
 @media (max-width: 860px) {
-  .log-detail__meta { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .log-detail__panes { grid-template-columns: 1fr; }
   .log-detail__message,
   .log-detail__extra { max-height: 40vh; min-height: 140px; }
@@ -334,6 +260,4 @@
 
 @media (max-width: 520px) {
   .logs-summary__label { display: none; }
-  .log-detail__meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .modal.log-detail .modal__footer { flex-wrap: wrap; }
 }

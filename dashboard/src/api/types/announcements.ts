@@ -21,6 +21,8 @@ export type AnnouncementEngagementEntry = {
 };
 
 export type AnnouncementEngagement = {
+  // Absent from servers built before reads were attributed to visitors.
+  reads?: AnnouncementEngagementEntry[];
   reactions: AnnouncementEngagementEntry[];
   comments: AnnouncementEngagementEntry[];
 };

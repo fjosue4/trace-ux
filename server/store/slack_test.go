@@ -316,7 +316,7 @@ func TestSlackLogMatchesMigrationFromSinglePattern(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	migration := migrations[len(migrations)-1]
+	migration := migrations[24] // v25
 	if _, err := s.DB.Exec(migration[strings.Index(migration, "UPDATE"):]); err != nil {
 		t.Fatal(err)
 	}

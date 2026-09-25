@@ -160,12 +160,34 @@ type AnnouncementEngagementEntry struct {
 }
 
 type AnnouncementEngagement struct {
+	Reads     []AnnouncementEngagementEntry `json:"reads"`
 	Reactions []AnnouncementEngagementEntry `json:"reactions"`
 	Comments  []AnnouncementEngagementEntry `json:"comments"`
 }
 
 func (s *Store) AnnouncementEngagement(announcementID int64) (AnnouncementEngagement, error) {
-	out := AnnouncementEngagement{Reactions: []AnnouncementEngagementEntry{}, Comments: []AnnouncementEngagementEntry{}}
+	out := AnnouncementEngagement{
+		Reads:     []AnnouncementEngagementEntry{},
+		Reactions: []AnnouncementEngagementEntry{},
+		Comments:  []AnnouncementEngagementEntry{},
+	}
+
+	reads, err := s.DB.Query(`SELECT visitor_key, user_id, read_at
+		FROM announcement_reads WHERE announcement_id=? ORDER BY read_at DESC`, announcementID)
+	if err != nil {
+		return out, err
+	}
+	defer reads.Close()
+	for reads.Next() {
+		var entry AnnouncementEngagementEntry
+		if err := reads.Scan(&entry.VisitorKey, &entry.UserID, &entry.CreatedAt); err != nil {
+			return out, err
+		}
+		out.Reads = append(out.Reads, entry)
+	}
+	if err := reads.Err(); err != nil {
+		return out, err
+	}
 
 	reactions, err := s.DB.Query(`SELECT visitor_key, user_id, created_at
 		FROM announcement_reactions WHERE announcement_id=? ORDER BY created_at DESC`, announcementID)

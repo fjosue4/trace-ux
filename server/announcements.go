@@ -279,7 +279,12 @@ func (s *Server) handleAnnouncementRead(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	_, _ = s.store.DB.Exec(`INSERT INTO announcement_reads(announcement_id,visitor_key,read_at) VALUES(?,?,?) ON CONFLICT(announcement_id,visitor_key) DO UPDATE SET read_at=excluded.read_at`, req.AnnouncementID, req.VisitorKey, time.Now().Unix())
+	// A later read keeps an identity the visitor already gave: signing out
+	// should not turn someone who read this into an unknown visitor.
+	_, _ = s.store.DB.Exec(`INSERT INTO announcement_reads(announcement_id,visitor_key,user_id,read_at) VALUES(?,?,?,?)
+		ON CONFLICT(announcement_id,visitor_key) DO UPDATE SET read_at=excluded.read_at,
+			user_id=CASE WHEN excluded.user_id != '' THEN excluded.user_id ELSE announcement_reads.user_id END`,
+		req.AnnouncementID, req.VisitorKey, req.UserID, time.Now().Unix())
 	writeJSON(w, 200, map[string]bool{"ok": true})
 }
 

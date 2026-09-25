@@ -6,6 +6,7 @@ import Badge from '../../../components/ui/Badge';
 import Button from '../../../components/ui/Button';
 import Modal from '../../../components/ui/Modal';
 import { Icon } from '../../../components/ui/Icon';
+import { DetailEmpty, DetailMeta, DetailPane } from '../../../components/ui/DetailModal';
 import { formatExtra, logTimestampMs, severityTone } from '../Logs.helpers';
 
 type CopyTarget = 'message' | 'extra' | 'log' | 'link';
@@ -61,7 +62,7 @@ export function LogDetailModal({ log, onClose }: { log: Log | null; onClose: () 
       open={log !== null}
       onClose={onClose}
       title="Log details"
-      className="log-detail"
+      className="detail-modal log-detail"
       footer={log && (
         <>
           {copyError && <span className="log-detail__copy-error small">{copyError}</span>}
@@ -82,56 +83,46 @@ export function LogDetailModal({ log, onClose }: { log: Log | null; onClose: () 
     >
       {log && (
         <>
-          <dl className="log-detail__meta">
-            <div>
-              <dt>Time</dt>
-              <dd>{formatFullTime(logTimestampMs(log))}</dd>
-            </div>
-            <div>
-              <dt>Level</dt>
-              <dd><Badge tone={severityTone(log.severity)}>{log.severity}</Badge></dd>
-            </div>
-            <div>
-              <dt>Service</dt>
-              <dd>{log.service_name || 'Browser'}</dd>
-            </div>
-            <div>
-              <dt>Environment</dt>
-              <dd>{log.environment || '—'}</dd>
-            </div>
-            <div>
-              <dt>Site</dt>
-              <dd>{log.site_name ?? '—'}</dd>
-            </div>
-            <div>
-              <dt>Source</dt>
-              <dd title={log.url || undefined}>{log.session_id ? (log.url ? stripProto(log.url) : 'Browser session') : 'API'}</dd>
-            </div>
-          </dl>
+          <DetailMeta
+            items={[
+              { label: 'Time', value: formatFullTime(logTimestampMs(log)) },
+              { label: 'Level', value: <Badge tone={severityTone(log.severity)}>{log.severity}</Badge> },
+              { label: 'Service', value: log.service_name || 'Browser' },
+              { label: 'Environment', value: log.environment || '—' },
+              { label: 'Site', value: log.site_name ?? '—' },
+              {
+                label: 'Source',
+                title: log.url || undefined,
+                value: log.session_id ? (log.url ? stripProto(log.url) : 'Browser session') : 'API',
+              },
+            ]}
+          />
 
           <div className="log-detail__panes">
-            <section className="log-detail__pane">
-              <div className="log-detail__pane-head">
-                <span className="log-detail__label">Message</span>
+            <DetailPane
+              label="Message"
+              actions={
                 <Button variant="ghost" size="sm" onClick={() => copy('message', log.message)} disabled={!log.message}>
                   <Icon name={copied === 'message' ? 'check' : 'copy'} size={13} /> {copied === 'message' ? 'Copied' : 'Copy'}
                 </Button>
-              </div>
+              }
+            >
               <pre className="log-detail__message">{log.message || '—'}</pre>
-            </section>
-            <section className="log-detail__pane">
-              <div className="log-detail__pane-head">
-                <span className="log-detail__label">Extra</span>
+            </DetailPane>
+            <DetailPane
+              label="Extra"
+              actions={
                 <Button variant="ghost" size="sm" onClick={() => extra && copy('extra', extra.pretty)} disabled={!extra}>
                   <Icon name={copied === 'extra' ? 'check' : 'copy'} size={13} /> {copied === 'extra' ? 'Copied' : 'Copy'}
                 </Button>
-              </div>
+              }
+            >
               {extra ? (
                 <pre className="log-detail__extra">{extra.pretty}</pre>
               ) : (
-                <p className="log-detail__empty muted small">No extra data was sent with this log.</p>
+                <DetailEmpty>No extra data was sent with this log.</DetailEmpty>
               )}
-            </section>
+            </DetailPane>
           </div>
         </>
       )}

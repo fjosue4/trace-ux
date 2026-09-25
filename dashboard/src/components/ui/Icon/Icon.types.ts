@@ -33,6 +33,7 @@ export type IconName =
   | 'slack'
   | 'grip'
   | 'chevronUp'
-  | 'chevronDown';
+  | 'chevronDown'
+  | 'eye';
 
 export type IconProps = { name: IconName; size?: number };

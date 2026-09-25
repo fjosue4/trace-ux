@@ -1,0 +1,111 @@
+@use 'abstracts' as *;
+
+.modal.detail-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(1080px, 100%);
+  max-height: calc(100vh - 3rem);
+
+  .modal__body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .modal__footer { align-items: center; }
+}
+
+.detail-meta {
+  display: grid;
+  grid-template-columns: repeat(var(--detail-meta-cols, 6), minmax(0, auto));
+  justify-content: start;
+  gap: 0.6rem 1.8rem;
+  margin: 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid $line;
+  border-radius: $radius;
+  background: $surface-2;
+
+  div { min-width: 0; }
+  dd {
+    margin: 0.25rem 0 0;
+    overflow: hidden;
+    color: $ink;
+    font-size: 0.85rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.detail-label {
+  color: $muted;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.detail-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.detail-pane__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 0.6rem;
+  min-height: 30px;
+}
+
+.detail-pane__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+  white-space: nowrap;
+  color: $muted;
+}
+
+.detail-pane__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.detail-count {
+  padding: 0.05rem 0.42rem;
+  border-radius: $radius-pill;
+  background: $surface-2;
+  color: $ink-2;
+  font-size: 0.68rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.detail-empty {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  margin: 0;
+  padding: 1rem;
+  border: 1px dashed $line;
+  border-radius: $radius;
+  text-align: center;
+}
+
+@media (max-width: 860px) {
+  .detail-meta { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .detail-empty { min-height: 140px; }
+}
+
+@media (max-width: 520px) {
+  .detail-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .modal.detail-modal .modal__footer { flex-wrap: wrap; }
+}

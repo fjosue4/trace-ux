@@ -563,6 +563,11 @@ var migrations = []string{
 		SET logs_match_rules = json_array(json_object('mode', logs_match_mode, 'value', logs_match_value))
 		WHERE logs_match_value != '';
 	`,
+	// v26: attribute reads to a visitor the same way likes and comments are,
+	// so the dashboard can list who saw an announcement, not only how many.
+	`
+	ALTER TABLE announcement_reads ADD COLUMN user_id TEXT NOT NULL DEFAULT '';
+	`,
 }
 
 func (s *Store) migrate() error {

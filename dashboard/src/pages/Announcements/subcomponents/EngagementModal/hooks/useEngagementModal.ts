@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AnnouncementEngagement, AnnouncementEngagementEntry, api, ApiError } from '../../../../../api';
+import { AnnouncementEngagement, api, ApiError } from '../../../../../api';
 
 export type TicketTarget = {
   visitorKey: string;
@@ -41,12 +41,12 @@ export function useEngagementModal(announcementId: number | null, announcementTi
     };
   }, [announcementId]);
 
-  function openTicketFor(entry: AnnouncementEngagementEntry, kind: 'like' | 'comment') {
+  function openTicketFor(visitorKey: string, userId: string, quote: string) {
     setTicketTarget({
-      visitorKey: entry.visitor_key,
-      userId: entry.user_id,
+      visitorKey,
+      userId: userId || undefined,
       subject: `Re: ${announcementTitle}`,
-      quote: kind === 'comment' ? entry.body ?? '' : '',
+      quote,
     });
   }
 
