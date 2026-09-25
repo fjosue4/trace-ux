@@ -111,6 +111,15 @@
   grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr);
   gap: 1.25rem;
   align-items: start;
+
+  &__aside {
+    position: sticky;
+    top: 0;
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 1rem;
+  }
 }
 
 .announcement-form {
@@ -129,6 +138,22 @@
     gap: .7rem;
     border-top: 1px solid $line;
     padding-top: .9rem;
+
+    &--aside {
+      padding: 1rem;
+      border: 1px solid $line;
+      border-radius: $radius;
+      background: $surface-2;
+
+      .announcement-form__header-row {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+
+      .announcement-form__header-row .btn {
+        grid-column: 1 / -1;
+        justify-self: start;
+      }
+    }
   }
 
   &__section-head {
@@ -188,8 +213,6 @@
 }
 
 .announcement-preview {
-  position: sticky;
-  top: 0;
   border: 1px solid $line;
   border-radius: $radius;
   padding: 1rem;
@@ -259,6 +282,7 @@
 
 @media (max-width: 760px) {
   .announcement-editor { grid-template-columns: 1fr; }
+  .announcement-editor__aside { position: static; }
   .announcement-preview { position: static; min-height: 0; }
   .announcement-form__row { grid-template-columns: 1fr; }
   .announcement-form__header-row { grid-template-columns: 1fr; }

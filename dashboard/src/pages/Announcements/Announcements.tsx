@@ -203,7 +203,24 @@ export default function Announcements() {
               </span>
               <textarea className="field-control announcement-form__body" value={form.body} maxLength={10000} onChange={(e) => setForm({ ...form, body: e.currentTarget.value })} placeholder="Explain the update with **bold text**, lists, links, or code." />
             </label>
-            <div className="announcement-form__internal">
+          </div>
+          <aside className="announcement-editor__aside">
+            <div className="announcement-preview">
+              <span>Visitor preview</span>
+              <div className="announcement-preview__card">
+                <small>{form.release_label || 'Announcement'}</small>
+                <strong>{form.title || 'Announcement title'}</strong>
+                {form.summary ? <p>{form.summary}</p> : !form.body && <p>Your summary will appear here.</p>}
+                {form.body && (
+                  <div
+                    className="announcement-preview__body announcement-preview__markdown"
+                    dangerouslySetInnerHTML={{ __html: renderMarkdownHTML(form.body) }}
+                  />
+                )}
+                {form.link_url && <span className="announcement-preview__link">Learn more ↗</span>}
+              </div>
+            </div>
+            <div className="announcement-form__internal announcement-form__internal--aside">
               <div className="announcement-form__section-head">
                 <div>
                   <strong>Internal headers</strong>
@@ -232,21 +249,6 @@ export default function Announcements() {
                   )}
                 </div>
               ))}
-            </div>
-          </div>
-          <aside className="announcement-preview">
-            <span>Visitor preview</span>
-            <div className="announcement-preview__card">
-              <small>{form.release_label || 'Announcement'}</small>
-              <strong>{form.title || 'Announcement title'}</strong>
-              {form.summary ? <p>{form.summary}</p> : !form.body && <p>Your summary will appear here.</p>}
-              {form.body && (
-                <div
-                  className="announcement-preview__body announcement-preview__markdown"
-                  dangerouslySetInnerHTML={{ __html: renderMarkdownHTML(form.body) }}
-                />
-              )}
-              {form.link_url && <span className="announcement-preview__link">Learn more ↗</span>}
             </div>
           </aside>
         </div>
