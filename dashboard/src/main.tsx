@@ -26,6 +26,7 @@ import Logs from './pages/Logs';
 import Settings from './pages/Settings';
 import SystemHealth from './pages/SystemHealth';
 import Announcements from './pages/Announcements';
+import Analyze, { ReportEditor, ReportView } from './pages/Analyze';
 
 function LegacySiteRedirect() {
   const { siteId } = useParams();
@@ -44,6 +45,10 @@ const router = createBrowserRouter([
       { path: 'sites/site/:siteId', element: <SiteDetail /> },
       { path: 'sessions', element: <Sessions /> },
       { path: 'performance', element: <Performance /> },
+      { path: 'analyze', element: <Analyze /> },
+      { path: 'analyze/new', element: <ReportEditor /> },
+      { path: 'analyze/:reportId', element: <ReportView /> },
+      { path: 'analyze/:reportId/edit', element: <ReportEditor /> },
       { path: 'site/:siteId', element: <LegacySiteRedirect /> },
       { path: 'feedback', element: <Feedback /> },
       { path: 'tickets', element: <Tickets /> },

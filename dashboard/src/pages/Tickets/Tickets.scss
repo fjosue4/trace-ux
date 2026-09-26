@@ -172,6 +172,16 @@
     margin-top: .85rem;
   }
 
+  // Name and email in one unbroken run: truncate it rather than let it push
+  // past the card; the title holds the full value.
+  &__requester {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   &__archive {
     display: flex;
     flex: none;
@@ -231,7 +241,15 @@
     font-size: .7rem;
     margin-bottom: .45rem;
 
-    strong { color: $ink-2; font-size: .73rem; }
+    strong {
+      min-width: 0;
+      overflow: hidden;
+      color: $ink-2;
+      font-size: .73rem;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    span { flex-shrink: 0; }
   }
 
   p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.55; font-size: .86rem; margin: 0; }

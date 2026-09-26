@@ -11,7 +11,11 @@ export default function Table({ headers, widths, fixed, children, className = ''
         <thead>
           <tr>
             {headers.map((header, index) => (
-              <th key={index} style={widths?.[index] ? { width: widths[index] } : undefined}>
+              <th
+                key={index}
+                style={widths?.[index] ? { width: widths[index] } : undefined}
+                title={typeof header === 'string' && header ? header : undefined}
+              >
                 {header}
               </th>
             ))}

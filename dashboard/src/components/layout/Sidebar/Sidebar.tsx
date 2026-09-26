@@ -16,6 +16,7 @@ export default function Sidebar({ user, onLogout }: SidebarProps) {
     { to: '/sites', icon: 'globe', label: 'Sites' },
     { to: '/sessions', icon: 'film', label: 'Sessions' },
     { to: '/performance', icon: 'activity', label: 'Performance' },
+    { to: '/analyze', icon: 'chart', label: 'Analyze' },
     { to: '/feedback', icon: 'message', label: 'Feedback' },
     { to: '/tickets', icon: 'lifebuoy', label: 'Tickets' },
     { to: '/announcements', icon: 'megaphone', label: 'Announcements' },

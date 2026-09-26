@@ -725,6 +725,8 @@
    at the end of the second. */
 .replay-meta .meta-block--wide { grid-column: auto; }
 .replay-meta .meta-block__value { overflow-wrap: normal; word-break: normal; }
+// Without breaks, an unbroken id would run out of the card; cut it instead.
+.replay-meta .meta-block__value--text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 @container (min-width: 560px) {
   /* Four even rows of two become two even rows of four. The first column is

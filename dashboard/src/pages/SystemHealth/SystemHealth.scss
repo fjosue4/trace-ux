@@ -52,6 +52,22 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
+
+  &__label { flex-shrink: 0; }
+
+  // Long values (a data directory, a hostname) truncate rather than escape
+  // the card; the row's title carries the full value.
+  &__value {
+    min-width: 0;
+    overflow: hidden;
+    text-align: right;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    // Ellipsis at the start: rtl moves the cut to the left edge, and the
+    // <bdi> keeps the characters themselves in their normal order.
+    &--start { direction: rtl; }
+  }
 }
 
 .health-store {

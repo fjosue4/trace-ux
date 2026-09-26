@@ -67,6 +67,11 @@
   &--pages {
     justify-items: start;
 
+    // justify-items: start sizes each line to its content, which let a long
+    // "Length 1h 2m" run past the column; cap it so the ellipsis applies.
+    .session-cell__primary,
+    .session-cell__meta { max-width: 100%; }
+
     .session-cell__primary { display: block; font-variant-numeric: tabular-nums; }
     .session-cell__primary--plain { color: $ink; }
   }

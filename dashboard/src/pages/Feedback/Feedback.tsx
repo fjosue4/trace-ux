@@ -91,7 +91,9 @@ export default function Feedback() {
         <Table
           className="feedback-table"
           fixed
-          widths={['12%', '10%', '28%', '9%', '13%', '12%', '100px', ...(user.role === 'admin' ? ['52px'] : [])]}
+          // Session and the ticket button are fixed-size controls, so their
+          // columns are sized to fit them rather than a share of the width.
+          widths={['12%', '10%', '28%', '96px', '13%', '12%', '150px', ...(user.role === 'admin' ? ['52px'] : [])]}
           headers={['Rating', 'Survey', 'Comment', 'Session', 'Device', 'Received', '', ...(user.role === 'admin' ? [''] : [])]}
         >
           {items.map((f) => (
