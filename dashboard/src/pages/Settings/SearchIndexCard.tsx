@@ -3,6 +3,7 @@ import Button from '../../components/ui/Button';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Notice from '../../components/ui/Notice';
 import Switch from '../../components/ui/Switch';
+import { InlineSpinner } from '../../components/ui/Loading';
 import { fmtBytes, fmtDuration, fmtTime } from '../../lib/format';
 import { useSearchIndex } from './hooks/useSearchIndex';
 
@@ -35,12 +36,19 @@ export default function SearchIndexCard() {
               Indexes pages, clicks and browser logs so searches return in milliseconds. Uses extra disk space.
             </p>
           </div>
-          <Switch
-            checked={status?.enabled ?? false}
-            onChange={toggle}
-            label="Fast session search"
-            disabled={loading || busy || status === null}
-          />
+          {loading && status === null ? (
+            <span className="settings__search-index-loading" role="status">
+              <InlineSpinner />
+              <span className="visually-hidden">Loading search index status…</span>
+            </span>
+          ) : (
+            <Switch
+              checked={status?.enabled ?? false}
+              onChange={toggle}
+              label="Fast session search"
+              disabled={busy || status === null}
+            />
+          )}
         </div>
 
         {error && <Notice tone="error">{error}</Notice>}

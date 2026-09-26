@@ -35,6 +35,15 @@
   p { margin: 0.35rem 0 0; }
   .switch { flex: none; margin-top: 0.1rem; }
 }
+.settings__search-index-loading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  margin-top: 0.1rem;
+}
 
 .search-index-progress {
   margin-top: 1rem;
