@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, Log, LogFilterOptions, LogStats, Site } from '../../../api';
-import { LIVE_REFRESH_MS, MAX_VISIBLE_LOGS } from '../Logs.constants';
+import { LIVE_REFRESH_MS, LOG_PAGE_SIZE } from '../Logs.constants';
 import { resolveTimeWindow } from '../Logs.helpers';
 import { SearchScope, ServiceSelection, SeveritySelection, SiteSelection, TimeRange } from '../Logs.types';
 
@@ -15,7 +15,11 @@ export function useLogs() {
   const [error, setError] = useState('');
   const [lastUpdated, setLastUpdated] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const requestGeneration = useRef(0);
+  const loadingMoreRef = useRef(false);
   const [live, setLive] = useState(initialRange !== 'all');
   const [siteSel, setSiteSel] = useState<SiteSelection>(() => readIDSelection(params.get('site')));
   const [severitySel, setSeveritySel] = useState<SeveritySelection>(() => readSeverities(params));
@@ -63,14 +67,24 @@ export function useLogs() {
   useEffect(() => {
     const initialWindow = resolveTimeWindow(timeRange, customFrom, customTo);
     if (!initialWindow.valid) {
+      requestGeneration.current += 1;
+      loadingMoreRef.current = false;
       setLogs([]);
       setStats(null);
+      setHasMore(false);
+      setLoadingMore(false);
       setLoading(false);
       return;
     }
 
+    const generation = ++requestGeneration.current;
     let cancelled = false;
     let fetching = false;
+    let firstRequest = true;
+
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
+    setHasMore(false);
 
     async function load() {
       if (fetching) return;
@@ -91,20 +105,35 @@ export function useLogs() {
             searchIn,
             fromMs: window.fromMs,
             toMs: window.toMs,
-            limit: MAX_VISIBLE_LOGS,
+            limit: LOG_PAGE_SIZE,
           }),
           api.logStats({ siteId, serviceId, environment: environmentValue, fromMs: window.fromMs, toMs: window.toMs }),
         ]);
-        if (!cancelled) {
-          setLogs(rows);
+        if (!cancelled && requestGeneration.current === generation) {
+          const replace = firstRequest;
+          setLogs((current) => {
+            if (replace || current === null) return rows;
+            const newestIDs = new Set(rows.map((row) => row.id));
+            return [
+              ...rows,
+              ...current.filter((row) => {
+                const timestamp = row.timestamp_ms || row.created_at * 1000;
+                return !newestIDs.has(row.id)
+                  && (!window.fromMs || timestamp >= window.fromMs)
+                  && (!window.toMs || timestamp <= window.toMs);
+              }),
+            ];
+          });
+          if (replace) setHasMore(rows.length === LOG_PAGE_SIZE);
           setStats(summary);
           setError('');
           setLastUpdated(Date.now());
+          firstRequest = false;
         }
       } catch {
-        if (!cancelled) setError('Could not load logs.');
+        if (!cancelled && requestGeneration.current === generation) setError('Could not load logs.');
       } finally {
-        if (!cancelled) {
+        if (!cancelled && requestGeneration.current === generation) {
           setLoading(false);
           fetching = false;
         }
@@ -119,6 +148,54 @@ export function useLogs() {
       if (timer) window.clearInterval(timer);
     };
   }, [siteSel, serviceSel, environment, severitySel, search, searchIn, timeRange, customFrom, customTo, live, refreshNonce]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMoreRef.current || !hasMore || !logs?.length) return;
+    const window = resolveTimeWindow(timeRange, customFrom, customTo);
+    if (!window.valid) return;
+
+    const generation = requestGeneration.current;
+    const beforeId = logs[logs.length - 1].id;
+    const siteId = siteSel === 'all' ? null : siteSel;
+    const severity = severitySel.length > 0 ? severitySel : '';
+    const serviceId = serviceSel === 'all' ? null : serviceSel;
+    const environmentValue = environment === 'all' ? undefined : environment;
+
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    try {
+      const page = await api.listLogs({
+        siteId,
+        serviceId,
+        environment: environmentValue,
+        severity,
+        search: search.trim(),
+        searchIn,
+        fromMs: window.fromMs,
+        toMs: window.toMs,
+        beforeId,
+        limit: LOG_PAGE_SIZE,
+      });
+      if (requestGeneration.current !== generation) return;
+      setLogs((current) => {
+        if (!current) return page;
+        const currentIDs = new Set(current.map((row) => row.id));
+        return [...current, ...page.filter((row) => !currentIDs.has(row.id))];
+      });
+      setHasMore(page.length === LOG_PAGE_SIZE);
+      setError('');
+    } catch {
+      if (requestGeneration.current === generation) {
+        setHasMore(false);
+        setError('Could not load older logs. Refresh to try again.');
+      }
+    } finally {
+      if (requestGeneration.current === generation) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
+    }
+  }, [customFrom, customTo, environment, hasMore, logs, search, searchIn, serviceSel, severitySel, siteSel, timeRange]);
 
   const timeWindow = resolveTimeWindow(timeRange, customFrom, customTo);
   const summary = stats
@@ -143,6 +220,9 @@ export function useLogs() {
     error,
     lastUpdated,
     loading,
+    loadingMore,
+    hasMore,
+    loadMore,
     setRefreshNonce,
     live,
     setLive,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import PageHeader from '../../components/ui/PageHeader';
 import Table from '../../components/ui/Table';
@@ -17,18 +17,22 @@ import { LogRow } from './subcomponents/LogRow';
 import { LogDetailModal } from './subcomponents/LogDetailModal';
 import { useLinkedLog } from './hooks/useLinkedLog';
 import { LogSearchField } from './subcomponents/LogSearchField';
-import { MAX_VISIBLE_LOGS, severityOptions, timeRangeOptions } from './Logs.constants';
+import { LOG_PAGE_SIZE, severityOptions, timeRangeOptions } from './Logs.constants';
 import { SeveritySelection } from './Logs.types';
 import './Logs.scss';
 
 export default function Logs() {
   const [linkCopied, setLinkCopied] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   const {
     sites,
     logs,
     error,
     lastUpdated,
     loading,
+    loadingMore,
+    hasMore,
+    loadMore,
     setRefreshNonce,
     live,
     setLive,
@@ -54,6 +58,19 @@ export default function Logs() {
     timeWindow,
     summary,
   } = useLogs();
+
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || !hasMore || loadingMore) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) void loadMore();
+      },
+      { rootMargin: '500px 0px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loadMore]);
 
   async function copyLink() {
     await navigator.clipboard.writeText(window.location.href);
@@ -100,7 +117,7 @@ export default function Logs() {
         footer={(
           <>
             <span className="muted small">
-              {logs ? `${logs.length.toLocaleString()} shown` : 'Loading'} · up to {MAX_VISIBLE_LOGS.toLocaleString()} rows
+              {logs ? `${logs.length.toLocaleString()} loaded` : 'Loading'} · {LOG_PAGE_SIZE.toLocaleString()} per request
               {lastUpdated > 0 && ` · updated ${fmtClock(Math.floor(lastUpdated / 1000))}`}
             </span>
             {summary.length > 0 && <LogsSummary summary={summary} />}
@@ -199,11 +216,6 @@ export default function Logs() {
         />
       ) : (
         <>
-          {logs.length >= MAX_VISIBLE_LOGS && (
-            <Notice tone="info">
-              Showing the newest {MAX_VISIBLE_LOGS.toLocaleString()} logs. Narrow the time range to see older entries.
-            </Notice>
-          )}
           <Table
             className="logs-table"
             fixed
@@ -214,6 +226,15 @@ export default function Logs() {
               <LogRow key={log.id} log={log} onOpen={openLogDetail} />
             ))}
           </Table>
+          <div ref={loadMoreRef} className="logs-load-more" aria-live="polite">
+            {loadingMore ? (
+              <Loading label="Loading older logs…" />
+            ) : hasMore ? (
+              <span className="muted small">Scroll for older logs</span>
+            ) : (
+              <span className="muted small">All matching logs loaded</span>
+            )}
+          </div>
         </>
       )}
 

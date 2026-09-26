@@ -18,7 +18,7 @@ export const logsEndpoints = {
     if (query.beforeId) q.set('before_id', String(query.beforeId));
     if (query.fromMs) q.set('from_ms', String(query.fromMs));
     if (query.toMs) q.set('to_ms', String(query.toMs));
-    q.set('limit', String(query.limit ?? 1000));
+    q.set('limit', String(query.limit ?? 100));
     return request<Log[]>(`/api/logs?${q.toString()}`);
   },
 

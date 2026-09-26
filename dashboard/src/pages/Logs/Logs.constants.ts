@@ -1,6 +1,6 @@
 import { TimeRange } from './Logs.types';
 
-export const MAX_VISIBLE_LOGS = 1000;
+export const LOG_PAGE_SIZE = 100;
 export const LIVE_REFRESH_MS = 5000;
 
 export const severityOptions = [
