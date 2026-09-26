@@ -25,3 +25,18 @@ export type SystemHealth = {
   };
   store: { sites: number; sessions: number; feedback: number };
 };
+
+export type SearchIndexStatus = {
+  state: 'off' | 'building' | 'ready' | 'dropping';
+  enabled: boolean;
+  sessions_done: number;
+  sessions_total: number;
+  bytes: number;
+  bytes_freed: number;
+  started_at: number;
+  eta_seconds: number;
+  reason: '' | 'manual' | 'low_disk';
+  reason_at: number;
+  overflowed: boolean;
+  error: string;
+};

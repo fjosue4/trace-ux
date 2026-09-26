@@ -94,7 +94,7 @@ func main() {
 				switch {
 				case err != nil:
 					log.Printf("disk budget: %v", err)
-				case res.Ran:
+				case res.Ran && res.SessionsGone > 0:
 					log.Printf("disk budget: pruned %d session(s), %d -> %d MiB of %d MiB (%s)",
 						res.SessionsGone, res.SizeBefore>>20, res.SizeAfter>>20,
 						res.Budget>>20, res.Reason)

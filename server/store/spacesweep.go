@@ -124,6 +124,19 @@ func (s *Store) SweepToBudget(dataDir string, maxBytes uint64, floorDays int) (S
 		return res, nil
 	}
 
+	// The derived search index is always expendable; recordings are not. Ask
+	// the background worker to remove it and let a later sweep re-measure before
+	// considering any session deletion.
+	removingIndex, err := s.DisableSearchIndexForLowDisk()
+	if err != nil {
+		return res, fmt.Errorf("disable session search index: %w", err)
+	}
+	if removingIndex {
+		res.Ran = true
+		res.Reason = "removing session search index before pruning recordings"
+		return res, nil
+	}
+
 	// Gate on reclaimability BEFORE deleting anything. On auto_vacuum=none the
 	// deletes cannot return a single byte to the filesystem, so the sweep would
 	// lose recordings and stay just as far over budget. The only honest move is

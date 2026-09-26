@@ -6,7 +6,7 @@ import { Feedback } from '../types/feedback';
 
 export const sessionsEndpoints = {
   // siteId === null lists sessions across all sites (rows carry site_name).
-  listSessions: (siteId: number | null, f: SessionFilter = {}) => {
+  listSessions: (siteId: number | null, f: SessionFilter = {}, signal?: AbortSignal) => {
     const q = new URLSearchParams();
     if (siteId) q.set('site_id', String(siteId));
     if (f.browser) q.set('browser', f.browser);
@@ -17,7 +17,7 @@ export const sessionsEndpoints = {
     if (f.action) q.set('action', f.action);
     if (f.identity) q.set('visitor', f.identity);
     if (f.min_duration_ms) q.set('min_duration_ms', String(f.min_duration_ms));
-    return request<Session[]>(`/api/sessions?${q}`);
+    return request<Session[]>(`/api/sessions?${q}`, { signal });
   },
 
   listSessionCountries: (siteId: number | null) =>

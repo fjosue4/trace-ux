@@ -81,6 +81,7 @@ export function useSessions() {
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
     const cached = resultCache.get(queryKey);
     if (cached) {
       setSessions(cached);
@@ -88,20 +89,22 @@ export function useSessions() {
     }
     setError('');
     api
-      .listSessions(selected === 'all' ? null : selected, filter)
+      .listSessions(selected === 'all' ? null : selected, filter, controller.signal)
       .then((rows) => {
         remember(queryKey, rows);
         if (cancelled) return;
         setSessions(rows);
         setShownKey(queryKey);
       })
-      .catch(() => {
+      .catch((cause) => {
         if (cancelled) return;
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
         setError('Could not load sessions.');
         setShownKey(queryKey);
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
     // queryKey already encodes selected and filter.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"io/fs"
 	"net/http"
 	"path/filepath"
@@ -155,4 +156,35 @@ func (s *Server) handleSystemHealth(w http.ResponseWriter, r *http.Request) {
 		"disk":  snapshot.Disk,
 		"store": snapshot.Store,
 	})
+}
+
+func (s *Server) handleGetSearchIndex(w http.ResponseWriter, r *http.Request) {
+	status, err := s.store.SearchIndexStatus(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (s *Server) handlePutSearchIndex(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Enabled *bool `json:"enabled"`
+	}
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&body); err != nil || body.Enabled == nil {
+		writeErr(w, http.StatusBadRequest, "invalid search index settings")
+		return
+	}
+	if err := s.store.SetSearchIndexEnabled(*body.Enabled, "manual"); err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	status, err := s.store.SearchIndexStatus(r.Context())
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
 }

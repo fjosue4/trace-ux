@@ -45,7 +45,7 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 			f.Limit = n
 		}
 	}
-	sessions, err := s.store.ListSessions(f)
+	sessions, err := s.store.ListSessionsContext(r.Context(), f)
 	if err != nil {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return

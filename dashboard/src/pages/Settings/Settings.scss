@@ -10,6 +10,7 @@
 
   > .page-head { grid-column: 1 / -1; margin-bottom: 0.1rem; }
   > .settings__team { grid-column: 1 / -1; }
+  > .settings__search-index { grid-column: 1 / -1; }
 }
 .settings__profile-card { grid-column: 1 / -1; }
 .settings__team {
@@ -24,6 +25,57 @@
   border-top: 1px solid $line;
 }
 .settings__pw { margin-top: 0.8rem; }
+
+.settings__search-index-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.25rem;
+
+  p { margin: 0.35rem 0 0; }
+  .switch { flex: none; margin-top: 0.1rem; }
+}
+
+.search-index-progress {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid $line;
+
+  > p { margin: 0.55rem 0 0; }
+}
+.search-index-progress__copy {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.65rem;
+}
+.search-index-progress__track {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: $radius-pill;
+  background: $surface-2;
+
+  > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: $accent;
+    transition: width $duration-fast $ease-out;
+  }
+
+  &.is-indeterminate > span {
+    position: absolute;
+    width: 35%;
+    animation: search-index-indeterminate 1.2s ease-in-out infinite;
+  }
+}
+.search-index-status { margin: 1rem 0 0; padding-top: 1rem; border-top: 1px solid $line; }
+
+@keyframes search-index-indeterminate {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(310%); }
+}
 
 /* segmented light/dark selector */
 .seg { display: inline-flex; background: $surface-2; border-radius: $radius-pill; padding: 4px; margin-top: 0.7rem; gap: 4px; }
@@ -46,4 +98,9 @@
 @media (max-width: 1100px) {
   .settings { grid-template-columns: 1fr; }
   .settings > .page-head { grid-column: auto; }
+}
+
+@media (max-width: 620px) {
+  .settings__search-index-head,
+  .search-index-progress__copy { flex-direction: column; }
 }
