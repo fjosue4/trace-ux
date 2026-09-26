@@ -315,6 +315,8 @@ func (s *Server) routes() http.Handler {
 
 	// Server resource usage (admin only).
 	mux.HandleFunc("GET /api/system/health", s.auth(s.requireAdmin(s.handleSystemHealth)))
+	mux.HandleFunc("GET /api/system/search-index", s.auth(s.requireAdmin(s.handleGetSearchIndex)))
+	mux.HandleFunc("PUT /api/system/search-index", s.auth(s.requireAdmin(s.handlePutSearchIndex)))
 
 	// Instance-wide Slack integration: system-health alerts only. CPU/RAM/disk
 	// describe the server itself, not a site, so this stays a single global

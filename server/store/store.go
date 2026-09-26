@@ -5,13 +5,28 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
 
 // Store wraps the SQLite database. All timestamps are unix seconds.
 type Store struct {
-	DB *sql.DB
+	DB     *sql.DB
+	readDB *sql.DB
+
+	searchMu    sync.Mutex
+	searchWake  chan struct{}
+	searchStop  chan struct{}
+	searchDone  chan struct{}
+	searchBatch int
+	lastIngest  atomic.Int64
+
+	searchBytesMu sync.Mutex
+	searchBytesAt time.Time
+	searchBytes   int64
 }
 
 // errBadJSON mirrors the dashboard API's own "invalid JSON body" sentinel
@@ -42,10 +57,25 @@ func OpenStore(path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	if err := secureStoreFiles(path); err != nil {
+	readDB, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(10000)&_pragma=query_only(1)")
+	if err != nil {
 		db.Close()
 		return nil, err
 	}
+	readDB.SetMaxOpenConns(4)
+	readDB.SetMaxIdleConns(4)
+	if err := readDB.Ping(); err != nil {
+		readDB.Close()
+		db.Close()
+		return nil, fmt.Errorf("open read pool: %w", err)
+	}
+	s.readDB = readDB
+	if err := secureStoreFiles(path); err != nil {
+		readDB.Close()
+		db.Close()
+		return nil, err
+	}
+	s.startSearchIndexWorker()
 	return s, nil
 }
 
@@ -58,7 +88,18 @@ func secureStoreFiles(path string) error {
 	return nil
 }
 
-func (s *Store) Close() error { return s.DB.Close() }
+func (s *Store) Close() error {
+	if s.searchStop != nil {
+		close(s.searchStop)
+		<-s.searchDone
+	}
+	readErr := s.readDB.Close()
+	writeErr := s.DB.Close()
+	if writeErr != nil {
+		return writeErr
+	}
+	return readErr
+}
 
 var migrations = []string{
 	`
@@ -594,7 +635,35 @@ var migrations = []string{
 	CREATE INDEX IF NOT EXISTS idx_custom_events_report
 		ON custom_events(name, track_id, ts, session_id);
 	`,
+	// v28: desired/runtime state for the optional FTS5 session search index.
+	// The large virtual table and its synchronization triggers are created by
+	// the background worker, never by this startup migration.
+	`
+	CREATE TABLE IF NOT EXISTS session_search_state (
+		id                    INTEGER PRIMARY KEY CHECK (id = 1),
+		enabled               INTEGER NOT NULL DEFAULT 0,
+		state                 TEXT    NOT NULL DEFAULT 'off'
+			CHECK (state IN ('off', 'building', 'ready', 'dropping')),
+		reason                TEXT    NOT NULL DEFAULT '',
+		cutoff_pages          INTEGER NOT NULL DEFAULT 0,
+		cutoff_events         INTEGER NOT NULL DEFAULT 0,
+		cutoff_logs           INTEGER NOT NULL DEFAULT 0,
+		cutoff_session_rowid  INTEGER NOT NULL DEFAULT 0,
+		next_session_rowid    INTEGER NOT NULL DEFAULT 0,
+		sessions_done         INTEGER NOT NULL DEFAULT 0,
+		sessions_total        INTEGER NOT NULL DEFAULT 0,
+		overflowed            INTEGER NOT NULL DEFAULT 0,
+		overflow_session_rowid INTEGER NOT NULL DEFAULT 0,
+		drop_bytes_start      INTEGER NOT NULL DEFAULT 0,
+		started_at            INTEGER NOT NULL DEFAULT 0,
+		reason_at             INTEGER NOT NULL DEFAULT 0,
+		error                 TEXT    NOT NULL DEFAULT ''
+	);
+	INSERT OR IGNORE INTO session_search_state (id) VALUES (1);
+	`,
 }
+
+const sessionSearchMigrationVersion = 28
 
 func (s *Store) migrate() error {
 	if _, err := s.DB.Exec(`CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)`); err != nil {
@@ -605,12 +674,24 @@ func (s *Store) migrate() error {
 	if err := row.Scan(&version); err != nil {
 		return err
 	}
+	versionBeforeMigration := version
 	for v := version; v < len(migrations); v++ {
 		if _, err := s.DB.Exec(migrations[v]); err != nil {
 			return fmt.Errorf("migration %d: %w", v+1, err)
 		}
 		if _, err := s.DB.Exec(`INSERT INTO schema_version (version) VALUES (?)`, v+1); err != nil {
 			return err
+		}
+	}
+	// The index is a good default for a brand-new installation, but an upgrade
+	// must not unexpectedly consume disk or background I/O. The migration itself
+	// defaults to off so an interrupted upgrade also fails safe; only a database
+	// created from version zero is opted in before the worker starts. Databases
+	// that already had v28 keep the operator's saved preference on later upgrades.
+	if versionBeforeMigration < sessionSearchMigrationVersion {
+		enabled := versionBeforeMigration == 0
+		if _, err := s.DB.Exec(`UPDATE session_search_state SET enabled = ? WHERE id = 1`, enabled); err != nil {
+			return fmt.Errorf("set initial session search preference: %w", err)
 		}
 	}
 	return nil

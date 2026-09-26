@@ -10,6 +10,7 @@ import Badge from '../../components/ui/Badge';
 import { Field, Input } from '../../components/ui/fields';
 import UserManager from '../../components/users/UserManager';
 import { useChangePassword } from './hooks/useChangePassword';
+import SearchIndexCard from './SearchIndexCard';
 import './Settings.scss';
 
 // Signed-in users manage appearance here. Admins manage account passwords from
@@ -52,6 +53,8 @@ export default function Settings() {
           </div>
         </div>
       </Card>
+
+      {user.role === 'admin' && <SearchIndexCard />}
 
       {user.role === 'admin' && (
         <Card className="settings__team">

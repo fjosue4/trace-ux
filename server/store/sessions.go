@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"io"
 	"strings"
@@ -115,10 +116,9 @@ func (s *Store) GetSession(id string) (*Session, error) {
 	return sess, nil
 }
 
-// ListSessions returns sessions newest first, with optional filters. With
-// f.SiteID set it is scoped to one site; with 0 it spans every site (the rows
-// then carry the site name for display). Empty filter values are ignored.
-func (s *Store) ListSessions(f SessionFilter) ([]Session, error) {
+// listSessionsStandard is the correctness baseline used whenever the optional
+// FTS accelerator is unavailable or cannot preserve the requested semantics.
+func (s *Store) listSessionsStandard(ctx context.Context, f SessionFilter) ([]Session, error) {
 	query := `SELECT ` + sessionColsQualified + `, si.name
 		FROM sessions s JOIN sites si ON si.id = s.site_id`
 	args := []any{}
@@ -198,10 +198,10 @@ func (s *Store) ListSessions(f SessionFilter) ([]Session, error) {
 		query += ` AND s.started_at < ?`
 		args = append(args, f.Before)
 	}
-	query += ` ORDER BY s.started_at DESC LIMIT ?`
+	query += ` ORDER BY s.started_at DESC, s.rowid DESC LIMIT ?`
 	args = append(args, f.Limit)
 
-	rows, err := s.DB.Query(query, args...)
+	rows, err := s.readDB.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

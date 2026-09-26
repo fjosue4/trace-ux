@@ -53,7 +53,13 @@ func newTestStore(t *testing.T) (*Store, string) {
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
-	t.Cleanup(func() { s.DB.Close() })
+	t.Cleanup(func() { _ = s.Close() })
+	// These tests isolate recording pruning. Search-index-first behavior has its
+	// own lifecycle test, so keep the optional index out of these size fixtures.
+	if err := s.SetSearchIndexEnabled(false, "manual"); err != nil {
+		t.Fatalf("disable search index: %v", err)
+	}
+	waitForSearchState(t, s, "off")
 	return s, dir
 }
 
@@ -92,7 +98,11 @@ func TestSweepRefusesWhenItCannotReclaim(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore: %v", err)
 	}
-	defer s.DB.Close()
+	defer s.Close()
+	if err := s.SetSearchIndexEnabled(false, "manual"); err != nil {
+		t.Fatalf("disable search index: %v", err)
+	}
+	waitForSearchState(t, s, "off")
 
 	if mode, _ := s.AutoVacuumMode(); mode == 2 {
 		t.Skip("this SQLite build upgraded auto_vacuum on an existing file; gate is untestable here")

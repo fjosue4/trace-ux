@@ -93,6 +93,7 @@ type IngestPing struct {
 // ---- Store: session persistence ----
 
 func (s *Store) EnsureSessionForSite(siteID int64, sessionID string, now int64) error {
+	s.lastIngest.Store(time.Now().UnixNano())
 	if _, err := s.DB.Exec(`INSERT INTO sessions (id, site_id, started_at, last_seen) VALUES (?, ?, ?, ?)
 		ON CONFLICT(id) DO NOTHING`, sessionID, siteID, now, now); err != nil {
 		return err
