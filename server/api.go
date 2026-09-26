@@ -379,6 +379,18 @@ func (s *Server) routes() http.Handler {
 	// key collection so keys can coexist and be revoked independently.
 	mux.HandleFunc("POST /api/sites/{id}/performance-key", s.auth(s.requireAdmin(s.handleRotatePerformanceKey)))
 
+	// Analyze: saved count reports over tracked actions or logs. Both roles
+	// may create reports; ownership and visibility are enforced per query.
+	mux.HandleFunc("GET /api/analyze/reports", s.auth(s.handleListAnalyzeReports))
+	mux.HandleFunc("POST /api/analyze/reports", s.auth(s.handleCreateAnalyzeReport))
+	mux.HandleFunc("GET /api/analyze/reports/{id}", s.auth(s.handleGetAnalyzeReport))
+	mux.HandleFunc("PATCH /api/analyze/reports/{id}", s.auth(s.handleUpdateAnalyzeReport))
+	mux.HandleFunc("DELETE /api/analyze/reports/{id}", s.auth(s.handleDeleteAnalyzeReport))
+	mux.HandleFunc("POST /api/analyze/reports/{id}/duplicate", s.auth(s.handleDuplicateAnalyzeReport))
+	mux.HandleFunc("GET /api/analyze/reports/{id}/results", s.auth(s.handleAnalyzeReportResults))
+	mux.HandleFunc("POST /api/analyze/preview", s.auth(s.handleAnalyzePreview))
+	mux.HandleFunc("GET /api/analyze/options", s.auth(s.handleAnalyzeOptions))
+
 	// Feedback & surveys from tracked sites.
 	mux.HandleFunc("GET /api/feedback", s.auth(s.handleListFeedback))
 	mux.HandleFunc("GET /api/feedback/summary", s.auth(s.handleFeedbackSummary))
@@ -649,7 +661,10 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	// which is admin-only: "which version am I looking at" is the first thing
 	// anyone asks when a replay misbehaves, and a viewer reporting the problem
 	// needs to be able to answer it too.
-	writeJSON(w, http.StatusOK, map[string]string{
+	// The numeric id lets the dashboard tell which saved reports are the
+	// viewer's own.
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":       u.ID,
 		"username": u.Username,
 		"role":     u.Role,
 		"version":  version,

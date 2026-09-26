@@ -25,3 +25,12 @@ export const stagger: Variants = {
   visible: { transition: { staggerChildren: 0.055, delayChildren: 0.03 } },
 };
 
+
+// Data transitions in charts: a decisive ease-out tween rather than a spring,
+// so bars and lines settle on the new values without overshooting them --
+// an overshoot would briefly show a count that is not real.
+export const chartTween: Transition = {
+  type: 'tween',
+  duration: 0.5,
+  ease: [0.22, 1, 0.36, 1],
+};

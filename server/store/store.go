@@ -568,6 +568,32 @@ var migrations = []string{
 	`
 	ALTER TABLE announcement_reads ADD COLUMN user_id TEXT NOT NULL DEFAULT '';
 	`,
+	// v27: saved Analyze reports. Only the definition is stored; results are
+	// recalculated on demand. source and site_id duplicate the JSON definition
+	// so the library can filter cheaply and a deleted site takes its reports
+	// with it (site_id NULL means All sites). A deleted user takes theirs too.
+	`
+	CREATE TABLE IF NOT EXISTS analyze_reports (
+		id              INTEGER PRIMARY KEY,
+		owner_user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		name            TEXT    NOT NULL,
+		description     TEXT    NOT NULL DEFAULT '',
+		visibility      TEXT    NOT NULL CHECK (visibility IN ('team', 'private')),
+		source          TEXT    NOT NULL CHECK (source IN ('event', 'log')),
+		site_id         INTEGER REFERENCES sites(id) ON DELETE CASCADE,
+		definition      TEXT    NOT NULL,
+		created_at      INTEGER NOT NULL,
+		updated_at      INTEGER NOT NULL
+	);
+	CREATE INDEX IF NOT EXISTS idx_analyze_reports_owner_updated
+		ON analyze_reports(owner_user_id, updated_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_analyze_reports_visibility_updated
+		ON analyze_reports(visibility, updated_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_analyze_reports_site_updated
+		ON analyze_reports(site_id, updated_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_custom_events_report
+		ON custom_events(name, track_id, ts, session_id);
+	`,
 }
 
 func (s *Store) migrate() error {

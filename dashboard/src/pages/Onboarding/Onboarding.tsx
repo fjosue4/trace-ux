@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { api, Session } from '../../api';
 import { useUser } from '../../App';
+import Breadcrumbs from '../../components/ui/Breadcrumbs';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -89,6 +90,7 @@ export default function Onboarding() {
   if (user.role !== 'admin') {
     return (
       <main className="page">
+        <Breadcrumbs items={[{ label: 'Sites', to: '/sites' }, { label: 'Set up a site' }]} />
         <PageHeader title="Set up a site" />
         <Notice tone="info">Only administrators can add and configure sites. Ask an admin to set one up.</Notice>
       </main>
@@ -100,6 +102,11 @@ export default function Onboarding() {
 
   return (
     <main className="page onboarding">
+      <Breadcrumbs
+        items={site
+          ? [{ label: 'Sites', to: '/sites' }, { label: site.name, to: `/sites/site/${site.id}` }, { label: 'Setup' }]
+          : [{ label: 'Sites', to: '/sites' }, { label: title }]}
+      />
       <PageHeader
         title={title}
         subtitle="Go step by step. Every step can be skipped and changed later from the site's page."

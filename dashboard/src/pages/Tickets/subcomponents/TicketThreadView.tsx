@@ -71,7 +71,7 @@ export function TicketThreadView({ thread, userRole, onStatus, onReply, onArchiv
           />
         </div>
         <div className="ticket-thread__meta">
-          <span>{requesterLabel(ticket)}</span>
+          <span className="ticket-thread__requester" title={requesterLabel(ticket)}>{requesterLabel(ticket)}</span>
           <span>Opened {fmtTime(ticket.created_at)}</span>
           {ticket.page_url && (
             <a href={ticket.page_url} target="_blank" rel="noreferrer" className="ticket-link">
@@ -90,7 +90,9 @@ export function TicketThreadView({ thread, userRole, onStatus, onReply, onArchiv
         {messages.map((message) => (
           <div key={message.id} className={`ticket-message ticket-message--${message.author}`}>
             <div className="ticket-message__meta">
-              <strong>{message.author === 'staff' ? message.author_name || 'Staff' : requester(ticket)}</strong>
+              <strong title={message.author === 'staff' ? message.author_name || 'Staff' : requester(ticket)}>
+                {message.author === 'staff' ? message.author_name || 'Staff' : requester(ticket)}
+              </strong>
               <span>{fmtClock(message.created_at) || fmtTime(message.created_at)}</span>
             </div>
             <p>{message.body}</p>

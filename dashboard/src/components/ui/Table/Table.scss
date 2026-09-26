@@ -23,7 +23,9 @@
     table-layout: fixed;
 
     th, td { padding-left: 0.8rem; padding-right: 0.8rem; }
-    td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    // A header wider than its column truncates instead of spilling into the
+    // next one; Table.tsx puts the full label in its title.
+    th, td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
     th:last-child, td:last-child { padding-left: 0.3rem; padding-right: 0.6rem; }
   }

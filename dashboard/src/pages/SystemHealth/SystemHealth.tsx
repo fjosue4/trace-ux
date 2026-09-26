@@ -125,7 +125,7 @@ export default function SystemHealth() {
             <span className="muted small">TraceUX data</span>
             <Badge tone="accent">{fmtBytes(disk.trace_ux_bytes)}</Badge>
           </div>
-          <Row label="Data dir" value={disk.data_dir} mono={false} />
+          <Row label="Data dir" value={disk.data_dir} mono={false} truncate="start" />
         </Card>
       </div>
 

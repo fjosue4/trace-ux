@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import { fmtTime } from '../../lib/format';
 import { useUser } from '../../App';
+import Breadcrumbs from '../../components/ui/Breadcrumbs';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -55,9 +56,12 @@ export default function SiteDetail() {
     patchTrigger,
   } = useSiteDetail(id);
 
+  const crumbs = (current: string) => <Breadcrumbs items={[{ label: 'Sites', to: '/sites' }, { label: current }]} />;
+
   if (error) {
     return (
       <main className="page">
+        {crumbs('Site')}
         <Notice tone="error">{error}</Notice>
       </main>
     );
@@ -65,6 +69,7 @@ export default function SiteDetail() {
   if (!detail) {
     return (
       <main className="page">
+        {crumbs('Site')}
         <Loading />
       </main>
     );
@@ -76,6 +81,7 @@ export default function SiteDetail() {
 
   return (
     <main className="page">
+      {crumbs(site.name)}
       <PageHeader
         title={site.name}
         subtitle={`Site key ${site.site_key} · tracking since ${fmtTime(site.created_at)}`}

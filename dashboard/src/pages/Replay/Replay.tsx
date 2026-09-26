@@ -1,5 +1,6 @@
-import { Link } from 'react-router-dom';
 import { useUser } from '../../App';
+import { fmtTime } from '../../lib/format';
+import Breadcrumbs from '../../components/ui/Breadcrumbs';
 import PageHeader from '../../components/ui/PageHeader';
 import Notice from '../../components/ui/Notice';
 import Loading from '../../components/ui/Loading';
@@ -40,9 +41,14 @@ export default function Replay() {
     windowStartMs,
   } = useReplay();
 
+  // The Sessions crumb returns to the list the replay was opened from,
+  // filters included.
+  const crumbs = (current: string) => <Breadcrumbs items={[{ label: 'Sessions', to: backTo }, { label: current }]} />;
+
   if (error) {
     return (
       <main className="page">
+        {crumbs('Recording')}
         <Notice tone="error">{error}</Notice>
       </main>
     );
@@ -50,6 +56,7 @@ export default function Replay() {
   if (!meta) {
     return (
       <main className="page">
+        {crumbs('Recording')}
         <Loading label={progress || 'Loading…'} />
       </main>
     );
@@ -60,11 +67,7 @@ export default function Replay() {
   return (
     <main className="page page--wide">
       <PageHeader
-        leading={
-          <Link to={backTo} className="btn btn--secondary btn--sm">
-            ← All sessions
-          </Link>
-        }
+        leading={crumbs(`Recording · ${fmtTime(session.started_at)}`)}
         actions={
           isAdmin && (
             <Button

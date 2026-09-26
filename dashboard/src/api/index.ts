@@ -13,6 +13,7 @@ export * from './types/system';
 export * from './types/users';
 export * from './types/integrations';
 export * from './types/services';
+export * from './types/analyze';
 
 import { authEndpoints } from './endpoints/auth';
 import { usersEndpoints } from './endpoints/users';
@@ -26,6 +27,7 @@ import { ticketsEndpoints } from './endpoints/tickets';
 import { systemEndpoints } from './endpoints/system';
 import { integrationsEndpoints } from './endpoints/integrations';
 import { servicesEndpoints } from './endpoints/services';
+import { analyzeEndpoints } from './endpoints/analyze';
 
 export const api = {
   ...authEndpoints,
@@ -40,4 +42,5 @@ export const api = {
   ...systemEndpoints,
   ...integrationsEndpoints,
   ...servicesEndpoints,
+  ...analyzeEndpoints,
 };

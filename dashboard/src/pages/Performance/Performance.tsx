@@ -126,10 +126,12 @@ export default function Performance() {
           {selected && (
             <Card className="performance-chart-card">
               <div className="performance-section-head">
-                <div>
+                <div className="performance-section-head__title">
                   <span className="performance-eyebrow">Selected endpoint</span>
-                  <h2>{selected.endpoint}</h2>
-                  <p className="muted small">{selected.service} · {selected.environment} · {selected.version}</p>
+                  <h2 title={selected.endpoint}>{selected.endpoint}</h2>
+                  <p className="muted small" title={`${selected.service} · ${selected.environment} · ${selected.version}`}>
+                    {selected.service} · {selected.environment} · {selected.version}
+                  </p>
                 </div>
                 <div className="performance-chart-summary">
                   <span><strong>{fmtLatency(selected.p95_ms)}</strong><small>p95</small></span>

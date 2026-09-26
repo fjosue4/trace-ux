@@ -219,7 +219,9 @@ export default function Logs() {
           <Table
             className="logs-table"
             fixed
-            widths={['12%', '8%', '24%', '18%', '12%', '10%', '8%', '8%']}
+            // Level and Source hold fixed-size badges and links, so they get
+            // widths those fit in; the text columns share the rest and truncate.
+            widths={['12%', '84px', '24%', '18%', '12%', '10%', '8%', '96px']}
             headers={['Time', 'Level', 'Message', 'Extra', 'Service', 'Environment', 'Site', 'Source']}
           >
             {logs.map((log) => (

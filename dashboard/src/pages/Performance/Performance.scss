@@ -60,6 +60,20 @@
   align-items: flex-start;
   h2 { margin-top: 0.18rem; }
   p { margin: 0.28rem 0 0; }
+
+  // Endpoints and service names can be long unbroken paths; they truncate
+  // beside the percentile summary instead of pushing out of the card.
+  &__title {
+    flex: 1 1 auto;
+    // Stacked on narrow screens (column, align-items: flex-start), an item
+    // takes its content's width; stretching and capping it restores the
+    // ellipsis there.
+    align-self: stretch;
+    min-width: 0;
+    max-width: 100%;
+
+    h2, p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  }
 }
 
 .performance-chart-summary {

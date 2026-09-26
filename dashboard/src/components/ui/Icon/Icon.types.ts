@@ -23,6 +23,7 @@ export type IconName =
   | 'message'
   | 'send'
   | 'activity'
+  | 'chart'
   | 'megaphone'
   | 'gear'
   | 'filter'

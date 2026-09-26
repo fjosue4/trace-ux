@@ -114,6 +114,14 @@ export const GLYPHS: Record<IconName, ReactNode> = {
   message: <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />,
   send: <path d="m22 2-11 11M22 2 15 22l-4-9-9-4 20-7z" />,
   activity: <path d="M3 12h4l2.2-7 4.2 14 2.2-7H21" />,
+  // Filled line chart, drawn on a 1024 grid (see Icon.tsx).
+  chart: (
+    <path
+      d="M888 792H200V168c0-4.4-3.6-8-8-8h-56c-4.4 0-8 3.6-8 8v688c0 4.4 3.6 8 8 8h752c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8M305.8 637.7c3.1 3.1 8.1 3.1 11.3 0l138.3-137.6L583 628.5c3.1 3.1 8.2 3.1 11.3 0l275.4-275.3c3.1-3.1 3.1-8.2 0-11.3l-39.6-39.6a8.03 8.03 0 0 0-11.3 0l-230 229.9L461.4 404a8.03 8.03 0 0 0-11.3 0L266.3 586.7a8.03 8.03 0 0 0 0 11.3z"
+      fill="currentColor"
+      stroke="none"
+    />
+  ),
   megaphone: <><path d="M3 11v2a2 2 0 0 0 2 2h3l9 4V5L8 9H5a2 2 0 0 0-2 2z"/><path d="M8 15l1 5h3"/><path d="M20 9v6"/></>,
   gear: (
     <>
