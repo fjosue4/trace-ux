@@ -227,6 +227,19 @@ const ICONS = {
   external: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>',
 };
 
+// Filled 16x16 glyphs for the Good/Bad answers of a sentiment campaign.
+const SENTIMENT_ICONS: Record<string, string> = {
+  Good: '<path d="M4 14H2a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1h2zM7.206 2.323a1.392 1.392 0 0 1 2.531 1.098L9 6h4.114a2 2 0 0 1 1.872 2.702l-1.5 4A2 2 0 0 1 11.614 14H5V7.662a6 6 0 0 1 .855-3.087z"/>',
+  Bad: '<path d="M11 8.338a6 6 0 0 1-.854 3.088l-1.352 2.252a1.391 1.391 0 0 1-2.53-1.098L7 10H2.887a2 2 0 0 1-1.873-2.702l1.5-4A2 2 0 0 1 4.387 2H11zM14 2a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-2V2z"/>',
+};
+
+function filledIcon(paths: string): SVGSVGElement {
+  const node = svg(paths, '0 0 16 16');
+  node.setAttribute('fill', 'currentColor');
+  node.setAttribute('stroke', 'none');
+  return node;
+}
+
 /** Only ever attach http(s) links. The server already validates link_url, but
  *  the widget runs on someone else's page and re-checks before writing an href. */
 function safeHref(raw: string): string | null {
@@ -1674,9 +1687,14 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
         wrap.appendChild(row);
       } else if (q.type === 'choice') {
         const row = el('div', 'choices');
+        const sentiment = survey.answer_type === 'sentiment';
         (q.options || []).forEach((opt) => {
           const b = markWidgetAction(el('button', undefined, opt), `feedback:${q.id}:${opt}`);
           b.type = 'button';
+          if (sentiment && SENTIMENT_ICONS[opt]) {
+            b.classList.add('choice--icon');
+            b.prepend(filledIcon(SENTIMENT_ICONS[opt]));
+          }
           b.addEventListener('click', () => {
             answers.set(q.id, opt);
             wrap.classList.remove('invalid');
@@ -1751,7 +1769,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     form.appendChild(submit);
 
     if (survey.delivery_token) {
-      const skip = markWidgetAction(el('button', 'announcement-reset', 'Skip'), 'feedback:skip');
+      const skip = markWidgetAction(el('button', 'skip', 'Skip'), 'feedback:skip');
       skip.type = 'button';
       skip.addEventListener('click', () => {
         finishActiveDelivery('skipped');

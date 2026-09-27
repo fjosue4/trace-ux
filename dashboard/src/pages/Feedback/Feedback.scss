@@ -1,5 +1,83 @@
 @use 'abstracts' as *;
 
+.feedback-campaign-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+}
+
+.feedback-campaign-empty { margin-bottom: 1.1rem; }
+
+.feedback-campaign-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  min-width: 0;
+
+  &__top,
+  &__badges,
+  &__details,
+  &__stats,
+  &__foot {
+    display: flex;
+    align-items: center;
+  }
+
+  &__top { justify-content: space-between; gap: 0.75rem; }
+  &__badges { flex-wrap: wrap; justify-content: flex-end; gap: 0.35rem; }
+
+  &__site {
+    color: $muted;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  &__name { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
+  &__key { display: block; margin-top: 0.25rem; color: $muted; font-size: 0.72rem; overflow-wrap: anywhere; }
+  &__question { min-height: 2.6em; margin: 0; color: $ink-2; line-height: 1.45; }
+
+  &__details {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+
+    span {
+      padding: 0.25rem 0.5rem;
+      border: 1px solid $line;
+      border-radius: $radius-pill;
+      color: $muted;
+      font-size: 0.7rem;
+    }
+  }
+
+  &__stats {
+    align-items: stretch;
+    margin-top: auto;
+    padding: 0.75rem 0;
+    border-top: 1px solid $line;
+    border-bottom: 1px solid $line;
+
+    div {
+      display: flex;
+      flex: 1 1 25%;
+      flex-direction: column;
+      gap: 0.15rem;
+      min-width: 0;
+      padding: 0 0.55rem;
+      border-left: 1px solid $line;
+
+      &:first-child { padding-left: 0; border-left: 0; }
+    }
+
+    strong { font-size: 1.05rem; }
+    span { color: $muted; font-size: 0.64rem; }
+  }
+
+  &__foot { justify-content: flex-end; }
+}
+
 .feedback-summary {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -46,4 +124,12 @@
 @media (max-width: 640px) {
   .feedback-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; }
   .feedback-card__num { font-size: 1.45rem; }
+}
+
+// Long ids and emails stay on one line; the full value is in the title.
+.feedback-user {
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

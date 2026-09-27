@@ -419,6 +419,8 @@ export function widgetCSS(): string {
 .choices button:hover { background: var(--w-hover); }
 .choices button.on { background: var(--w-accent); border-color: var(--w-accent); color: #fff; font-weight: 620; }
 .choices button:focus-visible { outline: 2px solid var(--w-accent); outline-offset: 2px; }
+.choices button.choice--icon { display: inline-flex; align-items: center; gap: 7px; }
+.choices button.choice--icon svg { width: 15px; height: 15px; flex: none; }
 textarea {
   width: 100%; height: 76px; resize: none; padding: 10px 12px;
   border: 1px solid var(--w-line); border-radius: 9px;
@@ -437,6 +439,14 @@ textarea:focus { outline: 0; border-color: var(--w-accent); box-shadow: 0 0 0 3p
 .submit:hover { filter: brightness(1.08); }
 .submit:disabled { opacity: .45; cursor: default; }
 .submit:focus-visible { outline: 2px solid var(--w-accent); outline-offset: 2px; }
+.skip {
+  display: block; width: 100%; height: 34px; margin-top: 6px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--w-muted);
+  font-family: var(--w-font); font-size: 13px; font-weight: 560; cursor: pointer;
+  transition: background-color .14s ease, color .14s ease;
+}
+.skip:hover { background: var(--w-hover); color: var(--w-panel-text); }
+.skip:focus-visible { outline: 2px solid var(--w-accent); outline-offset: 2px; }
 
 /* ---- states ---- */
 .done { padding: 44px 24px; text-align: center; }

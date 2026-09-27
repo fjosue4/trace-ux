@@ -23,7 +23,14 @@ function blankCampaign(siteId: number): FeedbackCampaignInput {
   };
 }
 
-export default function FeedbackSettingsModal({ open, onClose, siteId }: FeedbackSettingsModalProps) {
+export default function FeedbackSettingsModal({
+  open,
+  onClose,
+  siteId,
+  startCreating = false,
+  initialCampaignId = null,
+  onChanged,
+}: FeedbackSettingsModalProps) {
   const [campaigns, setCampaigns] = useState<FeedbackCampaign[]>([]);
   const [editing, setEditing] = useState<FeedbackCampaign | null>(null);
   const [draft, setDraft] = useState<FeedbackCampaignInput | null>(null);
@@ -31,11 +38,17 @@ export default function FeedbackSettingsModal({ open, onClose, siteId }: Feedbac
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  function load() {
+  function load(selectCampaignId?: number | null) {
     setLoading(true);
     setError('');
     api.listFeedbackCampaigns(siteId)
-      .then(setCampaigns)
+      .then((rows) => {
+        setCampaigns(rows);
+        if (selectCampaignId) {
+          const campaign = rows.find((row) => row.id === selectCampaignId);
+          if (campaign) edit(campaign);
+        }
+      })
       .catch(() => setError('Could not load feedback campaigns.'))
       .finally(() => setLoading(false));
   }
@@ -43,9 +56,9 @@ export default function FeedbackSettingsModal({ open, onClose, siteId }: Feedbac
   useEffect(() => {
     if (!open) return;
     setEditing(null);
-    setDraft(null);
-    load();
-  }, [open, siteId]);
+    setDraft(startCreating ? blankCampaign(siteId) : null);
+    load(startCreating ? null : initialCampaignId);
+  }, [open, siteId, startCreating, initialCampaignId]);
 
   function edit(campaign: FeedbackCampaign) {
     setEditing(campaign);
@@ -80,6 +93,7 @@ export default function FeedbackSettingsModal({ open, onClose, siteId }: Feedbac
     try {
       if (editing) await api.updateFeedbackCampaign(editing.id, draft);
       else await api.createFeedbackCampaign(draft);
+      await onChanged?.();
       setEditing(null);
       setDraft(null);
       load();
