@@ -55,6 +55,7 @@ type WidgetAppearance struct {
 // than one available section is enabled.
 type WidgetConfig struct {
 	Enabled         bool     `json:"enabled"`
+	MasterEnabled   bool     `json:"master_enabled"`
 	UpdatesEnabled  bool     `json:"updates_enabled"`
 	FeedbackEnabled bool     `json:"feedback_enabled"`
 	TicketsEnabled  bool     `json:"tickets_enabled"`
@@ -219,6 +220,7 @@ func buildWidgetConfig(site store.Site, iconURL string) WidgetConfig {
 
 	return WidgetConfig{
 		Enabled:              s.WidgetOn() && hasSection,
+		MasterEnabled:        s.WidgetOn(),
 		UpdatesEnabled:       s.UpdatesEnabled,
 		FeedbackEnabled:      s.FeedbackEnabled,
 		TicketsEnabled:       s.TicketsEnabled,

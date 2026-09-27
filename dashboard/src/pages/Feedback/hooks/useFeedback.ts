@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react';
-import { api, Feedback as FeedbackItem, FeedbackSummary, Site } from '../../../api';
+import { useCallback, useEffect, useState } from 'react';
+import { api, Feedback as FeedbackItem, FeedbackCampaign, FeedbackSummary, Site } from '../../../api';
 
 type SiteSelection = number | 'all';
+export type FeedbackCampaignListItem = FeedbackCampaign & { site_name: string };
 
 export function useFeedback() {
   const [sites, setSites] = useState<Site[] | null>(null);
   const [summaries, setSummaries] = useState<FeedbackSummary[]>([]);
   const [items, setItems] = useState<FeedbackItem[] | null>(null);
+  const [campaigns, setCampaigns] = useState<FeedbackCampaignListItem[] | null>(null);
   const [error, setError] = useState('');
   const [siteSel, setSiteSel] = useState<SiteSelection>('all');
   const [surveySel, setSurveySel] = useState<string>('all');
@@ -43,6 +45,27 @@ export function useFeedback() {
     };
   }, [siteSel, surveySel]);
 
+  const refreshCampaigns = useCallback(async () => {
+    if (!sites) return;
+    const selectedSites = siteSel === 'all' ? sites : sites.filter((site) => site.id === siteSel);
+    try {
+      const rows = await Promise.all(
+        selectedSites.map(async (site) =>
+          (await api.listFeedbackCampaigns(site.id)).map((campaign) => ({ ...campaign, site_name: site.name })),
+        ),
+      );
+      setCampaigns(rows.flat());
+    } catch {
+      setError('Could not load feedback campaigns.');
+      setCampaigns([]);
+    }
+  }, [sites, siteSel]);
+
+  useEffect(() => {
+    setCampaigns(null);
+    void refreshCampaigns();
+  }, [refreshCampaigns]);
+
   async function confirmDelete() {
     if (!pendingDelete) return;
     setDeleting(true);
@@ -57,5 +80,20 @@ export function useFeedback() {
     }
   }
 
-  return { sites, summaries, items, error, siteSel, setSiteSel, surveySel, setSurveySel, pendingDelete, setPendingDelete, deleting, confirmDelete };
+  return {
+    sites,
+    campaigns,
+    refreshCampaigns,
+    summaries,
+    items,
+    error,
+    siteSel,
+    setSiteSel,
+    surveySel,
+    setSurveySel,
+    pendingDelete,
+    setPendingDelete,
+    deleting,
+    confirmDelete,
+  };
 }

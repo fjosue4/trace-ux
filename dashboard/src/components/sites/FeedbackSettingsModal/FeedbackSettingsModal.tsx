@@ -1,123 +1,217 @@
-import type { FeedbackTrigger } from '../../../api';
+import { useEffect, useState } from 'react';
+import { api, FeedbackCampaign, FeedbackCampaignInput } from '../../../api';
 import Button from '../../ui/Button';
 import Modal from '../../ui/Modal';
+import Notice from '../../ui/Notice';
+import Switch from '../../ui/Switch';
 import { Icon } from '../../ui/Icon';
 import { Field, Input, Select } from '../../ui/fields';
-import { QuestionEditor } from './subcomponents/QuestionEditor';
 import { FeedbackSettingsModalProps } from './FeedbackSettingsModal.types';
 import '../widgetSettingsModals.scss';
+
+function blankCampaign(siteId: number): FeedbackCampaignInput {
+  return {
+    site_id: siteId,
+    key: '',
+    name: '',
+    question: '',
+    answer_type: 'sentiment',
+    allow_comment: true,
+    recurrence: 'every_occurrence',
+    placement: 'explicit',
+    enabled: true,
+  };
+}
 
 export default function FeedbackSettingsModal({
   open,
   onClose,
-  draft,
-  trigger,
-  onPatchDraft,
-  onPatchTrigger,
-  onPatchQuestion,
+  siteId,
+  startCreating = false,
+  initialCampaignId = null,
+  onChanged,
 }: FeedbackSettingsModalProps) {
+  const [campaigns, setCampaigns] = useState<FeedbackCampaign[]>([]);
+  const [editing, setEditing] = useState<FeedbackCampaign | null>(null);
+  const [draft, setDraft] = useState<FeedbackCampaignInput | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  function load(selectCampaignId?: number | null) {
+    setLoading(true);
+    setError('');
+    api.listFeedbackCampaigns(siteId)
+      .then((rows) => {
+        setCampaigns(rows);
+        if (selectCampaignId) {
+          const campaign = rows.find((row) => row.id === selectCampaignId);
+          if (campaign) edit(campaign);
+        }
+      })
+      .catch(() => setError('Could not load feedback campaigns.'))
+      .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    setEditing(null);
+    setDraft(startCreating ? blankCampaign(siteId) : null);
+    load(startCreating ? null : initialCampaignId);
+  }, [open, siteId, startCreating, initialCampaignId]);
+
+  function edit(campaign: FeedbackCampaign) {
+    setEditing(campaign);
+    setDraft({
+      site_id: campaign.site_id,
+      key: campaign.key,
+      name: campaign.name,
+      question: campaign.question,
+      answer_type: campaign.answer_type,
+      allow_comment: campaign.allow_comment,
+      recurrence: campaign.recurrence,
+      placement: campaign.placement,
+      enabled: campaign.enabled,
+    });
+    setError('');
+  }
+
+  function create() {
+    setEditing(null);
+    setDraft(blankCampaign(siteId));
+    setError('');
+  }
+
+  function patch(values: Partial<FeedbackCampaignInput>) {
+    setDraft((current) => current ? { ...current, ...values } : current);
+  }
+
+  async function save() {
+    if (!draft) return;
+    setSaving(true);
+    setError('');
+    try {
+      if (editing) await api.updateFeedbackCampaign(editing.id, draft);
+      else await api.createFeedbackCampaign(draft);
+      await onChanged?.();
+      setEditing(null);
+      setDraft(null);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the campaign.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Feedback settings"
+      title="Feedback campaigns"
       className="widget-settings-modal"
-      footer={
-        <Button variant="secondary" onClick={onClose}>
-          Done
-        </Button>
-      }
+      footer={<Button variant="secondary" onClick={onClose}>Done</Button>}
     >
       <p className="widget-settings-modal__intro">
-        Configure the survey shown in the Feedback section. Changes stay in the draft until you save the widget configuration.
+        The default campaign is the Feedback section visitors can open themselves. Additional campaigns open from
+        <code> traceux.feedback.expand('campaign-key')</code> after a product interaction.
       </p>
-      <div className="widget-settings-form">
-        <div className="widget-settings-modal__title">Survey</div>
-        <div className="hub-config__grid">
-          <Field label="Survey id" hint="Groups responses together">
-            <Input value={draft.survey_id} onChange={(e) => onPatchDraft({ survey_id: e.target.value })} />
-          </Field>
-          <Field label="Survey title">
-            <Input value={draft.survey_title} onChange={(e) => onPatchDraft({ survey_title: e.target.value })} />
-          </Field>
-          <Field label="Question set">
-            <Select
-              value={draft.survey_type}
-              ariaLabel="Question set"
-              onChange={(value) => onPatchDraft({ survey_type: value })}
-              options={[
-                { value: 'stars', label: 'Stars (1–5) + comment' },
-                { value: 'nps', label: 'NPS (0–10) + comment' },
-                { value: 'custom', label: 'Custom questions' },
-              ]}
-            />
-          </Field>
-          <Field label="Show section">
-            <Select
-              value={trigger.mode}
-              ariaLabel="Show section"
-              onChange={(value) => onPatchTrigger({ mode: value as FeedbackTrigger['mode'] })}
-              options={[
-                { value: 'always', label: 'Always' },
-                { value: 'page', label: 'On specific pages' },
-                { value: 'action', label: 'After a tracked action' },
-              ]}
-            />
-          </Field>
-        </div>
+      {error && <Notice tone="error">{error}</Notice>}
 
-        {trigger.mode === 'page' && (
-          <Field
-            label="Page patterns"
-            hint="Comma separated, * wildcards — e.g. /checkout*, /pricing. The feedback section appears only on matching pages."
-          >
-            <Input
-              value={(trigger.pages ?? []).join(', ')}
-              onChange={(e) => onPatchTrigger({ pages: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
-            />
-          </Field>
-        )}
-        {trigger.mode === 'action' && (
-          <Field
-            label="Tracked actions"
-            hint="Comma separated trace-ux-track-id names — the widget opens on the feedback section when the visitor clicks one."
-          >
-            <Input
-              value={(trigger.actions ?? []).join(', ')}
-              onChange={(e) => onPatchTrigger({ actions: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
-            />
-          </Field>
-        )}
-
-        {draft.survey_type === 'custom' && (
-          <div className="hub-questions">
-            {(draft.questions ?? []).map((question, index) => (
-              <QuestionEditor
-                key={question.id || index}
-                question={question}
-                index={index}
-                onPatchQuestion={onPatchQuestion}
-                onRemove={(i) => onPatchDraft({ questions: (draft.questions ?? []).filter((_, questionIndex) => questionIndex !== i) })}
-              />
-            ))}
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() =>
-                onPatchDraft({
-                  questions: [
-                    ...(draft.questions ?? []),
-                    { id: `q${(draft.questions?.length ?? 0) + 1}`, label: '', type: 'rating', max: 5 },
-                  ],
-                })
-              }
-            >
-              <Icon name="plus" size={13} />
-              Add question
-            </Button>
+      {draft ? (
+        <div className="widget-settings-form campaign-editor">
+          <div className="campaign-editor__head">
+            <button type="button" className="icon-btn" aria-label="Back to campaigns" onClick={() => setDraft(null)}>
+              <Icon name="chevronUp" size={15} />
+            </button>
+            <strong>{editing ? `Edit ${editing.name}` : 'New campaign'}</strong>
           </div>
-        )}
-      </div>
+          <div className="hub-config__grid widget-settings-fields">
+            <Field label="Campaign name" hint="Only shown in the dashboard">
+              <Input value={draft.name} maxLength={120} onChange={(e) => patch({ name: e.target.value })} />
+            </Field>
+            <Field label="Campaign key" hint={editing ? 'Immutable after creation' : 'Used by the npm/global API'}>
+              <Input
+                value={draft.key}
+                disabled={!!editing}
+                maxLength={100}
+                placeholder="phone-call-quality"
+                onChange={(e) => patch({ key: e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '-') })}
+              />
+            </Field>
+          </div>
+          <Field label="Campaign question">
+            <Input value={draft.question} maxLength={300} onChange={(e) => patch({ question: e.target.value })} />
+          </Field>
+          <div className="hub-config__grid widget-settings-fields">
+            <Field label="Answer type">
+              <Select
+                ariaLabel="Answer type"
+                value={draft.answer_type}
+                onChange={(answer_type) => patch({ answer_type: answer_type as FeedbackCampaignInput['answer_type'] })}
+                options={[
+                  { value: 'sentiment', label: 'Good / Bad' },
+                  { value: 'stars', label: 'Stars (1–5)' },
+                  { value: 'scale_10', label: 'Scale (1–10)' },
+                ]}
+              />
+            </Field>
+            <Field label="Recurrence" hint="Rolling cooldown starts when shown">
+              <Select
+                ariaLabel="Recurrence"
+                value={draft.recurrence}
+                onChange={(recurrence) => patch({ recurrence: recurrence as FeedbackCampaignInput['recurrence'] })}
+                options={[
+                  { value: 'every_occurrence', label: 'Every occurrence' },
+                  { value: 'daily', label: 'After 24 hours' },
+                  { value: 'weekly', label: 'After 7 days' },
+                ]}
+              />
+            </Field>
+          </div>
+          <div className="campaign-editor__switches">
+            <Switch checked={draft.allow_comment} onChange={(allow_comment) => patch({ allow_comment })} label="Show additional response field" />
+            <Switch checked={draft.enabled} onChange={(enabled) => patch({ enabled })} label="Campaign enabled" />
+          </div>
+          {editing?.is_default && (
+            <Notice tone="info">This is the site's basic feedback campaign. It can be edited or disabled, but not deleted.</Notice>
+          )}
+          <div className="campaign-editor__actions">
+            <Button variant="secondary" onClick={() => setDraft(null)}>Cancel</Button>
+            <Button disabled={saving} onClick={() => void save()}>{saving ? 'Saving…' : 'Save campaign'}</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="campaign-list">
+          <div className="campaign-list__head">
+            <div>
+              <div className="widget-settings-modal__title">Campaigns</div>
+              <span className="muted small">{campaigns.length} configured</span>
+            </div>
+            <Button size="sm" onClick={create}><Icon name="plus" size={13} /> New campaign</Button>
+          </div>
+          {loading ? (
+            <p className="muted small">Loading campaigns…</p>
+          ) : campaigns.map((campaign) => (
+            <button type="button" className="campaign-row" key={campaign.id} onClick={() => edit(campaign)}>
+              <span className="campaign-row__main">
+                <span className="campaign-row__title">
+                  {campaign.name}
+                  {campaign.is_default && <span className="chip">Default</span>}
+                  <span className={`campaign-row__state${campaign.enabled ? ' is-on' : ''}`}>{campaign.enabled ? 'Enabled' : 'Disabled'}</span>
+                </span>
+                <span className="campaign-row__question">{campaign.question}</span>
+                <code>{campaign.key}</code>
+              </span>
+              <span className="campaign-row__stats">
+                <strong>{campaign.response_count ?? 0}</strong> responses
+                <small>{campaign.shown_count ?? 0} shown · {campaign.dismissed_count ?? 0} closed · {campaign.skipped_count ?? 0} skipped</small>
+              </span>
+              <Icon name="more" size={15} />
+            </button>
+          ))}
+        </div>
+      )}
     </Modal>
   );
 }

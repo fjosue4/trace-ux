@@ -71,14 +71,15 @@ type ingestLogs struct {
 }
 
 type ingestFeedback struct {
-	Type       string                 `json:"type"`
-	SessionID  string                 `json:"session_id"`
-	VisitorKey string                 `json:"visitor_key"`
-	UserID     string                 `json:"user_id"`
-	SurveyID   string                 `json:"survey_id"`
-	Rating     int                    `json:"rating"`
-	Comment    string                 `json:"comment"`
-	Answers    []store.FeedbackAnswer `json:"answers"`
+	Type          string                 `json:"type"`
+	SessionID     string                 `json:"session_id"`
+	VisitorKey    string                 `json:"visitor_key"`
+	UserID        string                 `json:"user_id"`
+	SurveyID      string                 `json:"survey_id"`
+	Rating        int                    `json:"rating"`
+	Comment       string                 `json:"comment"`
+	Answers       []store.FeedbackAnswer `json:"answers"`
+	DeliveryToken string                 `json:"delivery_token"`
 }
 
 type ingestEvents struct {
@@ -317,7 +318,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, http.StatusBadRequest, "rating must be 0-10")
 			return
 		}
-		if len(m.Comment) > 2000 || len(m.SurveyID) > 100 {
+		if len(m.Comment) > 2000 || len(m.SurveyID) > 100 || len(m.DeliveryToken) > 100 {
 			writeErr(w, http.StatusBadRequest, "feedback payload too long")
 			return
 		}
@@ -357,14 +358,15 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 			m.UserID = ""
 		}
 		_, err = s.store.SaveFeedback(store.NewFeedback{
-			SiteID:      site.ID,
-			SessionID:   env.SessionID,
-			VisitorKey:  m.VisitorKey,
-			UserID:      m.UserID,
-			SurveyID:    m.SurveyID,
-			Rating:      m.Rating,
-			Comment:     m.Comment,
-			AnswersJSON: answersJSON,
+			SiteID:        site.ID,
+			SessionID:     env.SessionID,
+			VisitorKey:    m.VisitorKey,
+			UserID:        m.UserID,
+			SurveyID:      m.SurveyID,
+			Rating:        m.Rating,
+			Comment:       m.Comment,
+			AnswersJSON:   answersJSON,
+			DeliveryToken: m.DeliveryToken,
 		})
 	default:
 		writeErr(w, http.StatusBadRequest, "unknown batch type")
@@ -374,6 +376,10 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, store.ErrSessionSiteMismatch) {
 			writeErr(w, http.StatusBadRequest, "invalid session")
+			return
+		}
+		if errors.Is(err, store.ErrDeliveryState) || errors.Is(err, store.ErrDeliveryNotFound) {
+			writeErr(w, http.StatusConflict, "feedback campaign delivery is no longer valid")
 			return
 		}
 		log.Printf("ingest %s: %v", env.Type, err)

@@ -74,9 +74,19 @@ traceux.log('warn', 'same as warn()', details);
 
 traceux.feedback({ rating: 5, comment: 'Fast checkout' });
 
+const feedbackResult = await traceux.feedback.expand('phone-call-quality', {
+  occurrenceId: call.id, // optional idempotency key for this occurrence
+});
+
 const link = await traceux.claimReplay();          // short-lived share link, no session id
 traceux.stop();                                    // flush, stop recording, remove listeners
 ```
+
+Feedback campaigns are configured per site in the dashboard. TraceUX checks
+their rolling cooldown before opening the widget. If the widget is already
+open, `expand()` returns `{ status: 'skipped', reason: 'widget_open' }` without
+consuming the cooldown. When the site-level widget master switch is disabled,
+it returns `{ status: 'unavailable', reason: 'widget_disabled' }`.
 
 When the widget receives a newly published announcement, or a published
 announcement is edited, `onAnnouncement` receives the complete announcement

@@ -50,10 +50,8 @@ export default function SiteDetail() {
     toggleRecording,
     saveSettings,
     patchDraft,
-    patchQuestion,
     patchAnnouncementAppearance,
     patchWidgetPosition,
-    patchTrigger,
   } = useSiteDetail(id);
 
   const crumbs = (current: string) => <Breadcrumbs items={[{ label: 'Sites', to: '/sites' }, { label: current }]} />;
@@ -77,7 +75,6 @@ export default function SiteDetail() {
 
   const { site } = detail;
   const recordingOn = site.recording_enabled ?? true;
-  const trigger = draft?.feedback_trigger ?? { mode: 'always' as const };
 
   return (
     <main className="page">
@@ -191,11 +188,7 @@ export default function SiteDetail() {
           <FeedbackSettingsModal
             open={widgetSettingsModal === 'feedback'}
             onClose={() => setWidgetSettingsModal(null)}
-            draft={draft}
-            trigger={trigger}
-            onPatchDraft={patchDraft}
-            onPatchTrigger={patchTrigger}
-            onPatchQuestion={patchQuestion}
+            siteId={id}
           />
         </>
       )}

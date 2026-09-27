@@ -30,6 +30,7 @@ export type WidgetAppearanceCfg = {
 
 export type WidgetCfg = {
   enabled: boolean;
+  master_enabled?: boolean;
   updates_enabled: boolean;
   feedback_enabled: boolean;
   tickets_enabled: boolean;
@@ -50,6 +51,7 @@ export type WidgetQuestion = {
   label: string;
   type: 'rating' | 'text' | 'choice';
   max?: number;
+  min?: number;
   options?: string[];
   optional?: boolean;
 };
@@ -59,6 +61,10 @@ export type WidgetSurvey = {
   type?: string;
   survey_id?: string;
   questions?: WidgetQuestion[];
+  campaign_key?: string;
+  delivery_token?: string;
+  allow_comment?: boolean;
+  answer_type?: 'sentiment' | 'stars' | 'scale_10';
 };
 
 export type Announcement = {
@@ -124,6 +130,7 @@ export type WidgetHost = {
   siteKey: string;
   config: WidgetCfg;
   survey: WidgetSurvey;
+  visitorKey?: string;
   /** Routes through the tracker so the response is linked to the recording. */
   submitFeedback: (input: {
     rating: number;
@@ -131,7 +138,11 @@ export type WidgetHost = {
     surveyId: string;
     answers: { id: string; label?: string; value: string }[];
     visitorKey: string;
+    deliveryToken?: string;
   }) => void;
+  /** Records shown/dismissed/skipped for an explicit campaign delivery. */
+  campaignLifecycle?: (token: string, action: 'dismissed' | 'skipped') => void;
+  onCampaignFinished?: () => void;
   newId: () => string;
   /** The current recording session, attached to newly opened tickets. */
   sessionId: () => string;
@@ -147,6 +158,8 @@ export type WidgetHandle = {
   open: (section?: 'updates' | 'tickets' | 'feedback') => void;
   close: () => void;
   destroy: () => void;
+  isOpen: () => boolean;
+  showCampaign: (survey: WidgetSurvey) => boolean;
 };
 
 type Section = 'updates' | 'tickets' | 'feedback';
@@ -213,6 +226,19 @@ const ICONS = {
   check: '<path d="m20 6-11 11-5-5"/>',
   external: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/>',
 };
+
+// Filled 16x16 glyphs for the Good/Bad answers of a sentiment campaign.
+const SENTIMENT_ICONS: Record<string, string> = {
+  Good: '<path d="M4 14H2a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1h2zM7.206 2.323a1.392 1.392 0 0 1 2.531 1.098L9 6h4.114a2 2 0 0 1 1.872 2.702l-1.5 4A2 2 0 0 1 11.614 14H5V7.662a6 6 0 0 1 .855-3.087z"/>',
+  Bad: '<path d="M11 8.338a6 6 0 0 1-.854 3.088l-1.352 2.252a1.391 1.391 0 0 1-2.53-1.098L7 10H2.887a2 2 0 0 1-1.873-2.702l1.5-4A2 2 0 0 1 4.387 2H11zM14 2a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1h-2V2z"/>',
+};
+
+function filledIcon(paths: string): SVGSVGElement {
+  const node = svg(paths, '0 0 16 16');
+  node.setAttribute('fill', 'currentColor');
+  node.setAttribute('stroke', 'none');
+  return node;
+}
 
 /** Only ever attach http(s) links. The server already validates link_url, but
  *  the widget runs on someone else's page and re-checks before writing an href. */
@@ -282,10 +308,10 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   if (!sections.length) return null;
 
   // Visitor key: stable per browser + site, used for likes/reads/comments.
-  let visitor = '';
+  let visitor = host.visitorKey || '';
   try {
     const storageKey = `trace_ux_visitor_${host.siteKey}`;
-    visitor = localStorage.getItem(storageKey) || host.newId();
+    visitor = visitor || localStorage.getItem(storageKey) || host.newId();
     if (visitor.length < 8 || visitor.length > 100) visitor = host.newId();
     localStorage.setItem(storageKey, visitor);
   } catch {
@@ -353,6 +379,8 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   let section: Section = sections[0].id;
   let panelOpen = false;
   let submitted = false;
+  let activeSurvey = host.survey;
+  let activeDeliveryDone = false;
   let destroyed = false;
 	let tickets: Ticket[] = [];
 	let ticketThread: TicketThread | null = null;
@@ -372,6 +400,13 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 	// closing on a click elsewhere on the page — so a draft that lives only in
 	// the DOM is lost on all of them. Keeping it here is what survives.
 	let ticketDraft = { subject: '', email: '', body: '' };
+
+  function finishActiveDelivery(action: 'dismissed' | 'skipped') {
+    const token = activeSurvey.delivery_token;
+    if (!token || activeDeliveryDone) return;
+    activeDeliveryDone = true;
+    host.campaignLifecycle?.(token, action);
+  }
 	const ticketReplyDrafts = new Map<number, string>();
 
 	// Mirrors a field into the draft and seeds it from whatever is already there.
@@ -1597,7 +1632,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       view.appendChild(buildThanks());
       return view;
     }
-    const survey = host.survey || {};
+    const survey = activeSurvey || {};
     const questions: WidgetQuestion[] =
       survey.type === 'custom' && survey.questions && survey.questions.length
         ? survey.questions
@@ -1628,7 +1663,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
         const max = q.max === 10 ? 10 : 5;
         const row = el('div', max === 10 ? 'nps' : 'stars');
         const values: number[] = [];
-        for (let v = max === 10 ? 0 : 1; v <= max; v++) values.push(v);
+        for (let v = q.min ?? (max === 10 ? 0 : 1); v <= max; v++) values.push(v);
         const buttons: HTMLButtonElement[] = [];
         values.forEach((v) => {
           const b = el('button');
@@ -1652,9 +1687,14 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
         wrap.appendChild(row);
       } else if (q.type === 'choice') {
         const row = el('div', 'choices');
+        const sentiment = survey.answer_type === 'sentiment';
         (q.options || []).forEach((opt) => {
           const b = markWidgetAction(el('button', undefined, opt), `feedback:${q.id}:${opt}`);
           b.type = 'button';
+          if (sentiment && SENTIMENT_ICONS[opt]) {
+            b.classList.add('choice--icon');
+            b.prepend(filledIcon(SENTIMENT_ICONS[opt]));
+          }
           b.addEventListener('click', () => {
             answers.set(q.id, opt);
             wrap.classList.remove('invalid');
@@ -1701,14 +1741,19 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
         .filter((q) => answers.has(q.id))
         .map((q) => ({ id: q.id, label: q.label, value: answers.get(q.id) as string }));
       const ratingQ = questions.find((q) => q.type === 'rating' && answers.has(q.id));
+      const sentimentQ = survey.answer_type === 'sentiment'
+        ? questions.find((q) => q.type === 'choice' && answers.has(q.id))
+        : undefined;
       const textQ = questions.find((q) => q.type === 'text' && answers.has(q.id));
       host.submitFeedback({
         visitorKey: visitor,
-        rating: ratingQ ? Number(answers.get(ratingQ.id)) : 0,
+        rating: ratingQ ? Number(answers.get(ratingQ.id)) : sentimentQ && answers.get(sentimentQ.id) === 'Good' ? 1 : 0,
         comment: textQ ? (answers.get(textQ.id) as string) : '',
         surveyId: survey.survey_id || 'default',
         answers: answerList,
+        deliveryToken: survey.delivery_token,
       });
+      if (survey.delivery_token) activeDeliveryDone = true;
       submitted = true;
       const thanks = buildThanks();
       view.replaceChildren(thanks);
@@ -1722,6 +1767,16 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       if (sections.length < 2) setTimeout(() => closePanel(), 2200);
     });
     form.appendChild(submit);
+
+    if (survey.delivery_token) {
+      const skip = markWidgetAction(el('button', 'skip', 'Skip'), 'feedback:skip');
+      skip.type = 'button';
+      skip.addEventListener('click', () => {
+        finishActiveDelivery('skipped');
+        closePanel(false);
+      });
+      form.appendChild(skip);
+    }
 
     view.appendChild(form);
     return view;
@@ -1776,13 +1831,21 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     animate(launcher, { transform: ['none', 'scale(.94)', 'none'] }, { duration: dur(0.22), ease: EASE_OUT });
   }
 
-  function closePanel() {
+  function closePanel(recordDismissal = true) {
     if (!panelOpen) return;
+    if (recordDismissal && !submitted) finishActiveDelivery('dismissed');
+    const resetCampaign = !!activeSurvey.delivery_token;
     panelOpen = false;
     launcher.setAttribute('aria-expanded', 'false');
     void animateOut(panel).finished.then(() => {
       if (!panelOpen) panel.hidden = true;
     });
+    if (resetCampaign) {
+      activeSurvey = host.survey;
+      submitted = false;
+      activeDeliveryDone = false;
+      setTimeout(() => host.onCampaignFinished?.(), 0);
+    }
   }
 
   launcher.addEventListener('click', (e) => {
@@ -2221,6 +2284,15 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   return {
     open: (target) => openPanel(target),
     close: () => closePanel(),
+    isOpen: () => panelOpen,
+    showCampaign: (survey) => {
+      if (panelOpen || !sections.some((item) => item.id === 'feedback')) return false;
+      activeSurvey = survey;
+      submitted = false;
+      activeDeliveryDone = false;
+      openPanel('feedback');
+      return true;
+    },
     destroy: () => {
       destroyed = true;
       clearTimeout(timer);

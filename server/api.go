@@ -396,6 +396,9 @@ func (s *Server) routes() http.Handler {
 	// Feedback & surveys from tracked sites.
 	mux.HandleFunc("GET /api/feedback", s.auth(s.handleListFeedback))
 	mux.HandleFunc("GET /api/feedback/summary", s.auth(s.handleFeedbackSummary))
+	mux.HandleFunc("GET /api/feedback/campaigns", s.auth(s.handleListFeedbackCampaigns))
+	mux.HandleFunc("POST /api/feedback/campaigns", s.auth(s.requireAdmin(s.handleCreateFeedbackCampaign)))
+	mux.HandleFunc("PATCH /api/feedback/campaigns/{id}", s.auth(s.requireAdmin(s.handleUpdateFeedbackCampaign)))
 	mux.HandleFunc("DELETE /api/feedback/{id}", s.auth(s.requireAdmin(s.handleDeleteFeedback)))
 	mux.HandleFunc("GET /api/announcements", s.auth(s.handleListAnnouncements))
 	mux.HandleFunc("POST /api/announcements", s.auth(s.requireAdmin(s.handleCreateAnnouncement)))
@@ -421,6 +424,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/config/{siteKey}", s.handleConfig)
 	mux.HandleFunc("GET /api/widget-icon/{siteKey}", s.handlePublicWidgetIcon)
 	mux.HandleFunc("POST /api/ingest/{siteKey}", s.handleIngest)
+	mux.HandleFunc("POST /api/feedback/{siteKey}/campaigns/{campaignKey}/eligibility", s.handleFeedbackCampaignEligibility)
+	mux.HandleFunc("POST /api/feedback/{siteKey}/deliveries/{token}/{action}", s.handleFeedbackCampaignDelivery)
 	mux.HandleFunc("POST /api/demo/claim/{siteKey}", s.handleDemoClaim)
 	mux.HandleFunc("GET /api/updates/{siteKey}", s.handlePublicAnnouncements)
 	mux.HandleFunc("POST /api/updates/{siteKey}/{id}/reaction", s.handleAnnouncementReaction)
@@ -454,7 +459,7 @@ func (s *Server) routes() http.Handler {
 // CORS to that origin. The dashboard API is same-origin and needs no grant.
 func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		isPublic := strings.HasPrefix(r.URL.Path, "/api/ingest/") || strings.HasPrefix(r.URL.Path, "/api/config/") || strings.HasPrefix(r.URL.Path, "/api/demo/claim/") || strings.HasPrefix(r.URL.Path, "/api/updates/") || strings.HasPrefix(r.URL.Path, "/api/support/") || strings.HasPrefix(r.URL.Path, "/api/widget/")
+		isPublic := strings.HasPrefix(r.URL.Path, "/api/ingest/") || strings.HasPrefix(r.URL.Path, "/api/config/") || strings.HasPrefix(r.URL.Path, "/api/demo/claim/") || strings.HasPrefix(r.URL.Path, "/api/updates/") || strings.HasPrefix(r.URL.Path, "/api/support/") || strings.HasPrefix(r.URL.Path, "/api/widget/") || isPublicFeedbackPath(r.URL.Path)
 		if !isPublic {
 			next.ServeHTTP(w, r)
 			return
@@ -491,6 +496,19 @@ func (s *Server) cors(next http.Handler) http.Handler {
 	})
 }
 
+// The authenticated dashboard routes also begin with /api/feedback, so the
+// public campaign shape must be recognised structurally rather than by a broad
+// prefix. Public paths are /api/feedback/{siteKey}/campaigns/... and
+// /api/feedback/{siteKey}/deliveries/....
+func isPublicFeedbackPath(path string) bool {
+	after, ok := strings.CutPrefix(path, "/api/feedback/")
+	if !ok {
+		return false
+	}
+	parts := strings.Split(after, "/")
+	return len(parts) >= 3 && parts[0] != "" && (parts[1] == "campaigns" || parts[1] == "deliveries")
+}
+
 // originAllowed reports whether origin matches the URL registered for the
 // site addressed by the path (/api/config/{siteKey}, /api/ingest/{siteKey}).
 func (s *Server) originAllowed(path, origin string) bool {
@@ -506,6 +524,8 @@ func (s *Server) originAllowed(path, origin string) bool {
 	} else if after, ok := strings.CutPrefix(path, "/api/support/"); ok {
 		key, _, _ = strings.Cut(after, "/")
 	} else if after, ok := strings.CutPrefix(path, "/api/widget/"); ok {
+		key, _, _ = strings.Cut(after, "/")
+	} else if after, ok := strings.CutPrefix(path, "/api/feedback/"); ok {
 		key, _, _ = strings.Cut(after, "/")
 	}
 	if key == "" {
@@ -987,6 +1007,15 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	widget := buildWidgetConfig(site, iconURL)
+	defaultCampaign, err := s.store.GetDefaultFeedbackCampaign(site.ID)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if defaultCampaign != nil {
+		widget.FeedbackEnabled = widget.FeedbackEnabled && defaultCampaign.Enabled
+		widget.Enabled = widget.MasterEnabled && (widget.UpdatesEnabled || widget.TicketsEnabled || widget.FeedbackEnabled)
+	}
 
 	// The dashboard owns these settings per site; the tracker consumes them.
 	// "widget" is the unified shape; "feedback" and "updates" are kept so a
@@ -1008,7 +1037,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 			"minimum_severity": site.Settings.Logs.MinimumSeverity,
 		},
 		"feedback": map[string]any{
-			"enabled":    site.Settings.FeedbackEnabled,
+			"enabled":    widget.FeedbackEnabled,
 			"position":   widget.Position,
 			"survey_id":  site.Settings.SurveyID,
 			"title":      site.Settings.SurveyTitle,
@@ -1016,6 +1045,7 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 			"questions":  site.Settings.Questions,
 			"appearance": feedbackAppearance,
 			"trigger":    site.Settings.FeedbackTrigger,
+			"campaign":   defaultCampaign,
 		},
 		"updates": map[string]any{
 			"enabled":    site.Settings.UpdatesEnabled,
