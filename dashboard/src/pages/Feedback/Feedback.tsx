@@ -19,6 +19,14 @@ import { useFeedback } from './hooks/useFeedback';
 import { Stars } from './subcomponents/Stars';
 import './Feedback.scss';
 
+function feedbackAnswer(feedback: FeedbackType) {
+  if (feedback.campaign_answer_type === 'sentiment') {
+    return <span className="chip">{feedback.answers?.find((answer) => answer.id === 'rating')?.value || '—'}</span>;
+  }
+  if (feedback.campaign_answer_type === 'scale_10') return <span className="chip">{feedback.rating}/10</span>;
+  return feedback.rating <= 5 ? <Stars rating={feedback.rating} /> : <span className="chip">{feedback.rating}/10</span>;
+}
+
 // In-app feedback & survey responses collected by the tracker widget and
 // window.TraceUX.feedback(). Rows link straight to the session replay.
 export default function Feedback() {
@@ -47,12 +55,12 @@ export default function Feedback() {
         />
         <Select
           className="site-picker"
-          ariaLabel="Survey"
+          ariaLabel="Campaign"
           value={surveySel}
           onChange={setSurveySel}
           options={[
-            { value: 'all', label: 'All surveys' },
-            ...summaries.map((s) => ({ value: s.survey_id, label: s.survey_id })),
+            { value: 'all', label: 'All campaigns' },
+            ...summaries.map((s) => ({ value: s.survey_id, label: s.campaign_name || s.survey_id })),
           ]}
         />
       </FilterPanel>
@@ -62,17 +70,19 @@ export default function Feedback() {
       {summaries.length > 0 && (
         <div className="feedback-summary">
           {summaries.map((s) => (
-            <Card key={s.survey_id} className="feedback-card">
-              <span className="feedback-card__label">{s.survey_id}</span>
+            <Card key={`${s.campaign_id || 0}-${s.survey_id}`} className="feedback-card">
+              <span className="feedback-card__label">{s.campaign_name || s.survey_id}</span>
               <div className="feedback-card__row">
                 <strong className="feedback-card__num">{s.count}</strong>
                 <span className="muted small">responses</span>
               </div>
               <span className="feedback-card__avg">
-                {s.average <= 5 ? (
-                  <Stars rating={Math.round(s.average)} />
-                ) : (
+                {s.campaign_answer_type === 'sentiment' ? (
+                  <span className="chip">{Math.round(s.average * 100)}% Good</span>
+                ) : s.campaign_answer_type === 'scale_10' || s.average > 5 ? (
                   <span className="chip">{s.average.toFixed(1)}/10</span>
+                ) : (
+                  <Stars rating={Math.round(s.average)} />
                 )}
               </span>
             </Card>
@@ -94,12 +104,14 @@ export default function Feedback() {
           // Session and the ticket button are fixed-size controls, so their
           // columns are sized to fit them rather than a share of the width.
           widths={['12%', '10%', '28%', '96px', '13%', '12%', '150px', ...(user.role === 'admin' ? ['52px'] : [])]}
-          headers={['Rating', 'Survey', 'Comment', 'Session', 'Device', 'Received', '', ...(user.role === 'admin' ? [''] : [])]}
+          headers={['Rating', 'Campaign', 'Comment', 'Session', 'Device', 'Received', '', ...(user.role === 'admin' ? [''] : [])]}
         >
           {items.map((f) => (
             <tr key={f.id}>
-              <td>{f.rating <= 5 ? <Stars rating={f.rating} /> : <span className="chip">{f.rating}/10</span>}</td>
-              <td className="mono small">{f.survey_id}</td>
+              <td>{feedbackAnswer(f)}</td>
+              <td className="small" title={f.campaign_key || f.survey_id}>
+                {f.campaign_name || f.campaign_key || f.survey_id}
+              </td>
               <td title={f.comment} className="feedback-comment">
                 {f.comment ? truncate(f.comment, 60) : '—'}
               </td>
@@ -159,10 +171,12 @@ export default function Feedback() {
           pendingDelete && (
             <>
               The{' '}
-              {pendingDelete.rating <= 5 ? (
-                <>{pendingDelete.rating}-star</>
-              ) : (
+              {pendingDelete.campaign_answer_type === 'sentiment' ? (
+                <>{pendingDelete.answers?.find((answer) => answer.id === 'rating')?.value || 'sentiment'}</>
+              ) : pendingDelete.campaign_answer_type === 'scale_10' || pendingDelete.rating > 5 ? (
                 <>{pendingDelete.rating}/10</>
+              ) : (
+                <>{pendingDelete.rating}-star</>
               )}{' '}
               response{pendingDelete.comment ? ' and its comment' : ''} will be removed permanently.
             </>

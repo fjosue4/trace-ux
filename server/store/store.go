@@ -661,6 +661,79 @@ var migrations = []string{
 	);
 	INSERT OR IGNORE INTO session_search_state (id) VALUES (1);
 	`,
+	// v29: site-scoped feedback campaigns and delivery lifecycle. Campaign
+	// definitions live in rows rather than the site config JSON so contextual
+	// SDK prompts can be addressed by a stable key and recurrence can be
+	// enforced atomically across tabs and devices.
+	`
+	CREATE TABLE IF NOT EXISTS feedback_campaigns (
+		id            INTEGER PRIMARY KEY,
+		site_id       INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+		campaign_key  TEXT    NOT NULL,
+		name          TEXT    NOT NULL,
+		question      TEXT    NOT NULL,
+		answer_type   TEXT    NOT NULL CHECK (answer_type IN ('sentiment','stars','scale_10')),
+		allow_comment INTEGER NOT NULL DEFAULT 1,
+		recurrence    TEXT    NOT NULL DEFAULT 'every_occurrence'
+			CHECK (recurrence IN ('every_occurrence','daily','weekly')),
+		placement     TEXT    NOT NULL DEFAULT 'explicit' CHECK (placement IN ('widget','explicit')),
+		enabled       INTEGER NOT NULL DEFAULT 1,
+		is_default    INTEGER NOT NULL DEFAULT 0,
+		created_at    INTEGER NOT NULL,
+		updated_at    INTEGER NOT NULL,
+		UNIQUE (site_id, campaign_key)
+	);
+	CREATE UNIQUE INDEX idx_feedback_campaign_default
+		ON feedback_campaigns(site_id) WHERE is_default = 1;
+	CREATE INDEX idx_feedback_campaign_site ON feedback_campaigns(site_id, created_at);
+
+	CREATE TABLE IF NOT EXISTS feedback_deliveries (
+		id            INTEGER PRIMARY KEY,
+		site_id       INTEGER NOT NULL REFERENCES sites(id) ON DELETE CASCADE,
+		campaign_id   INTEGER NOT NULL REFERENCES feedback_campaigns(id) ON DELETE CASCADE,
+		token_hash    TEXT    NOT NULL UNIQUE,
+		session_id    TEXT    NOT NULL DEFAULT '',
+		visitor_key   TEXT    NOT NULL DEFAULT '',
+		user_id       TEXT    NOT NULL DEFAULT '',
+		occurrence_id TEXT    NOT NULL DEFAULT '',
+		status        TEXT    NOT NULL DEFAULT 'reserved'
+			CHECK (status IN ('reserved','shown','answered','dismissed','skipped','expired')),
+		campaign_snapshot TEXT NOT NULL,
+		shown_at      INTEGER NOT NULL DEFAULT 0,
+		completed_at  INTEGER NOT NULL DEFAULT 0,
+		created_at    INTEGER NOT NULL
+	);
+	CREATE INDEX idx_feedback_delivery_user
+		ON feedback_deliveries(campaign_id, user_id, shown_at DESC);
+	CREATE INDEX idx_feedback_delivery_visitor
+		ON feedback_deliveries(campaign_id, visitor_key, shown_at DESC);
+	CREATE UNIQUE INDEX idx_feedback_delivery_occurrence_user
+		ON feedback_deliveries(campaign_id, user_id, occurrence_id)
+		WHERE user_id != '' AND occurrence_id != '';
+	CREATE UNIQUE INDEX idx_feedback_delivery_occurrence_visitor
+		ON feedback_deliveries(campaign_id, visitor_key, occurrence_id)
+		WHERE user_id = '' AND visitor_key != '' AND occurrence_id != '';
+
+	ALTER TABLE feedback ADD COLUMN campaign_id INTEGER REFERENCES feedback_campaigns(id) ON DELETE SET NULL;
+	ALTER TABLE feedback ADD COLUMN delivery_id INTEGER REFERENCES feedback_deliveries(id) ON DELETE SET NULL;
+	ALTER TABLE feedback ADD COLUMN campaign_snapshot TEXT NOT NULL DEFAULT '';
+	CREATE INDEX idx_feedback_campaign ON feedback(campaign_id, created_at DESC);
+
+	INSERT INTO feedback_campaigns (
+		site_id, campaign_key, name, question, answer_type, allow_comment,
+		recurrence, placement, enabled, is_default, created_at, updated_at
+	)
+	SELECT id, 'default', 'General feedback',
+		COALESCE(NULLIF(json_extract(NULLIF(config, ''), '$.survey_title'), ''), 'How was your experience?'),
+		CASE json_extract(NULLIF(config, ''), '$.survey_type')
+			WHEN 'nps' THEN 'scale_10'
+			ELSE 'stars'
+		END,
+		1, 'every_occurrence', 'widget',
+		COALESCE(json_extract(NULLIF(config, ''), '$.feedback_enabled'), 1),
+		1, created_at, created_at
+	FROM sites;
+	`,
 }
 
 const sessionSearchMigrationVersion = 28

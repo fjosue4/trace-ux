@@ -10,13 +10,14 @@
  */
 import { record } from '@rrweb/record';
 import type { eventWithTime } from '@rrweb/types';
-import type { Announcement, WidgetCfg, WidgetHandle } from './widget';
+import type { Announcement, WidgetCfg, WidgetHandle, WidgetSurvey } from './widget';
 
 type SurveyQuestionCfg = {
   id: string;
   label: string;
   type: 'rating' | 'text' | 'choice';
   max?: number; // rating scale: 5 (stars) or 10 (NPS)
+  min?: number;
   options?: string[]; // choice
   optional?: boolean;
 };
@@ -41,6 +42,7 @@ type FeedbackCfg = {
     spacing?: number;
   };
   trigger?: { mode?: string; pages?: string[]; actions?: string[] };
+  campaign?: TraceUXFeedbackCampaign;
 };
 
 export type LogSeverity = 'debug' | 'info' | 'warn' | 'error';
@@ -87,6 +89,34 @@ export interface TraceUXFeedbackInput {
   comment?: string;
   surveyId?: string;
   answers?: { id: string; label?: string; value: string }[];
+  /** Opaque campaign delivery token; normally supplied by the widget. */
+  deliveryToken?: string;
+}
+
+export type TraceUXFeedbackCampaign = {
+  id: number;
+  key: string;
+  name: string;
+  question: string;
+  answer_type: 'sentiment' | 'stars' | 'scale_10';
+  allow_comment: boolean;
+  recurrence: 'every_occurrence' | 'daily' | 'weekly';
+  placement: 'widget' | 'explicit';
+  enabled: boolean;
+  is_default: boolean;
+};
+
+export type TraceUXFeedbackExpandOptions = { userId?: string; occurrenceId?: string };
+
+export type TraceUXFeedbackExpandResult =
+  | { status: 'opened'; campaignId: string }
+  | { status: 'skipped'; reason: 'widget_open' }
+  | { status: 'ineligible'; reason: 'disabled' | 'recurrence' | 'not_found' }
+  | { status: 'unavailable'; reason: 'widget_disabled' | 'network' | 'stopped' };
+
+export interface TraceUXFeedbackApi {
+  (input: TraceUXFeedbackInput): void;
+  expand(campaignId: string, options?: TraceUXFeedbackExpandOptions): Promise<TraceUXFeedbackExpandResult>;
 }
 
 export interface TraceUXOptions extends TraceUXIdentity {
@@ -136,7 +166,7 @@ export interface TraceUXHandle {
   warn: (message: unknown, ...details: unknown[]) => void;
   error: (message: unknown, ...details: unknown[]) => void;
   /** Submit in-app feedback/survey response, linked to the current session. */
-  feedback: (input: TraceUXFeedbackInput) => void;
+  feedback: TraceUXFeedbackApi;
   /** Request a short-lived demo replay link without exposing the session ID. */
   claimReplay: () => Promise<{ url: string; expires_at: number }>;
   /** Stop recording, flush pending data, and remove tracker listeners. */
@@ -254,6 +284,10 @@ function unavailableReplay(): Promise<{ url: string; expires_at: number }> {
 }
 
 function createNoopHandle(): TraceUXHandle {
+  const feedback = Object.assign(
+    (_input: TraceUXFeedbackInput) => {},
+    { expand: async (): Promise<TraceUXFeedbackExpandResult> => ({ status: 'unavailable', reason: 'stopped' }) },
+  );
   return {
     identify: () => {},
     track: () => {},
@@ -264,7 +298,7 @@ function createNoopHandle(): TraceUXHandle {
     info: () => {},
     warn: () => {},
     error: () => {},
-    feedback: () => {},
+    feedback,
     claimReplay: unavailableReplay,
     stop: () => {},
   };
@@ -275,6 +309,11 @@ function createQueuedHandle(): QueuedHandle {
   let failed = false;
   const pending: Array<(next: TraceUXHandle) => void> = [];
   const claims: DeferredClaim[] = [];
+  const expands: Array<{
+    campaignId: string;
+    options?: TraceUXFeedbackExpandOptions;
+    resolve: (value: TraceUXFeedbackExpandResult) => void;
+  }> = [];
 
   function dispatch(action: (next: TraceUXHandle) => void) {
     if (runtime) {
@@ -283,6 +322,17 @@ function createQueuedHandle(): QueuedHandle {
       pending.push(action);
     }
   }
+
+  const feedback = Object.assign(
+    (input: TraceUXFeedbackInput) => dispatch((next) => next.feedback(input)),
+    {
+      expand(campaignId: string, options?: TraceUXFeedbackExpandOptions) {
+        if (runtime) return runtime.feedback.expand(campaignId, options);
+        if (failed) return Promise.resolve<TraceUXFeedbackExpandResult>({ status: 'unavailable', reason: 'stopped' });
+        return new Promise<TraceUXFeedbackExpandResult>((resolve) => expands.push({ campaignId, options, resolve }));
+      },
+    },
+  );
 
   const handle: QueuedHandle = {
     identify(fields) {
@@ -312,9 +362,7 @@ function createQueuedHandle(): QueuedHandle {
     error(message, ...details) {
       dispatch((next) => next.error(message, ...details));
     },
-    feedback(input) {
-      dispatch((next) => next.feedback(input));
-    },
+    feedback,
     claimReplay() {
       if (runtime) return runtime.claimReplay();
       if (failed) return unavailableReplay();
@@ -328,11 +376,13 @@ function createQueuedHandle(): QueuedHandle {
       failed = true;
       pending.length = 0;
       for (const claim of claims.splice(0)) claim.reject(new Error('TraceUX was stopped.'));
+      for (const item of expands.splice(0)) item.resolve({ status: 'unavailable', reason: 'stopped' });
     },
     activate(next) {
       if (failed) {
         next.stop();
         for (const claim of claims.splice(0)) claim.reject(new Error('TraceUX was stopped.'));
+        for (const item of expands.splice(0)) item.resolve({ status: 'unavailable', reason: 'stopped' });
         return;
       }
       runtime = next;
@@ -340,11 +390,15 @@ function createQueuedHandle(): QueuedHandle {
       for (const claim of claims.splice(0)) {
         next.claimReplay().then(claim.resolve, claim.reject);
       }
+      for (const item of expands.splice(0)) {
+        next.feedback.expand(item.campaignId, item.options).then(item.resolve);
+      }
     },
     fail() {
       failed = true;
       pending.length = 0;
       for (const claim of claims.splice(0)) claim.reject(new Error('TraceUX is not active.'));
+      for (const item of expands.splice(0)) item.resolve({ status: 'unavailable', reason: 'stopped' });
     },
     isFailed() {
       return failed;
@@ -437,6 +491,19 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
     logSeq = 0;
     pageIdx = -1;
     activeMs = 0;
+  }
+
+  // Stable, site-scoped anonymous identity shared by campaign recurrence and
+  // the widget. Identified users use user_id server-side, but this remains the
+  // fallback before login and when an integration is intentionally anonymous.
+  let widgetVisitorKey = newId();
+  try {
+    const visitorStorageKey = `trace_ux_visitor_${siteKey}`;
+    widgetVisitorKey = localStorage.getItem(visitorStorageKey) || widgetVisitorKey;
+    if (widgetVisitorKey.length < 8 || widgetVisitorKey.length > 100) widgetVisitorKey = newId();
+    localStorage.setItem(visitorStorageKey, widgetVisitorKey);
+  } catch {
+    /* storage is optional; recurrence remains best-effort for this page */
   }
 
   let stopped = false;
@@ -663,8 +730,19 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
     );
   }
 
+  const campaignShownAcks = new Map<string, Promise<void>>();
+
   function sendFeedback(input: TraceUXFeedbackInput, visitorKey = '') {
     if (disposed) return;
+    const deliveryToken = String(input.deliveryToken || '').slice(0, 100);
+    const shownAck = deliveryToken ? campaignShownAcks.get(deliveryToken) : undefined;
+    if (shownAck) {
+      void shownAck.then(() => {
+        campaignShownAcks.delete(deliveryToken);
+        sendFeedback(input, visitorKey);
+      });
+      return;
+    }
     const rating = Math.round(Number(input && input.rating)) || 0;
     if (rating < 0 || rating > 10) return;
     const answers = (input.answers || []).slice(0, 20).map((a) => ({
@@ -682,6 +760,7 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
         rating,
         comment: String(input.comment || '').slice(0, 2000),
         answers,
+        delivery_token: deliveryToken,
       },
       false,
     );
@@ -895,11 +974,70 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
   // action fires (which then opens the panel on that section).
   function feedbackAvailable(triggerAction?: string): boolean {
     if (!cfg.feedback?.enabled) return false;
+    // Campaign-based default feedback is deliberately always available when
+    // enabled. Recurrence belongs only to automatic/SDK campaign opens.
+    if (cfg.feedback.campaign) return true;
     const trigger = cfg.feedback.trigger;
     const mode = trigger?.mode || 'always';
     if (mode === 'action') return !!triggerAction && (trigger?.actions || []).includes(triggerAction);
     if (mode === 'page') return matchesPages(trigger?.pages || []);
     return true;
+  }
+
+  function campaignSurvey(campaign: TraceUXFeedbackCampaign, deliveryToken?: string): WidgetSurvey {
+    const questions: SurveyQuestionCfg[] = [];
+    if (campaign.answer_type === 'sentiment') {
+      questions.push({ id: 'rating', label: campaign.question, type: 'choice', options: ['Good', 'Bad'] });
+    } else {
+      questions.push({
+        id: 'rating',
+        label: campaign.question,
+        type: 'rating',
+        max: campaign.answer_type === 'scale_10' ? 10 : 5,
+        min: 1,
+      });
+    }
+    if (campaign.allow_comment) {
+      questions.push({ id: 'comment', label: 'Anything else?', type: 'text', optional: true });
+    }
+    return {
+      type: 'custom',
+      survey_id: campaign.key,
+      questions,
+      campaign_key: campaign.key,
+      delivery_token: deliveryToken,
+      allow_comment: campaign.allow_comment,
+      answer_type: campaign.answer_type,
+    };
+  }
+
+  function configuredSurvey(): WidgetSurvey {
+    const campaign = cfg.feedback?.campaign;
+    if (campaign) return campaignSurvey(campaign);
+    return {
+      title: cfg.feedback?.title,
+      type: cfg.feedback?.type,
+      survey_id: cfg.feedback?.survey_id,
+      questions: cfg.feedback?.questions,
+    };
+  }
+
+  function campaignLifecycle(token: string, action: 'dismissed' | 'skipped') {
+    const shownAck = campaignShownAcks.get(token) || Promise.resolve();
+    void shownAck
+      .then(() => fetch(
+        `${origin}/api/feedback/${encodeURIComponent(siteKey)}/deliveries/${encodeURIComponent(token)}/${action}`,
+        { method: 'POST' },
+      ))
+      .catch(() => {})
+      .finally(() => campaignShownAcks.delete(token));
+  }
+
+  function onCampaignFinished() {
+    if (feedbackAvailable()) return;
+    unifiedWidget?.destroy();
+    unifiedWidget = null;
+    mountWidgetIfConfigured();
   }
 
   let widgetLoading: Promise<void> | null = null;
@@ -942,13 +1080,11 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
             feedback_enabled: feedbackAvailable(action),
             tickets_enabled: ticketsNow,
           },
-          survey: {
-            title: cfg.feedback?.title,
-            type: cfg.feedback?.type,
-            survey_id: cfg.feedback?.survey_id,
-            questions: cfg.feedback?.questions,
-          },
+          survey: configuredSurvey(),
+          visitorKey: widgetVisitorKey,
           submitFeedback: (input) => sendFeedback(input, input.visitorKey),
+          campaignLifecycle,
+          onCampaignFinished,
           newId,
           sessionId: () => sessionId,
           identity: () => ({ userId: identity.user_id }),
@@ -972,6 +1108,96 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
       .finally(() => {
         widgetLoading = null;
       });
+  }
+
+  let campaignOpening = false;
+
+  async function expandFeedbackCampaign(
+    campaignId: string,
+    expandOptions?: TraceUXFeedbackExpandOptions,
+  ): Promise<TraceUXFeedbackExpandResult> {
+    if (disposed || stopped) return { status: 'unavailable', reason: 'stopped' };
+    const widgetCfg = cfg.widget;
+    const masterEnabled = widgetCfg?.master_enabled ?? widgetCfg?.enabled ?? false;
+    if (options.widget !== true || !widgetCfg || !masterEnabled) {
+      return { status: 'unavailable', reason: 'widget_disabled' };
+    }
+    if (campaignOpening || unifiedWidget?.isOpen()) {
+      return { status: 'skipped', reason: 'widget_open' };
+    }
+    const key = String(campaignId || '').trim().slice(0, 100);
+    if (!key) return { status: 'ineligible', reason: 'not_found' };
+
+    campaignOpening = true;
+    try {
+      const response = await fetch(
+        `${origin}/api/feedback/${encodeURIComponent(siteKey)}/campaigns/${encodeURIComponent(key)}/eligibility`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            visitor_key: widgetVisitorKey,
+            user_id: String(expandOptions?.userId || identity.user_id || '').slice(0, 256),
+            session_id: sessionId,
+            occurrence_id: String(expandOptions?.occurrenceId || '').slice(0, 100),
+          }),
+        },
+      );
+      if (!response.ok) return { status: 'unavailable', reason: 'network' };
+      const result = (await response.json()) as {
+        eligible?: boolean;
+        reason?: string;
+        delivery_token?: string;
+        campaign?: TraceUXFeedbackCampaign;
+      };
+      if (!result.eligible || !result.campaign || !result.delivery_token) {
+        if (result.reason === 'widget_disabled') return { status: 'unavailable', reason: 'widget_disabled' };
+        const reason = result.reason === 'disabled' || result.reason === 'recurrence' ? result.reason : 'not_found';
+        return { status: 'ineligible', reason };
+      }
+
+      const survey = campaignSurvey(result.campaign, result.delivery_token);
+      if (widgetLoading) await widgetLoading;
+      if (unifiedWidget?.isOpen()) return { status: 'skipped', reason: 'widget_open' };
+      let opened = unifiedWidget?.showCampaign(survey) ?? false;
+      if (!opened) {
+        unifiedWidget?.destroy();
+        unifiedWidget = null;
+        try {
+          const { mountUnifiedWidget } = await import('./widget.js');
+          unifiedWidget = mountUnifiedWidget({
+            origin,
+            siteKey,
+            config: { ...widgetCfg, enabled: true, feedback_enabled: true },
+            survey: configuredSurvey(),
+            visitorKey: widgetVisitorKey,
+            submitFeedback: (input) => sendFeedback(input, input.visitorKey),
+            campaignLifecycle,
+            onCampaignFinished,
+            newId,
+            sessionId: () => sessionId,
+            identity: () => ({ userId: identity.user_id }),
+            track: (name, trackId, details) =>
+              sendCustom(String(name || 'event').slice(0, 100), String(trackId || '').slice(0, 100), false, details),
+            onAnnouncement: options.onAnnouncement,
+          });
+          opened = unifiedWidget?.showCampaign(survey) ?? false;
+        } catch {
+          opened = false;
+        }
+      }
+      if (!opened) return { status: 'unavailable', reason: 'network' };
+      const shownAck = fetch(
+        `${origin}/api/feedback/${encodeURIComponent(siteKey)}/deliveries/${encodeURIComponent(result.delivery_token)}/shown`,
+        { method: 'POST' },
+      ).then(() => {}).catch(() => {});
+      campaignShownAcks.set(result.delivery_token, shownAck);
+      return { status: 'opened', campaignId: result.campaign.key };
+    } catch {
+      return { status: 'unavailable', reason: 'network' };
+    } finally {
+      campaignOpening = false;
+    }
   }
 
   function applyIdentity(fields: TraceUXIdentity, notify = true) {
@@ -1002,6 +1228,11 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
     return { ...link, url: new URL(link.url, origin).toString() };
   }
 
+  const runtimeFeedback = Object.assign(
+    (input: TraceUXFeedbackInput) => sendFeedback(input, widgetVisitorKey),
+    { expand: expandFeedbackCampaign },
+  );
+
   const runtime: TraceUXHandle = {
     identify: (fields) => applyIdentity(fields),
     track: (name, trackId, options) => {
@@ -1024,7 +1255,7 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
     info: (message, ...details) => captureLog('info', [message, ...details]),
     warn: (message, ...details) => captureLog('warn', [message, ...details]),
     error: (message, ...details) => captureLog('error', [message, ...details]),
-    feedback: (input) => sendFeedback(input),
+    feedback: runtimeFeedback,
     claimReplay,
     stop: shutdown,
   };

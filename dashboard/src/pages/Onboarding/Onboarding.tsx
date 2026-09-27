@@ -227,11 +227,7 @@ export default function Onboarding() {
                         <FeedbackSettingsModal
                           open={hub.widgetSettingsModal === 'feedback'}
                           onClose={() => hub.setWidgetSettingsModal(null)}
-                          draft={hub.draft}
-                          trigger={hub.draft.feedback_trigger ?? { mode: 'always' }}
-                          onPatchDraft={hub.patchDraft}
-                          onPatchTrigger={hub.patchTrigger}
-                          onPatchQuestion={hub.patchQuestion}
+                          siteId={siteId}
                         />
                       </div>
                     )}

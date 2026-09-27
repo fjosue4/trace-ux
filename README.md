@@ -550,13 +550,21 @@ linked to the session recording, so you can watch the moment behind the score.
 Feedback and announcements share one visitor-facing launcher, so listening and
 communicating feel like one product surface instead of two unrelated widgets.
 
-**Everything is configured per site from the dashboard** (open a site from the Sites list): toggle recordings on/off, enable the widget, pick its corner, set the survey id/title, and choose the question set — built-in stars (1–5), NPS (0–10), or **fully custom questions** (rating, choice, or text; required or optional). The tracker picks the configuration up automatically from the server; the snippet carries no settings.
+**Everything is configured per site from the dashboard** (open a site from the Sites list): toggle recordings on/off, enable the widget, pick its corner, and manage Feedback campaigns. Every site starts with an editable, disable-only default campaign for basic feedback. Additional campaigns support Good/Bad, 1–5 stars, or a 1–10 scale, optional written feedback, and per-occurrence, 24-hour, or 7-day recurrence. The tracker picks the configuration up automatically from the server; the snippet carries no settings.
 
 **Or collect programmatically:**
 
 ```js
 window.TraceUX.feedback({ rating: 5, comment: 'Loved it', surveyId: 'checkout' });
+
+const result = await window.TraceUX.feedback.expand('phone-call-quality', {
+  occurrenceId: call.id, // optional idempotency key
+});
 ```
+
+Normal eligibility decisions are returned as typed outcomes. If the widget is
+already open, the request is skipped without starting a cooldown. The site's
+widget master switch blocks both the launcher and explicit campaign calls.
 
 Responses land in the dashboard's **Feedback** page (per-survey summaries, comments, device info, one-click jump into the replay). Each site's hub page shows the latest 5 recordings, the latest 5 feedback responses, and the overall positive-feedback percentage. Admins can delete individual responses (e.g. spam).
 

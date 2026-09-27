@@ -34,14 +34,28 @@ func newKey(n int) string {
 func (s *Store) CreateSite(name, url string) (Site, error) {
 	now := time.Now().Unix()
 	key := newKey(16)
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return Site{}, err
+	}
+	defer tx.Rollback()
 	// Backend telemetry credentials are issued per service, so new sites start
 	// without a legacy site-level performance key.
-	res, err := s.DB.Exec(`INSERT INTO sites (name, url, site_key, created_at) VALUES (?, ?, ?, ?)`, name, url, key, now)
+	res, err := tx.Exec(`INSERT INTO sites (name, url, site_key, created_at) VALUES (?, ?, ?, ?)`, name, url, key, now)
 	if err != nil {
 		return Site{}, err
 	}
 	id, err := res.LastInsertId()
 	if err != nil {
+		return Site{}, err
+	}
+	if _, err := tx.Exec(`INSERT INTO feedback_campaigns
+		(site_id, campaign_key, name, question, answer_type, allow_comment, recurrence, placement, enabled, is_default, created_at, updated_at)
+		VALUES (?, 'default', 'General feedback', 'How was your experience?', 'stars', 1, 'every_occurrence', 'widget', 1, 1, ?, ?)`,
+		id, now, now); err != nil {
+		return Site{}, err
+	}
+	if err := tx.Commit(); err != nil {
 		return Site{}, err
 	}
 	return Site{ID: id, Name: name, URL: url, SiteKey: key, CreatedAt: now, RecordingEnabled: true, Settings: DefaultSiteSettings()}, nil
@@ -740,9 +754,13 @@ func (s *Store) GetSiteDetail(siteID int64) (*Site, []Session, []Feedback, *Site
 	}
 
 	var stats SiteStats
-	err = s.DB.QueryRow(`SELECT COUNT(*), COALESCE(AVG(rating), 0),
-			COALESCE(SUM(CASE WHEN (rating BETWEEN 4 AND 5) OR rating >= 8 THEN 1 ELSE 0 END), 0)
-		FROM feedback WHERE site_id = ?`, siteID).
+	err = s.DB.QueryRow(`SELECT COUNT(*), COALESCE(AVG(f.rating), 0),
+			COALESCE(SUM(CASE
+				WHEN c.answer_type = 'sentiment' AND f.rating = 1 THEN 1
+				WHEN c.answer_type = 'scale_10' AND f.rating >= 8 THEN 1
+				WHEN (c.answer_type = 'stars' OR c.answer_type IS NULL) AND ((f.rating BETWEEN 4 AND 5) OR f.rating >= 8) THEN 1
+				ELSE 0 END), 0)
+		FROM feedback f LEFT JOIN feedback_campaigns c ON c.id = f.campaign_id WHERE f.site_id = ?`, siteID).
 		Scan(&stats.FeedbackCount, &stats.AvgRating, &stats.PositivePct)
 	if err != nil {
 		return nil, nil, nil, nil, err
