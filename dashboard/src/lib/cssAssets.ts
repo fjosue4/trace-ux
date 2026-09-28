@@ -39,10 +39,10 @@ export function collectCSSRefs(events: unknown[]): string[] {
   return [...found];
 }
 
-export function fetchCSSAsset(hash: string): Promise<string> {
+export function fetchCSSAsset(hash: string, url = `/api/css-assets/${hash}`): Promise<string> {
   const hit = cache.get(hash);
   if (hit) return hit;
-  const p = fetch(`/api/css-assets/${hash}`, { credentials: 'same-origin' }).then((r) => {
+  const p = fetch(url, { credentials: 'same-origin' }).then((r) => {
     if (!r.ok) throw new Error(`stylesheet ${hash.slice(0, 8)}… failed: HTTP ${r.status}`);
     return r.text();
   });
@@ -54,9 +54,12 @@ export function fetchCSSAsset(hash: string): Promise<string> {
 }
 
 /** Resolve every reference these events need, in parallel, once each. */
-export async function loadCSSAssets(events: unknown[]): Promise<Map<string, string>> {
+export async function loadCSSAssets(
+  events: unknown[],
+  assetURL: (hash: string) => string = (hash) => `/api/css-assets/${hash}`,
+): Promise<Map<string, string>> {
   const hashes = collectCSSRefs(events);
-  const loaded = await Promise.all(hashes.map((h) => fetchCSSAsset(h)));
+  const loaded = await Promise.all(hashes.map((h) => fetchCSSAsset(h, assetURL(h))));
   return new Map(hashes.map((h, i) => [h, loaded[i]]));
 }
 

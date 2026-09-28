@@ -219,6 +219,25 @@ func (s *Store) GetCSSAssetGzip(hash string) ([]byte, int, error) {
 	return data, n, nil
 }
 
+// SessionHasCSSAsset verifies that a content-addressed stylesheet is part of a
+// particular recording. Public replay capabilities use this to remain scoped
+// to the session they were minted for instead of becoming access to the global
+// stylesheet store.
+func (s *Store) SessionHasCSSAsset(sessionID, hash string) (bool, error) {
+	var one int
+	err := s.DB.QueryRow(
+		`SELECT 1 FROM session_css WHERE session_id = ? AND hash = ?`,
+		sessionID, hash,
+	).Scan(&one)
+	if err == sql.ErrNoRows {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // ErrNoCSSAsset reports a stylesheet the store does not hold, so the handler
 // can answer 404 rather than 500.
 var ErrNoCSSAsset = errors.New("no such stylesheet")

@@ -31,7 +31,10 @@ export function useShareReplay() {
         let afterSeq = -1;
         for (;;) {
           const page = await api.getSharedEvents(token, afterSeq);
-          const assets = await loadCSSAssets(page.events);
+          const assets = await loadCSSAssets(
+            page.events,
+            (hash) => `/api/demo/replay/${encodeURIComponent(token)}/css-assets/${hash}`,
+          );
           rehydrateCSS(page.events, assets);
           all.push(...(page.events as eventWithTime[]));
           afterSeq = page.next_seq;

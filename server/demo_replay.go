@@ -139,6 +139,36 @@ func (s *Server) handleDemoReplayEvents(w http.ResponseWriter, r *http.Request) 
 	s.handleSessionEvents(w, r)
 }
 
+// handleDemoReplayCSSAsset serves a stylesheet only when it belongs to the
+// recording authorized by this demo token. The authenticated dashboard uses
+// the global content-addressed route; a public capability must not widen into
+// access to assets from other sessions.
+func (s *Server) handleDemoReplayCSSAsset(w http.ResponseWriter, r *http.Request) {
+	if !s.allowDemoReplay(w, r) {
+		return
+	}
+	sess, ok := s.demoSession(r.PathValue("token"))
+	if !ok {
+		writeErr(w, http.StatusNotFound, "replay unavailable")
+		return
+	}
+	hash := r.PathValue("hash")
+	if !validCSSAssetHash(hash) {
+		writeErr(w, http.StatusBadRequest, "invalid stylesheet hash")
+		return
+	}
+	linked, err := s.store.SessionHasCSSAsset(sess.ID, hash)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "could not load replay stylesheet")
+		return
+	}
+	if !linked {
+		writeErr(w, http.StatusNotFound, "stylesheet not found")
+		return
+	}
+	s.serveCSSAsset(w, r, hash)
+}
+
 // publicDemoSession contains only values needed by the public player and its
 // visit summary. Bearer links must not expose IP hashes, identity fields,
 // referrers, user agents, or arbitrary attribution data.

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 // A stylesheet big enough to clear the dedupe threshold (16 KB).
@@ -184,5 +185,78 @@ func TestCSSAssetETagAndErrors(t *testing.T) {
 		if r.StatusCode != tc.want {
 			t.Errorf("%s: got %d, want %d", tc.label, r.StatusCode, tc.want)
 		}
+	}
+}
+
+func TestDemoReplayCSSAssetIsTokenAndSessionScoped(t *testing.T) {
+	srv, ts := newTestServer(t)
+	srv.cfg.DemoReplayEnabled = true
+	srv.cfg.DemoReplayTTL = 15 * time.Minute
+
+	css := bigCSS("demo-session")
+	sid := "sess-demo-css"
+	seedCSSSession(t, srv, sid, css)
+	refBody, _ := getEvents(t, ts.URL, sid, "&css=ref")
+	i := strings.Index(refBody, "@traceux-css-ref:")
+	if i < 0 {
+		t.Fatal("no reference in response")
+	}
+	hash := refBody[i+len("@traceux-css-ref:") : i+len("@traceux-css-ref:")+64]
+
+	token := strings.Repeat("t", 43)
+	now := time.Now().Unix()
+	if err := srv.store.CreateDemoReplayToken(
+		demoTokenHash(srv.secret, token), 1, sid, now, now+900,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := http.Get(ts.URL + "/api/demo/replay/" + token + "/css-assets/" + hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("authorized demo stylesheet: got %d, want 200", resp.StatusCode)
+	}
+
+	badTokenResp, err := http.Get(ts.URL + "/api/demo/replay/" + strings.Repeat("x", 43) + "/css-assets/" + hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	badTokenResp.Body.Close()
+	if badTokenResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown token: got %d, want 404", badTokenResp.StatusCode)
+	}
+
+	otherCSS := bigCSS("other-session")
+	if _, err := srv.store.DB.Exec(
+		`INSERT INTO sessions (id,site_id,started_at,last_seen) VALUES (?,1,1,1)`, "sess-other-css",
+	); err != nil {
+		t.Fatal(err)
+	}
+	var raw []json.RawMessage
+	otherSnapshot, _ := json.Marshal([]any{map[string]any{
+		"type": 2, "timestamp": 1,
+		"data": map[string]any{"node": map[string]any{"_cssText": otherCSS}},
+	}})
+	if err := json.Unmarshal(otherSnapshot, &raw); err != nil {
+		t.Fatal(err)
+	}
+	deduped, err := srv.store.DedupeCSS("sess-other-css", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherRef := string(deduped[0])
+	j := strings.Index(otherRef, "@traceux-css-ref:")
+	otherHash := otherRef[j+len("@traceux-css-ref:") : j+len("@traceux-css-ref:")+64]
+
+	wrongSessionResp, err := http.Get(ts.URL + "/api/demo/replay/" + token + "/css-assets/" + otherHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrongSessionResp.Body.Close()
+	if wrongSessionResp.StatusCode != http.StatusNotFound {
+		t.Fatalf("stylesheet from another session: got %d, want 404", wrongSessionResp.StatusCode)
 	}
 }

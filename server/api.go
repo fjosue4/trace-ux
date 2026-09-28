@@ -439,6 +439,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/widget/{siteKey}/socket", s.handleWidgetSocket)
 	mux.HandleFunc("GET /api/demo/replay/{token}", s.handleDemoReplay)
 	mux.HandleFunc("GET /api/demo/replay/{token}/events", s.handleDemoReplayEvents)
+	mux.HandleFunc("GET /api/demo/replay/{token}/css-assets/{hash}", s.handleDemoReplayCSSAsset)
 
 	mux.HandleFunc("GET /t.js", s.handleTracker)
 

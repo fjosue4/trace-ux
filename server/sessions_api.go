@@ -324,20 +324,29 @@ func (s *Server) handleSessionIndex(w http.ResponseWriter, r *http.Request) {
 // site, instead of re-downloading it inside every checkout snapshot.
 func (s *Server) handleCSSAsset(w http.ResponseWriter, r *http.Request) {
 	hash := r.PathValue("hash")
+	if !validCSSAssetHash(hash) {
+		writeErr(w, http.StatusBadRequest, "invalid stylesheet hash")
+		return
+	}
+	s.serveCSSAsset(w, r, hash)
+}
+
+func validCSSAssetHash(hash string) bool {
 	// Fixed shape, hex only: this value reaches a query, and a strict check here
 	// is cheaper to reason about than trusting the driver.
 	if len(hash) != 64 {
-		writeErr(w, http.StatusBadRequest, "invalid stylesheet hash")
-		return
+		return false
 	}
 	for i := 0; i < len(hash); i++ {
 		c := hash[i]
 		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
-			writeErr(w, http.StatusBadRequest, "invalid stylesheet hash")
-			return
+			return false
 		}
 	}
+	return true
+}
 
+func (s *Server) serveCSSAsset(w http.ResponseWriter, r *http.Request, hash string) {
 	gz, rawLen, err := s.store.GetCSSAssetGzip(hash)
 	if err != nil {
 		if errors.Is(err, store.ErrNoCSSAsset) {
