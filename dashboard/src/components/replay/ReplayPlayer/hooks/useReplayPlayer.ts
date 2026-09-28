@@ -112,6 +112,13 @@ export function useReplayPlayer(
   repositioningRef.current = repositioning;
   // Playback paused only because the playhead caught up with the buffer.
   const resumeAfterBuffering = useRef(false);
+  // True from the moment a seek is handed to the loader until the player it
+  // builds has landed. In between, every position a player reports is stale:
+  // the old one reports where it was paused, the rebuilt one its window start.
+  // Showing those moved the scrubber back while the jump loaded, and passing
+  // them to the loader made it decide on the old position -- it rebuilt the
+  // window the operator had just left, re-requesting that keyframe.
+  const awaitingLanding = useRef(false);
   const [isPlaying, setIsPlaying] = useState(autoplay);
   const [skipInactive, setSkipInactive] = useState(!durationMs);
   const [isSkipping, setIsSkipping] = useState(false);
@@ -331,7 +338,7 @@ export function useReplayPlayer(
     // the index so the scrubber is full-length from the first frame.
     if (durationMs && durationMs > nextDuration) nextDuration = durationMs;
     setDuration(nextDuration);
-    setCurrentTime(playerWindowStart + resumeAt);
+    if (!awaitingLanding.current) setCurrentTime(playerWindowStart + resumeAt);
     setIsPlaying(autoplay && !resumeAt ? true : resumePlaying && resumeAt > 0);
 
     // The rrweb wrapper emits UI events for the current position and player
@@ -353,7 +360,7 @@ export function useReplayPlayer(
       nextPlayer.addEventListener?.('ui-update-current-time', (payload) => {
         if (player.current !== nextPlayer) return;
         const value = (payload as { payload?: unknown } | undefined)?.payload;
-        if (typeof value !== 'number') return;
+        if (typeof value !== 'number' || awaitingLanding.current) return;
         const now = performance.now();
         if (now - lastReportedAt < TIME_REPORT_INTERVAL_MS) return;
         lastReportedAt = now;
@@ -365,13 +372,6 @@ export function useReplayPlayer(
         if (value === 'playing' || value === 'paused') {
           setIsPlaying(value === 'playing');
           if (value === 'playing') setStarted(true);
-          // The throttled clock can trail the real position; settle it exactly
-          // wherever playback stopped, so a resume starts from the right frame.
-          if (value === 'paused') {
-            const rp = nextPlayer.getReplayer?.();
-            const t = rp && typeof rp.getCurrentTime === 'function' ? rp.getCurrentTime() : null;
-            if (typeof t === 'number') setCurrentTime(playerWindowStart + t);
-          }
         }
       });
       nextPlayer.getReplayer?.()?.on?.('state-change', (state) => {
@@ -399,6 +399,14 @@ export function useReplayPlayer(
     // would tear the player down mid-playback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded, events, stageSize, autoplay, firstTs, fallbackW, fallbackH, durationMs, rebuildToken, windowStartMs, disposePlayer]);
+
+  // A jump that ends without a landing (it failed, or found nothing to load)
+  // must not leave the clock frozen. Declared after the build effect so a
+  // rebuild in the same commit still sees the flag; the loader's landing, in
+  // the parent's effect, runs after both and sets the exact position.
+  useEffect(() => {
+    if (!repositioning) awaitingLanding.current = false;
+  }, [repositioning]);
 
   // The index can resolve after the player is built; widen the scrubber then
   // rather than leaving it showing only the boot window.
@@ -446,13 +454,17 @@ export function useReplayPlayer(
       // Ask the loader for an outside target before calling rrweb. Its goto()
       // treats positions past the current buffer as the end of the recording.
       if (loaderBusy || target < start || target > end) {
-        wrapper.pause?.();
+        // Order matters: pausing makes rrweb report its position, and the
+        // loader must already know about this seek when that report arrives.
+        awaitingLanding.current = true;
         wantsToPlay.current = false;
         setIsPlaying(false);
         setCurrentTimeState(target);
         onSeekOutsideBuffer?.(target);
+        wrapper.pause?.();
         return;
       }
+      awaitingLanding.current = false;
       const inWindow = Math.max(0, target - start);
       if (typeof wrapper.goto === 'function') wrapper.goto(inWindow, play);
       else if (play) wrapper.play?.(inWindow);

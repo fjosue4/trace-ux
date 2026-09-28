@@ -108,6 +108,10 @@ func TestSearchIndexBuildSyncAndToggle(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Session lists leave out recordings shorter than a second.
+	if _, err := s.DB.Exec(`UPDATE sessions SET duration_ms = 60000`); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.SetSearchIndexEnabled(true, "manual"); err != nil {
 		t.Fatal(err)
 	}

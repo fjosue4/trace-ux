@@ -414,7 +414,17 @@ export function useReplay() {
     // rrweb has no API for evicting old events. Rebuild from the newest indexed
     // FullSnapshot periodically so the React buffer and rrweb's private event
     // array both stay bounded. Rewinding outside this window uses the same path.
-    if (!pumping.current && offsetMs - windowStartRef.current >= MAX_WINDOW_SPAN_MS) {
+    // Only a position inside the current window is the playhead. Anything
+    // else is a report from a player that is being replaced, and rebuilding
+    // around it re-requested the part of the recording the operator had just
+    // jumped away from. A queued seek also wins over an automatic rebuild.
+    const inWindow = offsetMs >= windowStartRef.current && offsetMs <= bufferedMs();
+    if (
+      !pumping.current &&
+      inWindow &&
+      queuedSeek.current == null &&
+      offsetMs - windowStartRef.current >= MAX_WINDOW_SPAN_MS
+    ) {
       let targetSeq: number | null = null;
       for (const chunk of seekIndex.current) {
         if (!chunk.snapshot) continue;

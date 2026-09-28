@@ -304,6 +304,7 @@ func TestListSessionsAcrossSites(t *testing.T) {
 	srv.store.SaveHello(a.ID, "sa", "UA", "h", &store.IngestHello{URL: "https://a.test/"})
 	srv.store.SaveHello(b.ID, "sb", "UA", "h", &store.IngestHello{URL: "https://b.test/"})
 
+	makeSessionsListable(t, srv.store)
 	get := func(q string) []store.Session {
 		resp := doReq(t, http.MethodGet, ts.URL+"/api/sessions"+q, admin, "")
 		var out []store.Session
@@ -380,6 +381,7 @@ func TestVisitorIdentityAndCustomEvents(t *testing.T) {
 		t.Fatalf("custom event details = %#v, want pathname and attempt", details)
 	}
 
+	makeSessionsListable(t, srv.store)
 	// visitor filter matches any of the three ids
 	for _, q := range []string{"u-42", "acme", "remote-7"} {
 		resp := doReq(t, http.MethodGet, ts.URL+"/api/sessions?site_id="+fmt.Sprint(site.ID)+"&visitor="+q, admin, "")
@@ -695,6 +697,7 @@ func TestURLFilterMatchesVisitedPages(t *testing.T) {
 		resp.Body.Close()
 		return out
 	}
+	makeSessionsListable(t, srv.store)
 	if got := get("&url=pricing"); len(got) != 1 {
 		t.Fatalf("url=pricing should match the mid-visit page, got %d sessions", len(got))
 	}
@@ -865,6 +868,7 @@ func TestSessionStatsAndActiveFlag(t *testing.T) {
 		t.Fatalf("site-scoped stats = %v, want active 1 completed 1", scoped)
 	}
 
+	makeSessionsListable(t, srv.store)
 	// The list marks the fresh session in-progress and the aged one completed.
 	resp = doReq(t, http.MethodGet, ts.URL+"/api/sessions?site_id="+fmt.Sprint(site.ID), admin, "")
 	var sessions []store.Session

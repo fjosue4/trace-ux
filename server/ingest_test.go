@@ -71,6 +71,7 @@ func TestListSessionsFiltersCountry(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	makeSessionsListable(t, srv.store)
 	resp = doReq(t, http.MethodGet, ts.URL+"/api/sessions?site_id="+strconv.FormatInt(site.ID, 10)+"&country=us", admin, "")
 	var sessions []store.Session
 	if err := json.NewDecoder(resp.Body).Decode(&sessions); err != nil {

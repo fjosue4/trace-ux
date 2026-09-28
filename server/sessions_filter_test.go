@@ -50,6 +50,8 @@ func TestListSessionsFilterByActionAndURL(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	makeSessionsListable(t, srv.store)
+
 	// Action filter: only the session that recorded the event matches.
 	got, err := srv.store.ListSessions(store.SessionFilter{Action: "signup_click", Limit: 50})
 	if err != nil {

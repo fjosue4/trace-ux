@@ -82,6 +82,13 @@ const sessionActionCountExprQualified = `((SELECT COUNT(*) FROM pages apg WHERE 
 	+ (SELECT COUNT(*) FROM tickets ati WHERE ati.session_id = s.id)
 	+ (SELECT COUNT(*) FROM feedback afe WHERE afe.session_id = s.id))`
 
+// Recordings shorter than a second are left out of the session lists: they
+// open to "Replay unavailable" with nothing to watch. Measured with the same
+// duration the list displays. Actions are deliberately not considered: every
+// visit records its entry page, so without custom tracking a real session and
+// an empty one both show a single action.
+const sessionListableQualified = `(` + sessionDurationExprQualified + ` >= 1000)`
+
 // sessionColsQualified is shared by detail and list queries; the latter joins
 // sites, whose id and created_at columns would otherwise be ambiguous.
 const sessionColsQualified = `s.id, s.site_id, s.started_at, s.last_seen, ` + sessionDurationExprQualified + `, s.page_count, s.event_count,
@@ -188,6 +195,7 @@ func (s *Store) listSessionsStandard(ctx context.Context, f SessionFilter) ([]Se
 	} else {
 		query += ` WHERE 1=1`
 	}
+	query += ` AND ` + sessionListableQualified
 	if f.Browser != "" {
 		query += ` AND s.browser = ?`
 		args = append(args, f.Browser)

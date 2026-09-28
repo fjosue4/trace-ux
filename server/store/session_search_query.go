@@ -208,6 +208,7 @@ func (s *Store) filterIndexedSessionCandidates(
 }
 
 func appendIndexedSessionFilters(query string, args []any, f SessionFilter) (string, []any) {
+	query += ` AND ` + sessionListableQualified
 	if f.SiteID > 0 {
 		query += ` AND s.site_id = ?`
 		args = append(args, f.SiteID)
