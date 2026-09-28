@@ -407,6 +407,17 @@ function createQueuedHandle(): QueuedHandle {
   return handle;
 }
 
+// One lost or slow config request used to cost the whole visit its widget:
+// a single 1.5s attempt fell back to DEFAULTS, where the widget is off. A lossy
+// path between a CDN and the server (a 522, or a connection retried after a
+// dropped packet) is exactly that case, so retry with longer patience before
+// giving up. A 4xx is an answer, not a failure: an unknown site key still
+// resolves at once.
+//
+// Module scope on purpose: fetchConfig is called at the very top of start(),
+// before any const declared further down start() is initialised.
+const CONFIG_ATTEMPT_TIMEOUTS_MS = [3000, 5000, 8000];
+
 export function init(options: TraceUXOptions): TraceUXHandle {
   const noop = createNoopHandle();
   if (typeof window === 'undefined' || typeof document === 'undefined') return noop;
@@ -1491,23 +1502,30 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
   }
 
   async function fetchConfig(origin: string, key: string): Promise<TraceUXConfig> {
-    const ctrl = new AbortController();
-    const bail = setTimeout(() => ctrl.abort(), 1500);
-    try {
-      const res = await fetch(`${origin}/api/config/${encodeURIComponent(key)}`, {
-        signal: ctrl.signal,
-      });
-      const remote = await res.json();
-      return {
-        ...DEFAULTS,
-        ...remote,
-        logs: { ...DEFAULTS.logs, ...(remote.logs || {}) },
-      };
-    } catch {
-      return DEFAULTS;
-    } finally {
-      clearTimeout(bail);
+    for (let attempt = 0; attempt < CONFIG_ATTEMPT_TIMEOUTS_MS.length; attempt++) {
+      const ctrl = new AbortController();
+      const bail = setTimeout(() => ctrl.abort(), CONFIG_ATTEMPT_TIMEOUTS_MS[attempt]);
+      try {
+        const res = await fetch(`${origin}/api/config/${encodeURIComponent(key)}`, {
+          signal: ctrl.signal,
+        });
+        if (res.status >= 500) throw new Error(`config HTTP ${res.status}`);
+        const remote = await res.json();
+        return {
+          ...DEFAULTS,
+          ...remote,
+          logs: { ...DEFAULTS.logs, ...(remote.logs || {}) },
+        };
+      } catch {
+        // Fall through to the next attempt after a short pause.
+      } finally {
+        clearTimeout(bail);
+      }
+      if (attempt < CONFIG_ATTEMPT_TIMEOUTS_MS.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+      }
     }
+    return DEFAULTS;
   }
 
   handle.activate(runtime);

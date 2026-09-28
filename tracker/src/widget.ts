@@ -509,12 +509,26 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   if (hasCustomIcon) {
     launcher.classList.add('launcher--icon');
     const img = el('img');
-    img.src = host.origin + (ap.icon_url as string);
+    const iconURL = host.origin + (ap.icon_url as string);
+    img.src = iconURL;
     img.alt = '';
     // Otherwise dragging the launcher drags a ghost of the image instead.
     img.draggable = false;
-    // A custom icon that fails to load must not leave an empty circle.
-    img.addEventListener('error', useDefaultMark);
+    // A custom icon that fails to load must not leave an empty circle. A lost
+    // request is retried first: falling straight back swapped the site's own
+    // icon for the built-in mark on any visit that hit one dropped connection.
+    let iconRetries = 0;
+    img.addEventListener('error', () => {
+      if (iconRetries < 2) {
+        iconRetries++;
+        const retry = iconRetries;
+        setTimeout(() => {
+          img.src = `${iconURL}${iconURL.includes('?') ? '&' : '?'}retry=${retry}`;
+        }, 1500 * retry);
+        return;
+      }
+      useDefaultMark();
+    });
     launcherIcon.appendChild(img);
     launcher.append(launcherIcon, launcherBadge);
     // The label still names the control for assistive tech.
