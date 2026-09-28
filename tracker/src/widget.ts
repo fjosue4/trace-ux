@@ -929,14 +929,48 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
    *  translated full-width child extends its scroll box and the panel flashes
    *  a horizontal scrollbar mid-transition. Scaling about the centre cannot
    *  overflow on either axis. */
+  // Views differ in height (the Feedback form is ~100px taller than the
+  // updates list), and the panel is anchored by its bottom edge, so a swap
+  // used to snap the top edge up or down in one frame. Tween the panel from the
+  // height it had to the height the new view needs instead.
+  let panelHeightAnimation: ReturnType<typeof animate> | null = null;
+  // Opening already animates the whole panel in; a height tween on top of that
+  // would start from whatever the previous open left behind.
+  let panelOpening = false;
+
   function swapView(build: () => HTMLElement, dir: 1 | -1) {
     const next = build();
+    const tweenHeight = panelOpen && !panelOpening && !reducedMotion();
+    panelHeightAnimation?.stop();
+    panelHeightAnimation = null;
+    const fromHeight = tweenHeight ? panel.offsetHeight : 0;
+    panel.style.height = '';
     body.classList.toggle('body--ticket-thread', next.classList.contains('ticket-view--thread'));
     body.replaceChildren(next);
     body.scrollTop = 0;
     // Beside a moved mid-edge tab the panel is centred by its own height,
     // which the new view just changed.
     if (panelOpen && launcherAt) placeSurface(panel);
+    if (tweenHeight) {
+      const toHeight = panel.offsetHeight;
+      if (Math.abs(toHeight - fromHeight) > 2) {
+        panel.style.height = `${fromHeight}px`;
+        panelHeightAnimation = animate(
+          panel,
+          { height: [`${fromHeight}px`, `${toHeight}px`] },
+          { duration: dur(0.28), ease: EASE_OUT },
+        );
+        const tween = panelHeightAnimation;
+        // Back to its natural height once settled, so later content changes
+        // (a message arriving, a textarea growing) size it as before.
+        void tween.finished.then(() => {
+          if (panelHeightAnimation === tween) {
+            panel.style.height = '';
+            panelHeightAnimation = null;
+          }
+        });
+      }
+    }
     animate(
       next,
       { opacity: [0, 1], transform: [`scale(${dir === 1 ? 0.975 : 1.02})`, 'none'] },
@@ -981,12 +1015,18 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     tabMarkerAnimation = null;
     const width = active.offsetWidth;
     const offset = active.offsetLeft - tabs.offsetLeft;
-    tabMarker.style.width = `${width}px`;
     if (!animated || reducedMotion()) {
+      tabMarker.style.width = `${width}px`;
       tabMarker.style.transform = `translateX(${offset}px)`;
       return;
     }
-    tabMarkerAnimation = animate(tabMarker, { transform: `translateX(${offset}px)` }, { duration: 0.32, ease: EASE_OUT });
+    // Width and position move together; snapping the width while the
+    // position slid drew the new tab's underline under the old tab.
+    tabMarkerAnimation = animate(
+      tabMarker,
+      { transform: `translateX(${offset}px)`, width: `${width}px` },
+      { duration: 0.32, ease: EASE_OUT },
+    );
   }
 
   // ---- announcements: list ----
@@ -1824,7 +1864,9 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     panelOpen = true;
     panel.hidden = false;
     launcher.setAttribute('aria-expanded', 'true');
+    panelOpening = true;
     showSection(section);
+    panelOpening = false;
     placeSurface(panel);
     if (sections.length > 1) requestAnimationFrame(() => moveTabMarker(false));
     animateIn(panel);
@@ -1861,14 +1903,12 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   });
   closeBtn.addEventListener('click', () => closePanel());
 
-  const onDocClick = (e: MouseEvent) => {
-    if (!panelOpen) return;
-    if (!(e.composedPath() as Node[]).includes(container)) closePanel();
-  };
+  // Clicking elsewhere on the page deliberately does not close the panel: a
+  // visitor mid-way through a feedback form or a support message lost it to a
+  // stray click. The close button, the launcher and Escape still close it.
   const onKeydown = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && panelOpen) closePanel();
   };
-  document.addEventListener('click', onDocClick);
   document.addEventListener('keydown', onKeydown);
 
   // ---- toast for freshly published updates or support replies ----
@@ -2305,7 +2345,6 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       widgetSocketRetryTimer = undefined;
       widgetSocket?.close();
       widgetSocket = null;
-      document.removeEventListener('click', onDocClick);
       document.removeEventListener('keydown', onKeydown);
       document.removeEventListener('visibilitychange', onVisibility);
       removeEventListener('resize', onResize);
