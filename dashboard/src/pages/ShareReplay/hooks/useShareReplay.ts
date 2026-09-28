@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import type { eventWithTime } from '@rrweb/types';
 import { api, CustomEvent, SharedLog, SharedSession } from '../../../api';
 import { ReplayPlayerHandle } from '../../../components/replay/ReplayPlayer';
+import { loadCSSAssets, rehydrateCSS } from '../../../lib/cssAssets';
 
 export function useShareReplay() {
   const { token = '' } = useParams();
@@ -30,6 +31,8 @@ export function useShareReplay() {
         let afterSeq = -1;
         for (;;) {
           const page = await api.getSharedEvents(token, afterSeq);
+          const assets = await loadCSSAssets(page.events);
+          rehydrateCSS(page.events, assets);
           all.push(...(page.events as eventWithTime[]));
           afterSeq = page.next_seq;
           setProgress(`Loaded ${all.length} events…`);

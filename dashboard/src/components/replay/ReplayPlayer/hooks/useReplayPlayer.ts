@@ -56,6 +56,17 @@ export function getInactivePeriods(events: eventWithTime[]): InactivePeriod[] {
   return periods;
 }
 
+// How often playback may push its position into React state.
+//
+// rrweb reports the playhead on every animation frame. Each report re-renders
+// the whole replay page, and at ~60 per second those urgent renders kept
+// interrupting React Router's navigation, which it renders as a low-priority
+// transition: clicking away from a playing recording left the page on screen
+// for about 8 seconds, until React forced the starved navigation through. The
+// scrubber, clock and active sidebar row read fine at 5 updates per second.
+// Seeks, pauses and the end of the buffer still report the exact position.
+const TIME_REPORT_INTERVAL_MS = 200;
+
 export function useReplayPlayer(
   {
     events,
@@ -67,6 +78,8 @@ export function useReplayPlayer(
     onTimeChange,
     onSeekOutsideBuffer,
     durationMs,
+    buffering = false,
+    repositioning = false,
     rebuildToken = 0,
     windowStartMs = 0,
   }: ReplayPlayerProps,
@@ -80,13 +93,25 @@ export function useReplayPlayer(
   const builtToken = useRef(0); // rebuildToken the current player was built for
   const waitingAtBufferEnd = useRef<number | null>(null);
   const wantsToPlay = useRef(autoplay);
-  const latestEvents = useRef(events);
-  latestEvents.current = events;
   // All times in this hook's state are RECORDING time. rrweb speaks window
   // time, so conversion happens at exactly two boundaries: the position it
   // reports, and the position we ask it to seek to.
-  const windowStart = useRef(0);
-  windowStart.current = windowStartMs;
+  //
+  // Both use the window the CURRENT player was built from, not the prop. After
+  // a jump the parent hands over the new window's start in the same render as
+  // the new events, but the old player keeps running until the rebuild effect
+  // replaces it. Converting its clock with the new offset reported positions
+  // from a different part of the recording, which is what sent the scrubber
+  // jumping backwards through unrelated times and could trigger another jump.
+  const builtWindowStart = useRef(0);
+  // Recording time of the last event the current player holds, kept in step
+  // with appended pages. Same reason: the events prop can already describe
+  // the next window while this player still holds the previous one.
+  const builtEnd = useRef(0);
+  const repositioningRef = useRef(repositioning);
+  repositioningRef.current = repositioning;
+  // Playback paused only because the playhead caught up with the buffer.
+  const resumeAfterBuffering = useRef(false);
   const [isPlaying, setIsPlaying] = useState(autoplay);
   const [skipInactive, setSkipInactive] = useState(!durationMs);
   const [isSkipping, setIsSkipping] = useState(false);
@@ -100,6 +125,25 @@ export function useReplayPlayer(
   const builtStage = useRef({ width: 0, height: 0 });
   const speedRef = useRef(1);
   const skipInactiveRef = useRef(!durationMs);
+
+  const disposePlayer = useCallback((instance: PlayerLike | null) => {
+    if (!instance) return;
+    try {
+      instance.pause?.();
+    } catch {
+      // Continue teardown even if the player is already detached.
+    }
+    try {
+      instance.getReplayer?.()?.destroy?.();
+    } catch {
+      // rrweb may already have removed its wrapper.
+    }
+    try {
+      instance.$destroy?.();
+    } catch {
+      // The Svelte component may already be destroyed.
+    }
+  }, []);
 
   const inactivePeriods = useMemo(() => getInactivePeriods(events ?? []), [events]);
 
@@ -158,12 +202,44 @@ export function useReplayPlayer(
 
   useEffect(
     () => () => {
-      player.current?.pause?.();
+      disposePlayer(player.current);
       player.current = null;
       builtStage.current = { width: 0, height: 0 };
     },
-    [],
+    [disposePlayer],
   );
+
+  // A seek outside the loaded window is not playable until its snapshot and
+  // following mutations have arrived. Pause without clearing wantsToPlay: an
+  // automatic rolling-window refresh resumes explicitly once the rebuild is
+  // ready, while a user seek stays paused.
+  //
+  // A stall is different: the playhead simply caught up with the buffer while
+  // the operator was watching. Once the next page is in, carry on playing
+  // instead of leaving a paused player that looks stuck. A jump never resumes
+  // from here; the loader's landing seek decides whether it plays.
+  useEffect(() => {
+    if (buffering) {
+      if (!repositioningRef.current && wantsToPlay.current && player.current) resumeAfterBuffering.current = true;
+      player.current?.pause?.();
+      setIsPlaying(false);
+      return;
+    }
+    if (!resumeAfterBuffering.current) return;
+    resumeAfterBuffering.current = false;
+    // A rebuild committed in this same render owns the position.
+    if (repositioningRef.current || rebuildToken !== builtToken.current) return;
+    const wrapper = player.current;
+    if (!wrapper || !wantsToPlay.current) return;
+    const rp = wrapper.getReplayer?.();
+    const t = rp && typeof rp.getCurrentTime === 'function' ? rp.getCurrentTime() : 0;
+    const at = typeof t === 'number' ? t : 0;
+    if (typeof wrapper.goto === 'function') wrapper.goto(at, true);
+    else wrapper.play?.(at);
+    setIsPlaying(true);
+    // rebuildToken is read to detect a same-render rebuild, not to re-run this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buffering]);
 
   // Mount the player once sized; rebuild only when the host changes meaningfully
   // (window resizes), resuming at the current playback position.
@@ -192,17 +268,21 @@ export function useReplayPlayer(
       return;
     }
     builtToken.current = rebuildToken;
-    if (repositioned) waitingAtBufferEnd.current = null;
+    if (repositioned) {
+      waitingAtBufferEnd.current = null;
+      resumeAfterBuffering.current = false;
+    }
 
     // A reposition starts at the new window's own beginning; resuming the old
     // clock would land somewhere the freshly loaded events do not cover.
     let resumeAt = 0;
     const resumePlaying = repositioned ? false : isPlaying;
-    if (player.current && !repositioned) {
-      const rp = player.current.getReplayer?.();
+    const previousPlayer = player.current;
+    if (previousPlayer && !repositioned) {
+      const rp = previousPlayer.getReplayer?.();
       const t = rp && typeof rp.getCurrentTime === 'function' ? rp.getCurrentTime() : 0;
       if (typeof t === 'number' && t > 500) resumeAt = t;
-      player.current.pause?.();
+      previousPlayer.pause?.();
     }
 
     const ratio = ratioFor(events, { w: fallbackW, h: fallbackH });
@@ -211,6 +291,8 @@ export function useReplayPlayer(
       : stageSize.width;
     const height = Math.round(width * ratio);
     builtStage.current = { width: stageSize.width, height: stageSize.height };
+    disposePlayer(previousPlayer);
+    player.current = null;
     playerHost.current.innerHTML = '';
     let nextPlayer: PlayerLike;
     try {
@@ -234,6 +316,10 @@ export function useReplayPlayer(
       return;
     }
     player.current = nextPlayer;
+    // This player's own window, fixed for its lifetime (see builtWindowStart).
+    const playerWindowStart = windowStartMs;
+    builtWindowStart.current = playerWindowStart;
+    builtEnd.current = events[events.length - 1].timestamp - firstTs;
     const eventDuration = Math.max(0, events[events.length - 1].timestamp - firstTs);
     let nextDuration = eventDuration;
     try {
@@ -245,7 +331,7 @@ export function useReplayPlayer(
     // the index so the scrubber is full-length from the first frame.
     if (durationMs && durationMs > nextDuration) nextDuration = durationMs;
     setDuration(nextDuration);
-    setCurrentTime(windowStart.current + resumeAt);
+    setCurrentTime(playerWindowStart + resumeAt);
     setIsPlaying(autoplay && !resumeAt ? true : resumePlaying && resumeAt > 0);
 
     // The rrweb wrapper emits UI events for the current position and player
@@ -263,10 +349,15 @@ export function useReplayPlayer(
       } catch {
         // The event-derived duration is already in state.
       }
+      let lastReportedAt = 0;
       nextPlayer.addEventListener?.('ui-update-current-time', (payload) => {
         if (player.current !== nextPlayer) return;
         const value = (payload as { payload?: unknown } | undefined)?.payload;
-        if (typeof value === 'number') setCurrentTime(windowStart.current + value);
+        if (typeof value !== 'number') return;
+        const now = performance.now();
+        if (now - lastReportedAt < TIME_REPORT_INTERVAL_MS) return;
+        lastReportedAt = now;
+        setCurrentTime(playerWindowStart + value);
       });
       nextPlayer.addEventListener?.('ui-update-player-state', (payload) => {
         if (player.current !== nextPlayer) return;
@@ -274,6 +365,13 @@ export function useReplayPlayer(
         if (value === 'playing' || value === 'paused') {
           setIsPlaying(value === 'playing');
           if (value === 'playing') setStarted(true);
+          // The throttled clock can trail the real position; settle it exactly
+          // wherever playback stopped, so a resume starts from the right frame.
+          if (value === 'paused') {
+            const rp = nextPlayer.getReplayer?.();
+            const t = rp && typeof rp.getCurrentTime === 'function' ? rp.getCurrentTime() : null;
+            if (typeof t === 'number') setCurrentTime(playerWindowStart + t);
+          }
         }
       });
       nextPlayer.getReplayer?.()?.on?.('state-change', (state) => {
@@ -283,8 +381,7 @@ export function useReplayPlayer(
       });
       nextPlayer.getReplayer?.()?.on?.('finish', () => {
         if (player.current !== nextPlayer) return;
-        const held = latestEvents.current;
-        const end = held?.length ? held[held.length - 1].timestamp - firstTs : 0;
+        const end = builtEnd.current;
         if (durationMs && end < durationMs && wantsToPlay.current) {
           waitingAtBufferEnd.current = end;
           setCurrentTime(end);
@@ -301,7 +398,7 @@ export function useReplayPlayer(
     // isPlaying/setCurrentTime are read for resume only; rebuilding on either
     // would tear the player down mid-playback.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loaded, events, stageSize, autoplay, firstTs, fallbackW, fallbackH, durationMs, rebuildToken]);
+  }, [loaded, events, stageSize, autoplay, firstTs, fallbackW, fallbackH, durationMs, rebuildToken, windowStartMs, disposePlayer]);
 
   // The index can resolve after the player is built; widen the scrubber then
   // rather than leaving it showing only the boot window.
@@ -319,22 +416,36 @@ export function useReplayPlayer(
     const timer = window.setTimeout(() => {
       if (waitingAtBufferEnd.current !== stoppedAt || !wantsToPlay.current) return;
       waitingAtBufferEnd.current = null;
-      player.current?.goto?.(Math.max(0, stoppedAt - windowStart.current), true);
+      player.current?.goto?.(Math.max(0, stoppedAt - builtWindowStart.current), true);
       setIsPlaying(true);
     }, 0);
     return () => window.clearTimeout(timer);
   }, [events, firstTs]);
 
   const seekToOffset = useCallback(
-    (offsetMs: number, play = isPlaying) => {
-      const target = Math.max(0, offsetMs);
+    (offsetMs: number, play = isPlaying, fromLoader = false) => {
       const wrapper = player.current;
       if (!wrapper) return;
       waitingAtBufferEnd.current = null;
-      const end = events?.length ? events[events.length - 1].timestamp - firstTs : 0;
+      resumeAfterBuffering.current = false;
+      const start = builtWindowStart.current;
+      const end = builtEnd.current;
+      // The loader's own landing seek is final. Its window can open a moment
+      // after the chunk the index pointed at (a keyframe chunk carries events
+      // from before its snapshot), so the target may sit just before this
+      // window. Bouncing it back to the loader as "outside" asked for the same
+      // keyframe again, which landed on the same target again: an endless
+      // loop with no network activity, stuck on Buffering. Clamp instead.
+      const target = fromLoader
+        ? Math.min(Math.max(offsetMs, start), Math.max(start, end))
+        : Math.max(0, offsetMs);
+      // While the stream is being repositioned, the player on screen belongs
+      // to the old window and is about to be replaced. Moving it would be
+      // undone by the reposition landing, so queue the seek behind it instead.
+      const loaderBusy = !fromLoader && repositioningRef.current;
       // Ask the loader for an outside target before calling rrweb. Its goto()
       // treats positions past the current buffer as the end of the recording.
-      if (target < windowStart.current || target > end) {
+      if (loaderBusy || target < start || target > end) {
         wrapper.pause?.();
         wantsToPlay.current = false;
         setIsPlaying(false);
@@ -342,7 +453,7 @@ export function useReplayPlayer(
         onSeekOutsideBuffer?.(target);
         return;
       }
-      const inWindow = Math.max(0, target - windowStart.current);
+      const inWindow = Math.max(0, target - start);
       if (typeof wrapper.goto === 'function') wrapper.goto(inWindow, play);
       else if (play) wrapper.play?.(inWindow);
       else wrapper.getReplayer?.()?.pause?.(inWindow);
@@ -351,14 +462,18 @@ export function useReplayPlayer(
       setCurrentTime(target);
       setStarted(true);
     },
-    [events, firstTs, isPlaying, onSeekOutsideBuffer, setCurrentTime],
+    [isPlaying, onSeekOutsideBuffer, setCurrentTime],
   );
 
-  const appendEvents = useCallback((more: eventWithTime[]) => {
-    const p = player.current;
-    if (!p?.addEvent) return;
-    for (const e of more) p.addEvent(e);
-  }, []);
+  const appendEvents = useCallback(
+    (more: eventWithTime[]) => {
+      const p = player.current;
+      if (!p?.addEvent || more.length === 0) return;
+      for (const e of more) p.addEvent(e);
+      builtEnd.current = Math.max(builtEnd.current, more[more.length - 1].timestamp - firstTs);
+    },
+    [firstTs],
+  );
 
   const currentOffset = useCallback(() => {
     const rp = player.current?.getReplayer?.();
@@ -373,25 +488,29 @@ export function useReplayPlayer(
   );
 
   function playFromStart() {
+    if (buffering) return;
     wantsToPlay.current = true;
     if (player.current?.goto) player.current.goto(0, true);
     else player.current?.play?.();
-    setCurrentTime(windowStart.current);
+    setCurrentTime(builtWindowStart.current);
     setStarted(true);
     setIsPlaying(true);
   }
 
   function togglePlayback() {
+    if (buffering) return;
     if (isPlaying) {
       wantsToPlay.current = false;
       waitingAtBufferEnd.current = null;
       player.current?.pause?.();
       setIsPlaying(false);
+      // State is throttled during playback; record where it actually stopped.
+      setCurrentTime(builtWindowStart.current + currentOffset());
       return;
     }
     wantsToPlay.current = true;
-    const target = duration > 0 && currentTime >= duration ? windowStart.current : currentTime;
-    if (player.current?.goto) player.current.goto(Math.max(0, target - windowStart.current), true);
+    const target = duration > 0 && currentTime >= duration ? builtWindowStart.current : currentTime;
+    if (player.current?.goto) player.current.goto(Math.max(0, target - builtWindowStart.current), true);
     else player.current?.play?.();
     setCurrentTime(target);
     setStarted(true);

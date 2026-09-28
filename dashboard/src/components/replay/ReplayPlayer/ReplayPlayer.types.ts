@@ -9,6 +9,7 @@ export type PlayerLike = {
     play?: (timeOffset?: number) => void;
     pause?: (timeOffset?: number) => void;
     on?: (event: string, handler: (payload: unknown) => void) => void;
+    destroy?: () => void;
   };
   goto?: (timeOffset: number, play?: boolean) => void;
   play?: (timeOffset?: number) => void;
@@ -21,10 +22,17 @@ export type PlayerLike = {
   // makes windowed playback possible: the alternative is rebuilding the player
   // with a longer array, which re-parses everything loaded so far.
   addEvent?: (event: eventWithTime) => void;
+  /** rrweb-player is a Svelte component and must be destroyed, not just detached. */
+  $destroy?: () => void;
 };
 
 export type ReplayPlayerHandle = {
-  seekToOffset: (offsetMs: number, play?: boolean) => void;
+  /**
+   * `fromLoader` marks the loader's own landing after a reposition. That seek
+   * is clamped into the window and applied even while the loader is busy;
+   * every other seek is routed back to the loader when it falls outside.
+   */
+  seekToOffset: (offsetMs: number, play?: boolean, fromLoader?: boolean) => void;
   /** Extend a running replay with newly fetched events, without rebuilding. */
   appendEvents: (events: eventWithTime[]) => void;
   /** Playback position in ms, for deciding when to fetch the next window. */
@@ -50,6 +58,11 @@ export type ReplayPlayerProps = {
   durationMs?: number;
   /** Fetching the next window while the playhead has caught up to the buffer. */
   buffering?: boolean;
+  /**
+   * The stream is being moved to another part of the recording. The player on
+   * screen is about to be replaced, so seeks are queued behind the move.
+   */
+  repositioning?: boolean;
   /**
    * Changes when the event stream has been repositioned to a different part of
    * the recording (a seek past the buffer). The player must then rebuild from

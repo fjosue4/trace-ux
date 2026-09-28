@@ -47,15 +47,19 @@ export function useReplay() {
   // the CPU spike came from. Now it boots on the first few seconds and fetches
   // the rest as the playhead approaches, the way a video player buffers.
   //
-  // Events already fetched are kept, so rewinding and re-watching costs nothing
-  // and nothing is requested twice.
+  // The active window is kept until it reaches a bounded span. At that point
+  // playback rebases at a recent FullSnapshot, allowing rrweb's internal event
+  // array and our React state to release older history. Rewinding outside the
+  // active window reloads from the nearest snapshot.
 
   /** Keep this much playable time ahead of the playhead. */
   const BUFFER_AHEAD_MS = 15_000;
   /** Start fetching once the playhead is this close to the end of the buffer. */
   const PREFETCH_WITHIN_MS = 5_000;
+  /** Rebase at a FullSnapshot before watched history can grow without bound. */
+  const MAX_WINDOW_SPAN_MS = 5 * 60_000;
 
-  const allEvents = useRef<eventWithTime[]>([]); // everything fetched, in order
+  const allEvents = useRef<eventWithTime[]>([]); // current playback window, in order
   const nextSeq = useRef(-1); // resume point for the next page
   const exhausted = useRef(false); // server has no more chunks
   const haveSnapshot = useRef(false); // a FullSnapshot has been loaded
@@ -67,12 +71,12 @@ export function useReplay() {
   const pumping = useRef(false); // one catch-up loop at a time
   const seekIndex = useRef<{ seq: number; first_ts: number; snapshot: boolean }[]>([]);
   // Where the user actually asked to go, held until the rebuilt player exists.
-  const pendingSeek = useRef<number | null>(null);
+  const pendingSeek = useRef<{ offsetMs: number; play: boolean } | null>(null);
   // A seek that arrived while the loader was busy. Dropping it is what made
   // clicking an action in the sidebar do nothing until the third or fourth try:
   // a prefetch is in flight for much of playback, and the seek landed in that
   // window. Queued instead, and drained when the loader frees up.
-  const queuedSeek = useRef<number | null>(null);
+  const queuedSeek = useRef<{ offsetMs: number; play: boolean } | null>(null);
   // True while the stream is being repositioned. Pages fetched during a
   // reposition belong to the player that is about to be built, NOT to the one
   // still on screen showing a different part of the recording -- feeding them
@@ -82,6 +86,11 @@ export function useReplay() {
   // to the same keyframe reloads nothing and, crucially, cannot loop.
   const windowSeq = useRef<number | null>(null);
   const [buffering, setBuffering] = useState(false);
+  // A jump to another part of the recording is running. Kept apart from
+  // `buffering` (a quiet prefetch that caught up with the playhead): during a
+  // jump the player on screen is about to be replaced, so it must not take
+  // seeks or resume on its own.
+  const [seeking, setSeeking] = useState(false);
   const [durationMs, setDurationMs] = useState(0);
   // Bumped when the stream is repositioned, to force the player to rebuild from
   // the new window rather than keep its old DOM.
@@ -92,6 +101,7 @@ export function useReplay() {
   // relative while the scrubber speaks in recording time. This is the offset
   // between the two.
   const [windowStartMs, setWindowStartMs] = useState(0);
+  const windowStartRef = useRef(0);
 
   /** Playable milliseconds currently held, measured from the first event. */
   const bufferedMs = () => {
@@ -101,7 +111,7 @@ export function useReplay() {
   };
 
   const fetchNextPage = useRef(async (): Promise<boolean> => false);
-  const jumpTo = useRef(async (_offsetMs: number): Promise<void> => {});
+  const jumpTo = useRef(async (_offsetMs: number, _play = false): Promise<void> => {});
 
   useEffect(() => {
     if (!sessionId) return;
@@ -119,6 +129,20 @@ export function useReplay() {
     pendingSeek.current = null;
     queuedSeek.current = null;
     seekIndex.current = [];
+    firstTs.current = 0;
+    windowStartRef.current = 0;
+    setMeta(null);
+    setWindowStartMs(0);
+    setEvents(null);
+    setLoaded(false);
+    setError('');
+    setProgress('Loading events…');
+    setBuffering(false);
+    setSeeking(false);
+    setCurrentTime(0);
+    setDurationMs(0);
+    setRebuildToken(0);
+    setSeekReadyToken(0);
 
     const loadPage = async (): Promise<boolean> => {
       if (exhausted.current || cancelled) return false;
@@ -167,7 +191,14 @@ export function useReplay() {
     // rebuilds its whole DOM from a FullSnapshot, so everything between the
     // buffer and the nearest preceding snapshot is work whose result is thrown
     // away. Jump to that snapshot instead -- the index exists for this.
-    jumpTo.current = async (offsetMs: number) => {
+    // Where a finished jump should put the playhead: the requested point, kept
+    // inside what is actually loaded. The window can open a moment after the
+    // requested point (the keyframe chunk starts before its snapshot), and a
+    // landing outside the window would be sent straight back as another jump.
+    const landing = (offsetMs: number) =>
+      Math.min(Math.max(offsetMs, windowStartRef.current), Math.max(windowStartRef.current, bufferedMs()));
+
+    jumpTo.current = async (offsetMs: number, play = false) => {
       const idx = seekIndex.current;
       if (idx.length === 0) return;
       const t0 = firstTs.current;
@@ -187,7 +218,7 @@ export function useReplay() {
           if (!more || cancelled) break;
         }
         if (cancelled) return;
-        pendingSeek.current = Math.min(offsetMs, bufferedMs());
+        pendingSeek.current = { offsetMs: landing(offsetMs), play };
         setSeekReadyToken((n) => n + 1);
         return;
       }
@@ -234,12 +265,13 @@ export function useReplay() {
       if (allEvents.current.length === 0) return;
 
       windowSeq.current = target.seq;
-      setWindowStartMs(allEvents.current[0].timestamp - firstTs.current);
+      windowStartRef.current = allEvents.current[0].timestamp - firstTs.current;
+      setWindowStartMs(windowStartRef.current);
       setEvents([...allEvents.current]);
       // The window opens at the keyframe, which can be well before the point
       // that was asked for -- 41s earlier on this recording. Remember the real
       // target and land on it once the rebuilt player is mounted.
-      pendingSeek.current = offsetMs;
+      pendingSeek.current = { offsetMs: landing(offsetMs), play };
       setRebuildToken((n) => n + 1);
     };
 
@@ -277,6 +309,16 @@ export function useReplay() {
         // case of a cached new frontend talking to an older server.
         const windowed = idx !== null && idx.chunks.length > 0;
 
+        // Incremental events cannot be replayed without a FullSnapshot. Do not
+        // defeat windowing by downloading an entire corrupt recording while
+        // searching for a starting point that the index proves does not exist.
+        if (windowed && !idx!.chunks.some((chunk) => chunk.snapshot)) {
+          setEvents([]);
+          setLoaded(true);
+          setProgress('This recording has no complete snapshot and cannot be replayed.');
+          return;
+        }
+
         // Boot window: enough to start playing, not the whole recording.
         // Bounded, so a recording that never yields a snapshot cannot spin.
         for (let guard = 0; guard < 500; guard++) {
@@ -294,6 +336,10 @@ export function useReplay() {
         }
 
         setEvents([...allEvents.current]);
+        const firstWindowSnapshot = seekIndex.current.find(
+          (chunk) => chunk.snapshot && chunk.seq <= nextSeq.current,
+        );
+        windowSeq.current = firstWindowSnapshot?.seq ?? null;
         setLoaded(true);
         if (allEvents.current.length === 0) setProgress('This session has no recorded events yet.');
       } catch (e) {
@@ -312,31 +358,36 @@ export function useReplay() {
   // one that arrives mid-pump is held and run next rather than discarded. Only
   // the most recent is kept: dragging the scrubber emits a stream of positions
   // and only the one it was released on matters.
-  const runSeek = useRef((_offsetMs: number) => {});
+  const runSeek = useRef((_offsetMs: number, _play?: boolean) => {});
   const drainSeek = () => {
     const q = queuedSeek.current;
     queuedSeek.current = null;
-    if (q != null) runSeek.current(q);
+    if (q == null) return;
+    // The operator asked for somewhere else while the last jump was loading.
+    // Its landing is stale: applying it first is what yanked the playhead
+    // back to an earlier point after a seek.
+    pendingSeek.current = null;
+    runSeek.current(q.offsetMs, q.play);
   };
-  runSeek.current = (offsetMs: number) => {
+  runSeek.current = (offsetMs: number, play = false) => {
     if (pumping.current) {
-      queuedSeek.current = offsetMs;
+      queuedSeek.current = { offsetMs, play };
       return;
     }
     pumping.current = true;
-    setBuffering(true);
-    void jumpTo.current(offsetMs).catch((e) => {
+    setSeeking(true);
+    void jumpTo.current(offsetMs, play).catch((e) => {
       setError(e instanceof Error ? e.message : String(e));
     }).finally(() => {
       pumping.current = false;
-      setBuffering(false);
+      setSeeking(false);
       drainSeek();
     });
   };
 
   const onSeekOutsideBuffer = useCallback((offsetMs: number) => {
     setCurrentTime(offsetMs);
-    runSeek.current(offsetMs);
+    runSeek.current(offsetMs, false);
   }, []);
 
   // Apply a deferred seek once the repositioned player has been built.
@@ -349,7 +400,7 @@ export function useReplay() {
     const target = pendingSeek.current;
     pendingSeek.current = null;
     if (target == null) return;
-    playerRef.current?.seekToOffset(target, false);
+    playerRef.current?.seekToOffset(target.offsetMs, target.play, true);
   }, [rebuildToken, seekReadyToken]);
 
   // The buffering decision, driven by playback position.
@@ -360,6 +411,21 @@ export function useReplay() {
   // one that flashes a spinner every few seconds.
   const onPlaybackTime = useCallback((offsetMs: number) => {
     setCurrentTime(offsetMs);
+    // rrweb has no API for evicting old events. Rebuild from the newest indexed
+    // FullSnapshot periodically so the React buffer and rrweb's private event
+    // array both stay bounded. Rewinding outside this window uses the same path.
+    if (!pumping.current && offsetMs - windowStartRef.current >= MAX_WINDOW_SPAN_MS) {
+      let targetSeq: number | null = null;
+      for (const chunk of seekIndex.current) {
+        if (!chunk.snapshot) continue;
+        if (chunk.first_ts - firstTs.current <= offsetMs) targetSeq = chunk.seq;
+        else break;
+      }
+      if (targetSeq !== null && targetSeq !== windowSeq.current) {
+        runSeek.current(offsetMs, true);
+        return;
+      }
+    }
     // Nothing to do when everything is already loaded.
     if (seekIndex.current.length === 0 && exhausted.current) return;
     const buffered = bufferedMs();
@@ -425,7 +491,8 @@ export function useReplay() {
     removeSession,
     onPlaybackTime,
     onSeekOutsideBuffer,
-    buffering,
+    buffering: buffering || seeking,
+    repositioning: seeking,
     durationMs,
     rebuildToken,
     windowStartMs,

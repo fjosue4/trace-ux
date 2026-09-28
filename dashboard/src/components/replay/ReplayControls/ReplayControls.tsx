@@ -13,6 +13,7 @@ export default function ReplayControls({
   speed,
   inactivePeriods,
   isFullscreen,
+  playDisabled = false,
   onSeek,
   onTogglePlay,
   onSpeedChange,
@@ -28,6 +29,7 @@ export default function ReplayControls({
           type="button"
           className="replay-control-btn replay-control-btn--play"
           onClick={onTogglePlay}
+          disabled={playDisabled}
           aria-label={isPlaying ? 'Pause recording' : 'Play recording'}
           title={isPlaying ? 'Pause' : 'Play'}
         >

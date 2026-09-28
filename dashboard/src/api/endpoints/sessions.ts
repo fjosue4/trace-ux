@@ -68,6 +68,6 @@ export const sessionsEndpoints = {
     ),
   getSharedEvents: (token: string, afterSeq: number) =>
     request<{ next_seq: number; has_more: boolean; events: unknown[] }>(
-      `/api/demo/replay/${encodeURIComponent(token)}/events?after_seq=${afterSeq}&max_events=400`,
+      `/api/demo/replay/${encodeURIComponent(token)}/events?after_seq=${afterSeq}&max_events=400&css=ref`,
     ),
 };

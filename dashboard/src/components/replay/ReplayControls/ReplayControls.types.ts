@@ -9,6 +9,7 @@ export type ReplayControlsProps = {
   speed: number;
   inactivePeriods: InactivePeriod[];
   isFullscreen: boolean;
+  playDisabled?: boolean;
   onSeek: (offsetMs: number) => void;
   onTogglePlay: () => void;
   onSpeedChange: (speed: number) => void;

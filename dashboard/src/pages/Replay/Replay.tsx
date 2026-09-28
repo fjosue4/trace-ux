@@ -36,6 +36,7 @@ export default function Replay() {
     onPlaybackTime,
     onSeekOutsideBuffer,
     buffering,
+    repositioning,
     durationMs,
     rebuildToken,
     windowStartMs,
@@ -103,6 +104,7 @@ export default function Replay() {
       <div className="replay-grid">
         <div className="replay-main">
           <ReplayPlayer
+            key={session.id}
             ref={playerRef}
             events={events}
             loaded={loaded}
@@ -115,6 +117,7 @@ export default function Replay() {
             onSeekOutsideBuffer={onSeekOutsideBuffer}
             durationMs={durationMs}
             buffering={buffering}
+            repositioning={repositioning}
             rebuildToken={rebuildToken}
             windowStartMs={windowStartMs}
           />

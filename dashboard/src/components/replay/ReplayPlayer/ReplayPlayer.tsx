@@ -50,16 +50,21 @@ const ReplayPlayer = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(function 
             type="button"
             className="player-stage__toggle"
             onClick={togglePlayback}
+            disabled={buffering}
             aria-label={isPlaying ? 'Pause recording' : 'Play recording'}
           />
         )}
-        {playerReady && buffering && <div className="player-stage__buffering" role="status">Buffering…</div>}
+        {playerReady && buffering && <Loading label="Buffering…" overlay />}
         {playerReady ? (
-          !started && <PlayerCover onPlay={playFromStart} />
+          !started && <PlayerCover onPlay={playFromStart} disabled={buffering} />
         ) : replayUnavailable ? (
           <EmptyState
             title="Replay unavailable"
-            description="This recording has fewer than two replay events, so there is nothing to play yet."
+            description={
+              progress.startsWith('This recording has no complete snapshot')
+                ? progress
+                : 'This recording has fewer than two replay events, so there is nothing to play yet.'
+            }
             icon={<Icon name="film" size={20} />}
           />
         ) : (
@@ -76,6 +81,7 @@ const ReplayPlayer = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(function 
           speed={speed}
           inactivePeriods={inactivePeriods}
           isFullscreen={isFullscreen}
+          playDisabled={buffering}
           onSeek={seekPlayer}
           onTogglePlay={togglePlayback}
           onSpeedChange={changeSpeed}

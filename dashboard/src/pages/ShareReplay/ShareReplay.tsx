@@ -26,6 +26,7 @@ export default function ShareReplay() {
         <div className="share-replay-layout">
           <div className="share-replay-player">
             <ReplayPlayer
+              key={session.id}
               ref={playerRef}
               events={events}
               loaded={loaded}
