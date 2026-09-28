@@ -734,6 +734,27 @@ var migrations = []string{
 		1, created_at, created_at
 	FROM sites;
 	`,
+	// v30: session cards count the same action sources as the replay sidebar.
+	// These partial indexes keep the per-session ticket/feedback counts cheap.
+	`
+	CREATE INDEX IF NOT EXISTS idx_tickets_session
+		ON tickets(session_id) WHERE session_id IS NOT NULL AND session_id != '';
+	CREATE INDEX IF NOT EXISTS idx_feedback_session
+		ON feedback(session_id) WHERE session_id IS NOT NULL AND session_id != '';
+	`,
+	// v31: recordings are marked viewed per dashboard user. Keeping this on the
+	// server makes the state consistent across browsers without making one
+	// teammate's viewing history affect another's.
+	`
+	CREATE TABLE IF NOT EXISTS session_views (
+		user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		session_id TEXT    NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+		viewed_at  INTEGER NOT NULL,
+		PRIMARY KEY (user_id, session_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_session_views_session
+		ON session_views(session_id);
+	`,
 }
 
 const sessionSearchMigrationVersion = 28

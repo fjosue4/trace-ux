@@ -50,7 +50,32 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	ids := make([]string, len(sessions))
+	for i := range sessions {
+		ids[i] = sessions[i].ID
+	}
+	viewed, err := s.store.ViewedSessions(currentUser(r).ID, ids)
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for i := range sessions {
+		sessions[i].Viewed = viewed[sessions[i].ID]
+	}
 	writeJSON(w, http.StatusOK, sessions)
+}
+
+func (s *Server) handleMarkSessionViewed(w http.ResponseWriter, r *http.Request) {
+	ok, err := s.store.MarkSessionViewed(currentUser(r).ID, r.PathValue("id"))
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !ok {
+		writeErr(w, http.StatusNotFound, "session not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 // GET /api/sessions/countries?site_id=N — distinct country codes available

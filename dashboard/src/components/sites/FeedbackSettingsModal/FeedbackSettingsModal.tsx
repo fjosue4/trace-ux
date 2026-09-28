@@ -4,7 +4,6 @@ import Button from '../../ui/Button';
 import Modal from '../../ui/Modal';
 import Notice from '../../ui/Notice';
 import Switch from '../../ui/Switch';
-import { Icon } from '../../ui/Icon';
 import { Field, Input, Select } from '../../ui/fields';
 import { FeedbackSettingsModalProps } from './FeedbackSettingsModal.types';
 import '../widgetSettingsModals.scss';
@@ -31,7 +30,6 @@ export default function FeedbackSettingsModal({
   initialCampaignId = null,
   onChanged,
 }: FeedbackSettingsModalProps) {
-  const [campaigns, setCampaigns] = useState<FeedbackCampaign[]>([]);
   const [editing, setEditing] = useState<FeedbackCampaign | null>(null);
   const [draft, setDraft] = useState<FeedbackCampaignInput | null>(null);
   const [loading, setLoading] = useState(false);
@@ -43,11 +41,11 @@ export default function FeedbackSettingsModal({
     setError('');
     api.listFeedbackCampaigns(siteId)
       .then((rows) => {
-        setCampaigns(rows);
-        if (selectCampaignId) {
-          const campaign = rows.find((row) => row.id === selectCampaignId);
-          if (campaign) edit(campaign);
-        }
+        const campaign = selectCampaignId
+          ? rows.find((row) => row.id === selectCampaignId)
+          : rows.find((row) => row.is_default) ?? rows[0];
+        if (campaign) edit(campaign);
+        else setError('This site does not have a feedback campaign yet.');
       })
       .catch(() => setError('Could not load feedback campaigns.'))
       .finally(() => setLoading(false));
@@ -56,8 +54,14 @@ export default function FeedbackSettingsModal({
   useEffect(() => {
     if (!open) return;
     setEditing(null);
-    setDraft(startCreating ? blankCampaign(siteId) : null);
-    load(startCreating ? null : initialCampaignId);
+    setError('');
+    if (startCreating) {
+      setLoading(false);
+      setDraft(blankCampaign(siteId));
+      return;
+    }
+    setDraft(null);
+    load(initialCampaignId);
   }, [open, siteId, startCreating, initialCampaignId]);
 
   function edit(campaign: FeedbackCampaign) {
@@ -76,12 +80,6 @@ export default function FeedbackSettingsModal({
     setError('');
   }
 
-  function create() {
-    setEditing(null);
-    setDraft(blankCampaign(siteId));
-    setError('');
-  }
-
   function patch(values: Partial<FeedbackCampaignInput>) {
     setDraft((current) => current ? { ...current, ...values } : current);
   }
@@ -94,9 +92,7 @@ export default function FeedbackSettingsModal({
       if (editing) await api.updateFeedbackCampaign(editing.id, draft);
       else await api.createFeedbackCampaign(draft);
       await onChanged?.();
-      setEditing(null);
-      setDraft(null);
-      load();
+      onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save the campaign.');
     } finally {
@@ -108,9 +104,16 @@ export default function FeedbackSettingsModal({
     <Modal
       open={open}
       onClose={onClose}
-      title="Feedback campaigns"
+      title={editing ? `Edit ${editing.name}` : startCreating ? 'Add campaign' : 'Edit campaign'}
       className="widget-settings-modal"
-      footer={<Button variant="secondary" onClick={onClose}>Done</Button>}
+      footer={(
+        <>
+          <Button variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button disabled={saving || loading || !draft} onClick={() => void save()}>
+            {saving ? 'Saving…' : editing ? 'Save campaign' : 'Add campaign'}
+          </Button>
+        </>
+      )}
     >
       <p className="widget-settings-modal__intro">
         The default campaign is the Feedback section visitors can open themselves. Additional campaigns open from
@@ -120,12 +123,6 @@ export default function FeedbackSettingsModal({
 
       {draft ? (
         <div className="widget-settings-form campaign-editor">
-          <div className="campaign-editor__head">
-            <button type="button" className="icon-btn" aria-label="Back to campaigns" onClick={() => setDraft(null)}>
-              <Icon name="chevronUp" size={15} />
-            </button>
-            <strong>{editing ? `Edit ${editing.name}` : 'New campaign'}</strong>
-          </div>
           <div className="hub-config__grid widget-settings-fields">
             <Field label="Campaign name" hint="Only shown in the dashboard">
               <Input value={draft.name} maxLength={120} onChange={(e) => patch({ name: e.target.value })} />
@@ -176,41 +173,9 @@ export default function FeedbackSettingsModal({
           {editing?.is_default && (
             <Notice tone="info">This is the site's basic feedback campaign. It can be edited or disabled, but not deleted.</Notice>
           )}
-          <div className="campaign-editor__actions">
-            <Button variant="secondary" onClick={() => setDraft(null)}>Cancel</Button>
-            <Button disabled={saving} onClick={() => void save()}>{saving ? 'Saving…' : 'Save campaign'}</Button>
-          </div>
         </div>
       ) : (
-        <div className="campaign-list">
-          <div className="campaign-list__head">
-            <div>
-              <div className="widget-settings-modal__title">Campaigns</div>
-              <span className="muted small">{campaigns.length} configured</span>
-            </div>
-            <Button size="sm" onClick={create}><Icon name="plus" size={13} /> New campaign</Button>
-          </div>
-          {loading ? (
-            <p className="muted small">Loading campaigns…</p>
-          ) : campaigns.map((campaign) => (
-            <button type="button" className="campaign-row" key={campaign.id} onClick={() => edit(campaign)}>
-              <span className="campaign-row__main">
-                <span className="campaign-row__title">
-                  {campaign.name}
-                  {campaign.is_default && <span className="chip">Default</span>}
-                  <span className={`campaign-row__state${campaign.enabled ? ' is-on' : ''}`}>{campaign.enabled ? 'Enabled' : 'Disabled'}</span>
-                </span>
-                <span className="campaign-row__question">{campaign.question}</span>
-                <code>{campaign.key}</code>
-              </span>
-              <span className="campaign-row__stats">
-                <strong>{campaign.response_count ?? 0}</strong> responses
-                <small>{campaign.shown_count ?? 0} shown · {campaign.dismissed_count ?? 0} closed · {campaign.skipped_count ?? 0} skipped</small>
-              </span>
-              <Icon name="more" size={15} />
-            </button>
-          ))}
-        </div>
+        loading ? <p className="muted small">Loading campaign…</p> : null
       )}
     </Modal>
   );

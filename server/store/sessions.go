@@ -22,6 +22,8 @@ type Session struct {
 	DurationMs  int64  `json:"duration_ms"`
 	PageCount   int    `json:"page_count"`
 	EventCount  int    `json:"event_count"`
+	ActionCount int    `json:"action_count"`
+	Viewed      bool   `json:"viewed"`
 	InitialURL  string `json:"initial_url"`
 	ExitURL     string `json:"exit_url"`
 	Referrer    string `json:"referrer"`
@@ -62,18 +64,28 @@ func (p SessionPage) Dwell() int64 {
 
 // A session counts as in-progress while it was seen within the same 30-minute
 // window the concurrency gate uses; anything older is completed.
-const sessionActiveExpr = `CASE WHEN last_seen > CAST(strftime('%s','now') AS INTEGER) - 1800 THEN 1 ELSE 0 END`
 const sessionActiveExprQualified = `CASE WHEN s.last_seen > CAST(strftime('%s','now') AS INTEGER) - 1800 THEN 1 ELSE 0 END`
 
-const sessionCols = `id, site_id, started_at, last_seen, duration_ms, page_count, event_count,
-	initial_url, exit_url, referrer, utm_source, utm_medium, utm_campaign,
-	browser, os, device, viewport_w, viewport_h, screen_w, screen_h,
-	ip_hash, country, user_agent, user_id, client_id, remote_id,
-	` + sessionActiveExpr
+// The tracker reports visible-tab time in duration_ms, while rrweb preserves
+// real gaps between events. Use the last stored recording chunk as the elapsed
+// wall-clock boundary so the session list, replay summary and scrubber describe
+// the same recording. Sessions without chunks retain their reported duration.
+const sessionDurationExprQualified = `MAX(s.duration_ms, COALESCE(
+	(SELECT MAX(0, rc.created_at - s.started_at) * 1000
+	 FROM chunks rc WHERE rc.session_id = s.id ORDER BY rc.seq DESC LIMIT 1), 0))`
 
-// sessionColsQualified is sessionCols for queries that join other tables
-// sharing column names (sites also has created_at).
-const sessionColsQualified = `s.id, s.site_id, s.started_at, s.last_seen, s.duration_ms, s.page_count, s.event_count,
+// Matches the replay sidebar: every page opening, tracked custom event, browser
+// log, ticket and feedback response is one action.
+const sessionActionCountExprQualified = `((SELECT COUNT(*) FROM pages apg WHERE apg.session_id = s.id)
+	+ (SELECT COUNT(*) FROM custom_events ace WHERE ace.session_id = s.id)
+	+ (SELECT COUNT(*) FROM logs alg WHERE alg.session_id = s.id)
+	+ (SELECT COUNT(*) FROM tickets ati WHERE ati.session_id = s.id)
+	+ (SELECT COUNT(*) FROM feedback afe WHERE afe.session_id = s.id))`
+
+// sessionColsQualified is shared by detail and list queries; the latter joins
+// sites, whose id and created_at columns would otherwise be ambiguous.
+const sessionColsQualified = `s.id, s.site_id, s.started_at, s.last_seen, ` + sessionDurationExprQualified + `, s.page_count, s.event_count,
+	` + sessionActionCountExprQualified + `,
 	s.initial_url, s.exit_url, s.referrer, s.utm_source, s.utm_medium, s.utm_campaign,
 	s.browser, s.os, s.device, s.viewport_w, s.viewport_h, s.screen_w, s.screen_h,
 	s.ip_hash, s.country, s.user_agent, s.user_id, s.client_id, s.remote_id,
@@ -82,7 +94,7 @@ const sessionColsQualified = `s.id, s.site_id, s.started_at, s.last_seen, s.dura
 func scanSession(row interface{ Scan(...any) error }) (*Session, error) {
 	var s Session
 	var active int
-	err := row.Scan(&s.ID, &s.SiteID, &s.StartedAt, &s.LastSeen, &s.DurationMs, &s.PageCount, &s.EventCount,
+	err := row.Scan(&s.ID, &s.SiteID, &s.StartedAt, &s.LastSeen, &s.DurationMs, &s.PageCount, &s.EventCount, &s.ActionCount,
 		&s.InitialURL, &s.ExitURL, &s.Referrer, &s.UTMSource, &s.UTMMedium, &s.UTMCampaign,
 		&s.Browser, &s.OS, &s.Device, &s.ViewportW, &s.ViewportH, &s.ScreenW, &s.ScreenH,
 		&s.IPHash, &s.Country, &s.UserAgent, &s.UserID, &s.ClientID, &s.RemoteID, &active)
@@ -93,11 +105,11 @@ func scanSession(row interface{ Scan(...any) error }) (*Session, error) {
 	return &s, nil
 }
 
-// scanSessionNamed scans sessionCols plus the joined sites.name.
+// scanSessionNamed scans sessionColsQualified plus the joined sites.name.
 func scanSessionNamed(row interface{ Scan(...any) error }) (*Session, error) {
 	var s Session
 	var active int
-	err := row.Scan(&s.ID, &s.SiteID, &s.StartedAt, &s.LastSeen, &s.DurationMs, &s.PageCount, &s.EventCount,
+	err := row.Scan(&s.ID, &s.SiteID, &s.StartedAt, &s.LastSeen, &s.DurationMs, &s.PageCount, &s.EventCount, &s.ActionCount,
 		&s.InitialURL, &s.ExitURL, &s.Referrer, &s.UTMSource, &s.UTMMedium, &s.UTMCampaign,
 		&s.Browser, &s.OS, &s.Device, &s.ViewportW, &s.ViewportH, &s.ScreenW, &s.ScreenH,
 		&s.IPHash, &s.Country, &s.UserAgent, &s.UserID, &s.ClientID, &s.RemoteID, &active, &s.SiteName)
@@ -109,11 +121,59 @@ func scanSessionNamed(row interface{ Scan(...any) error }) (*Session, error) {
 }
 
 func (s *Store) GetSession(id string) (*Session, error) {
-	sess, err := scanSession(s.DB.QueryRow(`SELECT `+sessionCols+` FROM sessions WHERE id = ?`, id))
+	sess, err := scanSession(s.DB.QueryRow(`SELECT `+sessionColsQualified+` FROM sessions s WHERE s.id = ?`, id))
 	if err != nil {
 		return nil, err
 	}
 	return sess, nil
+}
+
+// MarkSessionViewed records dashboard viewing history for one user. The
+// INSERT...SELECT makes an unknown session a clean false result instead of
+// creating an orphan or leaking whether another site's identifier exists.
+func (s *Store) MarkSessionViewed(userID int64, sessionID string) (bool, error) {
+	now := time.Now().Unix()
+	res, err := s.DB.Exec(`INSERT INTO session_views (user_id, session_id, viewed_at)
+		SELECT ?, s.id, ? FROM sessions s WHERE s.id = ?
+		ON CONFLICT(user_id, session_id) DO UPDATE SET viewed_at = excluded.viewed_at`,
+		userID, now, sessionID)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n > 0, err
+}
+
+// ViewedSessions returns just the requested IDs viewed by this dashboard user.
+func (s *Store) ViewedSessions(userID int64, sessionIDs []string) (map[string]bool, error) {
+	viewed := make(map[string]bool, len(sessionIDs))
+	if len(sessionIDs) == 0 {
+		return viewed, nil
+	}
+	query := `SELECT session_id FROM session_views WHERE user_id = ? AND session_id IN (`
+	args := make([]any, 0, len(sessionIDs)+1)
+	args = append(args, userID)
+	for i, id := range sessionIDs {
+		if i > 0 {
+			query += ","
+		}
+		query += "?"
+		args = append(args, id)
+	}
+	query += `)`
+	rows, err := s.readDB.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		viewed[id] = true
+	}
+	return viewed, rows.Err()
 }
 
 // listSessionsStandard is the correctness baseline used whenever the optional
@@ -191,7 +251,7 @@ func (s *Store) listSessionsStandard(ctx context.Context, f SessionFilter) ([]Se
 		args = append(args, like, like, like)
 	}
 	if f.MinDurationMs > 0 {
-		query += ` AND s.duration_ms >= ?`
+		query += ` AND ` + sessionDurationExprQualified + ` >= ?`
 		args = append(args, f.MinDurationMs)
 	}
 	if f.Before != 0 {

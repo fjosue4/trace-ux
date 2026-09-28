@@ -45,6 +45,14 @@ export function forgetCachedSession(id: string) {
   }
 }
 
+// The row is marked immediately before navigation so Back does not briefly
+// restore it as unread while the refreshed server result is in flight.
+export function markCachedSessionViewed(id: string) {
+  for (const [key, rows] of resultCache) {
+    resultCache.set(key, rows.map((row) => row.id === id ? { ...row, viewed: true } : row));
+  }
+}
+
 export function useSessions() {
   const [params, setParams] = useSearchParams();
   const selected = siteFromParams(params);

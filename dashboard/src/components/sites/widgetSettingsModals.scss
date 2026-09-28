@@ -88,70 +88,14 @@
   margin-top: 1rem;
 }
 
-.campaign-list {
-  display: grid;
-  gap: 0.7rem;
-
-  &__head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 0.25rem;
-  }
-}
-
-.campaign-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 1rem;
-  align-items: center;
-  width: 100%;
-  padding: 0.9rem 1rem;
-  border: 1px solid $line;
-  border-radius: $radius;
-  color: inherit;
-  text-align: left;
-  background: $surface-2;
-  cursor: pointer;
-
-  &:hover { border-color: color-mix(in srgb, #{$accent} 45%, #{$line}); }
-
-  &__main { display: grid; gap: 0.28rem; min-width: 0; }
-  &__title { display: flex; align-items: center; flex-wrap: wrap; gap: 0.45rem; font-weight: 700; }
-  &__question { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.86rem; }
-  code { color: $muted; font-size: 0.72rem; }
-
-  &__state {
-    color: $muted;
-    font-size: 0.7rem;
-    font-weight: 650;
-    &.is-on { color: $accent; }
-  }
-
-  &__stats {
-    display: grid;
-    justify-items: end;
-    color: $muted;
-    font-size: 0.75rem;
-    white-space: nowrap;
-    strong { color: $ink; font-size: 0.95rem; }
-    small { margin-top: 0.2rem; }
-  }
-}
-
 .campaign-editor {
   display: grid;
   gap: 1rem;
 
-  &__head { display: flex; align-items: center; gap: 0.65rem; }
   &__switches { display: flex; flex-wrap: wrap; gap: 1.25rem; }
-  &__actions { display: flex; justify-content: flex-end; gap: 0.65rem; padding-top: 0.4rem; }
 }
 
 @media (max-width: 520px) {
   .widget-section-modal { gap: 0.7rem; }
   .widget-settings-fields { grid-template-columns: 1fr; }
-  .campaign-row { grid-template-columns: minmax(0, 1fr) auto; }
-  .campaign-row__stats { display: none; }
 }

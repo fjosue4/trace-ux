@@ -9,6 +9,7 @@ type SessionRowProps = {
   showSite: boolean;
   // Where the replay's back link should return, filters included.
   from: string;
+  onViewed: () => void;
   onOpen: () => void;
 };
 
@@ -16,9 +17,10 @@ function visitorOf(s: Session) {
   return s.user_id || s.remote_id || s.client_id || '';
 }
 
-export function SessionRow({ session: s, showSite, from, onOpen }: SessionRowProps) {
+export function SessionRow({ session: s, showSite, from, onViewed, onOpen }: SessionRowProps) {
+  const actionCount = s.action_count ?? s.page_count;
   return (
-    <tr className="is-clickable" onClick={onOpen}>
+    <tr className={`is-clickable${s.viewed ? ' is-viewed' : ''}`} onClick={() => { onViewed(); onOpen(); }}>
       <td>
         <div className="session-cell session-cell--visit">
           <span className="session-cell__primary">{fmtTime(s.started_at)}</span>
@@ -59,9 +61,9 @@ export function SessionRow({ session: s, showSite, from, onOpen }: SessionRowPro
         </div>
       </td>
       <td>
-        <div className="session-cell session-cell--pages">
+        <div className="session-cell session-cell--actions">
           <span className="session-cell__primary session-cell__primary--plain">
-            {s.page_count} {s.page_count === 1 ? 'page' : 'pages'}
+            {actionCount} {actionCount === 1 ? 'action' : 'actions'}
           </span>
           <span className="session-cell__meta">
             <strong>Length</strong> {fmtDuration(s.duration_ms)}
@@ -73,6 +75,7 @@ export function SessionRow({ session: s, showSite, from, onOpen }: SessionRowPro
           to={`/replay/${s.id}?autoplay=1`}
           state={{ from }}
           className="btn btn--primary btn--sm play-btn"
+          onClick={onViewed}
           aria-label={`Play session from ${fmtTime(s.started_at)}`}
           title="Play recording"
         >

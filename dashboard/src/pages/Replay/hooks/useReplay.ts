@@ -251,11 +251,20 @@ export function useReplay() {
           api.getSessionIndex(sessionId).catch(() => null),
         ]);
         if (cancelled) return;
+        // Viewing state is per dashboard user and intentionally best-effort;
+        // a replay must still open if this lightweight marker cannot be saved.
+        void api.markSessionViewed(sessionId).catch(() => {});
         setMeta(m);
         if (idx) {
           seekIndex.current = idx.chunks;
           if (idx.first_ts) firstTs.current = idx.first_ts;
-          if (idx.last_ts > idx.first_ts) setDurationMs(idx.last_ts - idx.first_ts);
+          if (idx.last_ts > idx.first_ts) {
+            // The API duration uses the final stored recording chunk so list
+            // rows and replay metadata agree. Keep the scrubber at least that
+            // long as well; rrweb's last event can precede the final flush by
+            // a few seconds.
+            setDurationMs(Math.max(idx.last_ts - idx.first_ts, m.session.duration_ms));
+          }
         }
         // No index, no windowing.
         //

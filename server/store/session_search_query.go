@@ -190,7 +190,7 @@ func (s *Store) filterIndexedSessionCandidates(
 		var active int
 		if err := rows.Scan(&rowID,
 			&session.ID, &session.SiteID, &session.StartedAt, &session.LastSeen,
-			&session.DurationMs, &session.PageCount, &session.EventCount,
+			&session.DurationMs, &session.PageCount, &session.EventCount, &session.ActionCount,
 			&session.InitialURL, &session.ExitURL, &session.Referrer,
 			&session.UTMSource, &session.UTMMedium, &session.UTMCampaign,
 			&session.Browser, &session.OS, &session.Device,
@@ -240,7 +240,7 @@ func appendIndexedSessionFilters(query string, args []any, f SessionFilter) (str
 		args = append(args, like, like, like)
 	}
 	if f.MinDurationMs > 0 {
-		query += ` AND s.duration_ms >= ?`
+		query += ` AND ` + sessionDurationExprQualified + ` >= ?`
 		args = append(args, f.MinDurationMs)
 	}
 	if f.Before != 0 {

@@ -8,6 +8,8 @@ export type Session = {
   duration_ms: number;
   page_count: number;
   event_count: number;
+  action_count: number;
+  viewed?: boolean;
   initial_url: string;
   exit_url: string;
   referrer: string;
@@ -29,7 +31,7 @@ export type Session = {
 
 export type SharedSession = Pick<
   Session,
-  'id' | 'started_at' | 'last_seen' | 'duration_ms' | 'page_count' | 'event_count' | 'viewport_w' | 'viewport_h'
+  'id' | 'started_at' | 'last_seen' | 'duration_ms' | 'page_count' | 'event_count' | 'action_count' | 'viewport_w' | 'viewport_h'
 >;
 
 // A tracked activity moment (trace-ux-track-id click or window.TraceUX.track()).

@@ -8,7 +8,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import Card from '../../components/ui/Card';
 import FiltersBar from '../../components/sessions/FiltersBar';
 import { Select } from '../../components/ui/fields';
-import { useSessions } from './hooks/useSessions';
+import { markCachedSessionViewed, useSessions } from './hooks/useSessions';
 import { SessionRow } from './subcomponents/SessionRow';
 import './Sessions.scss';
 
@@ -95,12 +95,19 @@ export default function Sessions() {
           }
           headers={
             showSite
-              ? ['Visit', 'Context', 'Device', 'Country', 'Pages', '']
-              : ['Visit', 'Visitor / referrer', 'Device', 'Country', 'Pages', '']
+              ? ['Visit', 'Context', 'Device', 'Country', 'Actions', '']
+              : ['Visit', 'Visitor / referrer', 'Device', 'Country', 'Actions', '']
           }
         >
           {sessions.map((s) => (
-            <SessionRow key={s.id} session={s} showSite={showSite} from={from} onOpen={() => navigate(`/replay/${s.id}`, { state: { from } })} />
+            <SessionRow
+              key={s.id}
+              session={s}
+              showSite={showSite}
+              from={from}
+              onViewed={() => markCachedSessionViewed(s.id)}
+              onOpen={() => navigate(`/replay/${s.id}`, { state: { from } })}
+            />
           ))}
         </Table>
       )}

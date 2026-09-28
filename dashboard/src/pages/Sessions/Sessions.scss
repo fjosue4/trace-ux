@@ -31,6 +31,12 @@
   tbody tr {
     &:last-child td { border-bottom: 0; }
     &:hover td { background: $surface-2; }
+
+    &.is-viewed td {
+      background: color-mix(in srgb, #{$surface-2} 48%, #{$surface});
+    }
+    &.is-viewed .session-cell__primary { color: $ink-2; }
+    &.is-viewed:hover td { background: $surface-2; }
   }
 }
 .session-cell {
@@ -64,7 +70,7 @@
     .session-cell__primary { font-weight: 650; }
     .session-cell__meta { letter-spacing: 0.04em; }
   }
-  &--pages {
+  &--actions {
     justify-items: start;
 
     // justify-items: start sizes each line to its content, which let a long

@@ -33,6 +33,9 @@ export const sessionsEndpoints = {
       feedback: Feedback[];
     }>(`/api/sessions/${id}`),
 
+  markSessionViewed: (id: string) =>
+    request<{ ok: boolean }>(`/api/sessions/${id}/viewed`, { method: 'POST' }),
+
   // In-progress vs completed counts (optional per-site scope).
   sessionStats: (siteId: number | null) =>
     request<{ active: number; completed: number }>(
