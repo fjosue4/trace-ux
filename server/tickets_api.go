@@ -452,6 +452,9 @@ func (s *Server) handleCreateStaffTicket(w http.ResponseWriter, r *http.Request)
 	if withSiteName, err := s.store.GetTicket(ticket.ID); err == nil {
 		ticket.SiteName = withSiteName.SiteName
 	}
-	s.notifySlackTicket(ticket, input.Body, r)
+	// This is an outbound conversation initiated by staff (for example from
+	// feedback or an announcement interaction). Slack ticket notifications are
+	// reserved for inbound conversations that visitors start through the
+	// widget; notifying here would tell the team about its own action.
 	writeJSON(w, http.StatusCreated, ticket)
 }

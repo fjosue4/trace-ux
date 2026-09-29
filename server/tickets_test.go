@@ -236,6 +236,51 @@ func TestDashboardTicketRoutesRequireAuthAndReply(t *testing.T) {
 	}
 }
 
+func TestSlackNotifiesForWidgetTicketsButNotStaffOutboundTickets(t *testing.T) {
+	srv, ts := newTestServer(t)
+	srv.initSecurity()
+	srv.ticketsReadLimiter = newRequestLimiter(1_000, time.Minute)
+	srv.ticketsWriteLimiter = newRequestLimiter(1_000, time.Minute)
+	srv.ticketsSiteLimiter = newRequestLimiter(1_000, time.Minute)
+
+	site := mustCreateNotifyTestSite(t, srv)
+	receiver := newSlackReceiver(t, 0)
+	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
+		RoutingMode:    store.SlackRoutingSingle,
+		TicketsEnabled: true,
+	})
+
+	admin := login(t, ts.URL, "admin", "pw")
+	resp := doReq(t, http.MethodPost, ts.URL+"/api/tickets", admin,
+		fmt.Sprintf(`{"site_id":%d,"visitor_key":"outbound-visitor","email":"visitor@example.com","subject":"Following up","body":"We saw your feedback."}`, site.ID))
+	data, err := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("staff outbound ticket: got %d (%s)", resp.StatusCode, data)
+	}
+
+	select {
+	case body := <-receiver.bodies:
+		t.Fatalf("staff outbound ticket unexpectedly notified Slack: %s", body)
+	case <-time.After(300 * time.Millisecond):
+	}
+
+	widgetURL := fmt.Sprintf("%s/api/support/%s/tickets", ts.URL, site.SiteKey)
+	resp, data = ticketJSONRequest(t, http.MethodPost, widgetURL,
+		`{"visitor_key":"inbound-visitor","email":"visitor@example.com","subject":"I need help","body":"The widget started this conversation."}`)
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("widget inbound ticket: got %d (%s)", resp.StatusCode, data)
+	}
+
+	body := waitForSlackDelivery(t, receiver)
+	if !strings.Contains(body, "I need help") || !strings.Contains(body, "The widget started this conversation.") {
+		t.Fatalf("widget ticket Slack payload = %s", body)
+	}
+}
+
 func TestTicketsCanBeArchivedButNotDeleted(t *testing.T) {
 	srv, ts := newTestServer(t)
 	site, err := srv.store.CreateSite("Site", "https://example.com")
