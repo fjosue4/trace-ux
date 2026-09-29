@@ -14,7 +14,8 @@ export type SystemHealth = {
     load1: number;
     load5: number;
     load15: number;
-    trace_ux_pct: number;
+    trace_ux_pct: number; // 100 = one core, up to cores * 100
+    trace_ux_machine_pct?: number; // share of all cores, 0-100 (older servers omit it)
     uptime_seconds: number;
   };
   disk: {

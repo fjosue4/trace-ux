@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"io/fs"
+	"math"
 	"net/http"
 	"path/filepath"
 	"runtime"
@@ -25,13 +26,18 @@ type ramHealth struct {
 	MemLimitBytes  int64  `json:"mem_limit_bytes"`
 }
 
+// TraceUXPct is the process's CPU use on the scale top reports: 100% is one
+// core, so it can reach Cores*100. TraceUXMachinePct is the same use as a
+// share of every core, 0-100, and is what the dashboard meter and the Slack
+// alert threshold compare against.
 type cpuHealth struct {
-	Cores         int     `json:"cores"`
-	Load1         float64 `json:"load1"`
-	Load5         float64 `json:"load5"`
-	Load15        float64 `json:"load15"`
-	TraceUXPct    float64 `json:"trace_ux_pct"`
-	UptimeSeconds float64 `json:"uptime_seconds"`
+	Cores             int     `json:"cores"`
+	Load1             float64 `json:"load1"`
+	Load5             float64 `json:"load5"`
+	Load15            float64 `json:"load15"`
+	TraceUXPct        float64 `json:"trace_ux_pct"`
+	TraceUXMachinePct float64 `json:"trace_ux_machine_pct"`
+	UptimeSeconds     float64 `json:"uptime_seconds"`
 }
 
 type diskHealth struct {
@@ -88,6 +94,15 @@ func traceUXCPUPercent(cpuSeconds float64) float64 {
 	return pct
 }
 
+// machineCPUPercent converts a per-core percentage (100% = one core) into a
+// share of the whole machine.
+func machineCPUPercent(perCorePct float64, cores int) float64 {
+	if cores <= 0 {
+		return perCorePct
+	}
+	return math.Min(100, perCorePct/float64(cores))
+}
+
 // dirSize sums the sizes of every regular file under path.
 func dirSize(path string) int64 {
 	var total int64
@@ -123,6 +138,7 @@ func (s *Server) collectSystemHealth() (systemHealthSnapshot, error) {
 		TraceUXPct:    traceUXCPUPercent(cpuSecs),
 		UptimeSeconds: time.Since(procStart).Seconds(),
 	}
+	cpu.TraceUXMachinePct = machineCPUPercent(cpu.TraceUXPct, cpu.Cores)
 	cpu.Load1, cpu.Load5, cpu.Load15 = readLoadAvg()
 
 	dataDir := "./data"

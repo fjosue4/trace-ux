@@ -139,12 +139,13 @@ func TestSystemHealthSlackMessageMatchesDashboardFields(t *testing.T) {
 			MemLimitBytes:  int64(2 * gib),
 		},
 		Cpu: cpuHealth{
-			Cores:         4,
-			Load1:         1.23,
-			Load5:         0.87,
-			Load15:        0.45,
-			TraceUXPct:    91.2,
-			UptimeSeconds: 3723,
+			Cores:             4,
+			Load1:             1.23,
+			Load5:             0.87,
+			Load15:            0.45,
+			TraceUXPct:        364.8,
+			TraceUXMachinePct: 91.2,
+			UptimeSeconds:     3723,
 		},
 		Disk: diskHealth{
 			TotalBytes:   100 * gib,
@@ -167,6 +168,7 @@ func TestSystemHealthSlackMessageMatchesDashboardFields(t *testing.T) {
 		"• TraceUX (RSS): 256 MB",
 		"• Soft memory cap: 2.0 GB",
 		"*CPU* · 91%",
+		"• TraceUX: 3.6 of 4 cores",
 		"• Cores: 4",
 		"• Load (1m): 1.23",
 		"• TraceUX uptime: 1h 2m",
@@ -727,5 +729,22 @@ func TestServiceLogIngestNotifiesSlackLogs(t *testing.T) {
 	}
 	if strings.Contains(body, "Unrelated failure") {
 		t.Fatalf("expected the non-matching service log to be filtered out: %s", body)
+	}
+}
+
+// The CPU alert compares TraceUX's share of the whole machine against the
+// threshold. One busy core on a multi-core box is not "CPU above 90%".
+func TestSystemHealthCPUAlertUsesMachineShare(t *testing.T) {
+	snapshot := systemHealthSnapshot{Cpu: cpuHealth{Cores: 6, TraceUXPct: 168, TraceUXMachinePct: machineCPUPercent(168, 6)}}
+	for _, alert := range systemHealthSnapshotAlerts(snapshot) {
+		if alert.Metric == "CPU" && alert.Pct >= slackHealthThreshold {
+			t.Fatalf("CPU alert at %.0f%% for 1.68 of 6 cores", alert.Pct)
+		}
+	}
+	if got := machineCPUPercent(168, 6); got != 28 {
+		t.Fatalf("machineCPUPercent(168, 6) = %v, want 28", got)
+	}
+	if got := machineCPUPercent(900, 6); got != 100 {
+		t.Fatalf("machineCPUPercent caps at 100, got %v", got)
 	}
 }

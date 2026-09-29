@@ -81,7 +81,7 @@ const listSitesQuery = `SELECT ` + siteCols + ` FROM sites s ORDER BY s.created_
 const siteByKeyQuery = `SELECT ` + siteCols + ` FROM sites s WHERE s.site_key = ?`
 
 func (s *Store) ListSites() ([]Site, error) {
-	rows, err := s.DB.Query(listSitesQuery)
+	rows, err := s.readDB.Query(listSitesQuery)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,7 @@ func (s *Store) ListSites() ([]Site, error) {
 }
 
 func (s *Store) GetSiteByKey(key string) (Site, error) {
-	st, err := scanSite(s.DB.QueryRow(siteByKeyQuery, key))
+	st, err := scanSite(s.readDB.QueryRow(siteByKeyQuery, key))
 	if err == sql.ErrNoRows {
 		return Site{}, nil // unknown key: zero Site, no error; caller decides
 	}
@@ -112,7 +112,7 @@ func (s *Store) GetSiteByKey(key string) (Site, error) {
 // ingest that know the site id but have no reason to load the whole site.
 func (s *Store) SiteName(id int64) (string, error) {
 	var name string
-	err := s.DB.QueryRow(`SELECT name FROM sites WHERE id = ?`, id).Scan(&name)
+	err := s.readDB.QueryRow(`SELECT name FROM sites WHERE id = ?`, id).Scan(&name)
 	return name, err
 }
 

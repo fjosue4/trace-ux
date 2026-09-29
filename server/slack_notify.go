@@ -415,7 +415,7 @@ func systemHealthSnapshotAlerts(snapshot systemHealthSnapshot) []systemHealthAle
 			Pct:    float64(snapshot.Ram.UsedBytes) / float64(snapshot.Ram.TotalBytes) * 100,
 		})
 	}
-	metrics = append(metrics, systemHealthAlert{Metric: "CPU", Pct: snapshot.Cpu.TraceUXPct})
+	metrics = append(metrics, systemHealthAlert{Metric: "CPU", Pct: snapshot.Cpu.TraceUXMachinePct})
 	if snapshot.Disk.TotalBytes > 0 {
 		used := snapshot.Disk.TotalBytes - snapshot.Disk.FreeBytes
 		metrics = append(metrics, systemHealthAlert{
@@ -462,7 +462,8 @@ func buildSystemHealthSlackMessage(snapshot systemHealthSnapshot, alerts []syste
 
 	lines = append(lines,
 		"",
-		fmt.Sprintf("*CPU* · %s", slackHealthPct(snapshot.Cpu.TraceUXPct)),
+		fmt.Sprintf("*CPU* · %s", slackHealthPct(snapshot.Cpu.TraceUXMachinePct)),
+		fmt.Sprintf("• TraceUX: %.1f of %d cores", snapshot.Cpu.TraceUXPct/100, snapshot.Cpu.Cores),
 		fmt.Sprintf("• Cores: %d", snapshot.Cpu.Cores),
 		fmt.Sprintf("• Load (1m): %.2f", snapshot.Cpu.Load1),
 		fmt.Sprintf("• Load (5m): %.2f", snapshot.Cpu.Load5),

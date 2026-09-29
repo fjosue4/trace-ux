@@ -45,6 +45,24 @@
     &--shot { background: $accent; }
     &.is-hot { background: $danger; }
   }
+
+  // CPU: one segment per core, so the meter reads as a share of the whole
+  // machine while still showing how many cores are busy.
+  &--cores {
+    gap: 3px;
+    background: none;
+    border: 0;
+    border-radius: 0;
+  }
+
+  &__core {
+    flex: 1;
+    display: flex;
+    border-radius: $radius-pill;
+    background: $surface-2;
+    border: 1px solid $line;
+    overflow: hidden;
+  }
 }
 
 .health-row {

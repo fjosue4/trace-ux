@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -14,7 +15,12 @@ import (
 
 // Store wraps the SQLite database. All timestamps are unix seconds.
 type Store struct {
-	DB     *sql.DB
+	DB *sql.DB
+	// readDB serves read-only queries on the hot request paths: the tracker's
+	// site lookup, dashboard auth and the Logs page. DB is a single connection
+	// shared with every ingest write, so anything that holds it (a long write,
+	// a slow statement) would otherwise stall those reads behind it. WAL lets
+	// these readers run while a write is in progress.
 	readDB *sql.DB
 
 	searchMu    sync.Mutex
@@ -27,6 +33,9 @@ type Store struct {
 	searchBytesMu sync.Mutex
 	searchBytesAt time.Time
 	searchBytes   int64
+
+	connWatchCancel context.CancelFunc
+	connWatchDone   chan struct{}
 }
 
 // errBadJSON mirrors the dashboard API's own "invalid JSON body" sentinel
@@ -76,6 +85,7 @@ func OpenStore(path string) (*Store, error) {
 		return nil, err
 	}
 	s.startSearchIndexWorker()
+	s.startWriteConnWatch(writeConnProbeEvery, writeConnSlowAfter)
 	return s, nil
 }
 
@@ -89,6 +99,7 @@ func secureStoreFiles(path string) error {
 }
 
 func (s *Store) Close() error {
+	s.stopWriteConnWatch()
 	if s.searchStop != nil {
 		close(s.searchStop)
 		<-s.searchDone

@@ -376,7 +376,7 @@ func scanLog(row interface{ Scan(...any) error }) (Log, error) {
 // GetLog returns one log by id, or nil when it does not exist (never stored,
 // or removed by retention). Used by direct links to a log.
 func (s *Store) GetLog(id int64) (*Log, error) {
-	item, err := scanLog(s.DB.QueryRow(logSelect+` WHERE l.id = ?`, id))
+	item, err := scanLog(s.readDB.QueryRow(logSelect+` WHERE l.id = ?`, id))
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -459,7 +459,7 @@ func (s *Store) ListLogs(f LogFilter) ([]Log, error) {
 	query += ` ORDER BY l.id DESC LIMIT ?`
 	args = append(args, limit)
 
-	rows, err := s.DB.Query(query, args...)
+	rows, err := s.readDB.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -499,7 +499,7 @@ func (s *Store) FrequentErrors(f LogFilter) ([]FrequentError, error) {
 	query += ` GROUP BY l.message ORDER BY COUNT(*) DESC, MAX(l.timestamp_ms) DESC LIMIT ?`
 	args = append(args, limit)
 
-	rows, err := s.DB.Query(query, args...)
+	rows, err := s.readDB.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -543,7 +543,7 @@ func (s *Store) FrequentErrorOccurrences(representativeID int64, f LogFilter) ([
 	query += ` ORDER BY l.id DESC LIMIT ?`
 	args = append(args, limit)
 
-	rows, err := s.DB.Query(query, args...)
+	rows, err := s.readDB.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -587,7 +587,7 @@ func (s *Store) LogStats(f LogFilter) (LogStats, error) {
 		args = append(args, f.ToMs)
 	}
 	query += ` GROUP BY l.severity`
-	rows, err := s.DB.Query(query, args...)
+	rows, err := s.readDB.Query(query, args...)
 	if err != nil {
 		return stats, err
 	}
@@ -625,7 +625,7 @@ func (s *Store) LogOptions(siteID int64) (LogFilterOptions, error) {
 		args = append(args, siteID)
 	}
 	query += ` ORDER BY name`
-	rows, err := s.DB.Query(query, args...)
+	rows, err := s.readDB.Query(query, args...)
 	if err != nil {
 		return options, err
 	}
@@ -647,7 +647,7 @@ func (s *Store) LogOptions(siteID int64) (LogFilterOptions, error) {
 		envArgs = append(envArgs, siteID)
 	}
 	envQuery += ` ORDER BY environment`
-	envRows, err := s.DB.Query(envQuery, envArgs...)
+	envRows, err := s.readDB.Query(envQuery, envArgs...)
 	if err != nil {
 		return options, err
 	}

@@ -288,7 +288,7 @@ func (s *Store) UserForToken(token string) (*User, error) {
 	if token == "" {
 		return nil, nil
 	}
-	u, err := scanUser(s.DB.QueryRow(`SELECT `+userColsQualified+` FROM users u
+	u, err := scanUser(s.readDB.QueryRow(`SELECT `+userColsQualified+` FROM users u
 		JOIN auth_sessions a ON a.user_id = u.id
 		WHERE a.token_hash = ? AND a.expires_at > ?`, tokenHash(token), time.Now().Unix()))
 	if err == sql.ErrNoRows {

@@ -14,6 +14,7 @@ import { fmtBytes, fmtClock, fmtDuration } from '../../lib/format';
 import { useSystemHealth } from './hooks/useSystemHealth';
 import { useSlackSystemIntegration } from './hooks/useSlackSystemIntegration';
 import { Meter } from './subcomponents/Meter';
+import { CoreMeter } from './subcomponents/CoreMeter';
 import { Row } from './subcomponents/Row';
 import { pctLabel } from './SystemHealth.constants';
 import './SystemHealth.scss';
@@ -63,6 +64,9 @@ export default function SystemHealth() {
   const diskUsedPct = disk.total_bytes > 0 ? (diskUsed / disk.total_bytes) * 100 : 0;
   const diskShotPct = disk.total_bytes > 0 ? (disk.trace_ux_bytes / disk.total_bytes) * 100 : 0;
   const noOS = ram.total_bytes === 0 && disk.total_bytes === 0;
+  const cores = Math.max(1, cpu.cores);
+  const cpuCoresUsed = cpu.trace_ux_pct / 100;
+  const cpuMachinePct = cpu.trace_ux_machine_pct ?? Math.min(100, cpu.trace_ux_pct / cores);
 
   return (
     <main className="page">
@@ -102,10 +106,13 @@ export default function SystemHealth() {
           <div className="health-card__head">
             <Icon name="clock" size={14} />
             <h3>CPU</h3>
-            <span className="health-card__big">{pctLabel(cpu.trace_ux_pct)}</span>
+            <span className="health-card__big">{pctLabel(cpuMachinePct)}</span>
           </div>
-          <Meter usedPct={cpu.trace_ux_pct} hot={cpu.trace_ux_pct >= 80} />
-          <Row label="Cores" value={String(cpu.cores)} />
+          <CoreMeter cores={cores} coresUsed={cpuCoresUsed} hot={cpuMachinePct >= 80} />
+          <div className="health-row">
+            <span className="muted small">TraceUX</span>
+            <Badge tone="accent">{cpuCoresUsed.toFixed(1)} of {cpu.cores} cores</Badge>
+          </div>
           <Row label="Load (1m)" value={cpu.load1.toFixed(2)} />
           <Row label="Load (5m)" value={cpu.load5.toFixed(2)} />
           <Row label="Load (15m)" value={cpu.load15.toFixed(2)} />
