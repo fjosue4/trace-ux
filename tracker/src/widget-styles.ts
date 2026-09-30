@@ -12,6 +12,7 @@ export function widgetCSS(): string {
   --w-line-soft: color-mix(in srgb, var(--w-panel-text) 7%, transparent);
   --w-muted: color-mix(in srgb, var(--w-panel-text) 58%, transparent);
   --w-quiet: color-mix(in srgb, var(--w-panel-text) 42%, transparent);
+  --w-announcement-text: color-mix(in srgb, var(--w-panel-text) 76%, transparent);
   --w-hover: color-mix(in srgb, var(--w-panel-text) 5%, transparent);
   --w-field: color-mix(in srgb, var(--w-panel-text) 3%, transparent);
   font-family: var(--w-font);
@@ -235,7 +236,7 @@ export function widgetCSS(): string {
 .item__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--w-accent); flex: none; }
 .item__title { margin: 6px 0 0; font-size: 14.5px; font-weight: 620; line-height: 1.35; letter-spacing: -0.012em; }
 .item__excerpt {
-  margin: 5px 0 0; font-size: 13px; line-height: 1.5; color: var(--w-muted);
+  margin: 5px 0 0; font-size: 13px; line-height: 1.5; color: var(--w-announcement-text);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .item__meta { display: flex; gap: 12px; margin-top: 9px; font-size: 11.5px; color: var(--w-quiet); }
@@ -256,7 +257,7 @@ export function widgetCSS(): string {
 .back:focus-visible { outline: 2px solid var(--w-accent); outline-offset: 2px; }
 .back svg { width: 13px; height: 13px; }
 .detail__title { margin: 8px 0 0; font-size: 18px; font-weight: 680; line-height: 1.28; letter-spacing: -0.02em; }
-.detail__body { margin: 12px 0 0; font-size: 13.5px; line-height: 1.62; color: var(--w-muted); overflow-wrap: anywhere; }
+.detail__body { margin: 12px 0 0; font-size: 13.5px; line-height: 1.62; color: var(--w-announcement-text); overflow-wrap: anywhere; }
 .detail__body > :first-child { margin-top: 0; }
 .detail__body > :last-child { margin-bottom: 0; }
 .detail__body p { margin: 9px 0; }
@@ -271,7 +272,7 @@ export function widgetCSS(): string {
 .detail__body ul,
 .detail__body ol { margin: 9px 0; padding-left: 21px; }
 .detail__body li + li { margin-top: 4px; }
-.detail__body blockquote { margin: 11px 0; padding: 2px 0 2px 12px; border-left: 3px solid var(--w-accent); color: var(--w-quiet); }
+.detail__body blockquote { margin: 11px 0; padding: 2px 0 2px 12px; border-left: 3px solid var(--w-accent); color: inherit; }
 .detail__body blockquote p { margin: 0; }
 .detail__body code { padding: 2px 4px; border-radius: 4px; background: var(--w-hover); color: var(--w-panel-text); font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .detail__body pre { margin: 11px 0; overflow-x: auto; padding: 10px 11px; border: 1px solid var(--w-line); border-radius: 8px; background: var(--w-hover); }
