@@ -98,30 +98,23 @@ TRACE_UX_PASSWORD=change-me TRACE_UX_SECURE_COOKIES=0 ./trace-ux # local HTTP de
 Then:
 
 1. Put the dashboard behind HTTPS (the Compose example binds the backend to loopback for this purpose), then open your HTTPS URL and sign in. Leave the username empty (or type `admin`) and use `TRACE_UX_PASSWORD` — that's the bootstrap **admin** account.
-2. **Add site** → copy the snippet (the card has a **Manual** and a **Google Tag Manager** tab):
+2. **Add site** → create a site for your application's URL and copy its site key.
+3. Connect your application with the npm integration below (recommended). If
+   npm is not available in your environment, the HTML/GTM compatibility option
+   is documented afterward.
 
-   ```html
-   <script async src="https://your-server/t.js" data-site="YOUR_SITE_KEY"></script>
-   ```
+### npm and React integrations (recommended)
 
-3. **Manual:** paste it into the `<head>` of every page on your site.
-   **Google Tag Manager:** create a *Custom HTML* tag with the snippet from the GTM tab (it sets `data-site` via `setAttribute`, because GTM's script injection drops the attribute), trigger it on *All Pages* and publish.
-
-   Sessions start appearing within seconds. The same tracker powers the
-   unified **Help & updates** launcher: enable Feedback and Announcements from
-   the site's dashboard settings, then publish an announcement or collect a
-   response without changing the snippet.
-
-### npm and React integrations
-
-For applications that prefer code over a script tag, install the tracker
-package — [**@trace-ux/tracker** on npm](https://www.npmjs.com/package/@trace-ux/tracker).
-The server origin is required because npm/React integrations do not have a
-script URL from which to infer it:
+Use [**@trace-ux/tracker** on npm](https://www.npmjs.com/package/@trace-ux/tracker)
+for the complete tracker API, including the optional React provider and
+announcement callback. Install it in the application that serves the site:
 
 ```bash
 npm install @trace-ux/tracker
 ```
+
+The server origin is required because npm/React integrations do not have a
+script URL from which to infer it:
 
 ```ts
 import { init } from '@trace-ux/tracker';
@@ -130,7 +123,7 @@ const traceux = init({
   siteKey: 'YOUR_SITE_KEY',
   origin: 'https://your-server.example.com',
   userId: currentUser?.id,
-  widget: true, // toggle in dashboard
+  widget: true, // opt into the dashboard-configured visitor widget
   onAnnouncement: (announcement) => {
     // Full title, summary, body, release label, link and metadata are available.
     console.log('New announcement:', announcement.title, announcement.body);
@@ -161,10 +154,9 @@ severity threshold permits them. `setUserStatus` records a seekable
 `user_status` activity; it does not create a separate server-side user table.
 
 **The script and GTM snippets pass `widget: true` for you; npm and React do
-not.** That is the whole reason the Help & updates widget can appear via GTM and
-not via npm with the same site key — a bundle that never uses the widget should
-not pay to download it. The check is `options.widget !== true`, so it must be
-exactly `true`; other truthy values are ignored.
+not.** Set it to exactly `true` when the application should load the optional
+widget; other truthy values are ignored. Leave it out when the application only
+needs recording, identity, events, or logs so the widget chunk is not fetched.
 
 React applications can use the optional provider and hook:
 
@@ -185,10 +177,33 @@ export function App() {
 }
 ```
 
-The same package also keeps the existing HTML and Google Tag Manager IIFE
-installation unchanged. If an npm/React integration and `/t.js` happen to be
-present on one page, the first initialized tracker owns the page and the other
-path reuses that handle rather than recording a second session.
+Sessions start appearing within seconds. Enable Feedback and Announcements in
+the site's dashboard settings to use the unified **Help & updates** launcher.
+
+### Script tag and Google Tag Manager (compatibility option)
+
+For static pages or environments where npm is not available, the server still
+serves the browser bundle directly:
+
+```html
+<script async src="https://your-server/t.js" data-site="YOUR_SITE_KEY"></script>
+```
+
+For a manual install, paste the snippet into the `<head>` of every page. For
+Google Tag Manager, create a *Custom HTML* tag with the snippet from the GTM
+tab (it sets `data-site` via `setAttribute`, because GTM's script injection
+drops the attribute), trigger it on *All Pages*, and publish.
+
+These paths support browser tracking and the server-configured visitor widget;
+the browser bundle also exposes its handle as `window.TraceUX` for global calls.
+They do not expose npm/React-specific features such as module imports, the React
+provider/hook, or the `onAnnouncement` callback. Use npm when the application
+needs the complete tracker API. The script and GTM adapters pass `widget: true`
+automatically; npm and React integrations must opt in explicitly.
+
+If an npm/React integration and `/t.js` happen to be present on one page, the
+first initialized tracker owns the page and the other path reuses that handle
+rather than recording a second session.
 
 ## Install on a VPS (one script)
 
@@ -401,15 +416,22 @@ The dashboard supports real accounts; the **admin** (the `TRACE_UX_PASSWORD` acc
 
 ## Tracking visitors & events
 
-The snippet takes identity at init, and the page can attach or change it later — for example when a visitor logs in mid-recording:
+The npm handle takes identity at init, and the application can attach or change
+it later — for example when a visitor logs in mid-recording:
 
-```html
-<script async src="https://your-server/t.js" data-site="KEY"
-        data-user-id="u-42" data-client-id="acme" data-remote-id="remote-7"></script>
-<script>
-  // any time during the session (latest non-empty value wins):
-  window.TraceUX.identify({ userId: 'u-42', clientId: 'acme', remoteId: 'remote-7' });
-</script>
+```ts
+import { init } from '@trace-ux/tracker';
+
+const traceux = init({
+  siteKey: 'KEY',
+  origin: 'https://your-server',
+  userId: 'u-42',
+  clientId: 'acme',
+  remoteId: 'remote-7',
+});
+
+// any time during the session (latest non-empty value wins):
+traceux.identify({ userId: 'u-42', clientId: 'acme', remoteId: 'remote-7' });
 ```
 
 Sessions are filterable by any of the three ids with the **Visitor** filter in the dashboard, and ids show on the replay page.
@@ -459,7 +481,7 @@ Mark any element to appear as seekable activity in the replay sidebar:
 <button trace-ux-track-id="checkout-click">Buy now</button>
 ```
 
-or programmatically: `window.TraceUX.track('checkout-click')`. Clicking an activity row jumps the recording to that exact moment.
+or programmatically: `traceux.track('checkout-click')`. Clicking an activity row jumps the recording to that exact moment.
 
 Ask for a Slack notification alongside the event (see the site's **Integrations** tab in the dashboard) by adding `notify: true`:
 
@@ -552,12 +574,20 @@ communicating feel like one product surface instead of two unrelated widgets.
 
 **Everything is configured per site from the dashboard** (open a site from the Sites list): toggle recordings on/off, enable the widget, pick its corner, and manage Feedback campaigns. Every site starts with an editable, disable-only default campaign for basic feedback. Additional campaigns support Good/Bad, 1–5 stars, or a 1–10 scale, optional written feedback, and per-occurrence, 24-hour, or 7-day recurrence. The tracker picks the configuration up automatically from the server; the snippet carries no settings.
 
-**Or collect programmatically:**
+**Collect programmatically with npm (recommended):**
 
-```js
-window.TraceUX.feedback({ rating: 5, comment: 'Loved it', surveyId: 'checkout' });
+```ts
+import { init } from '@trace-ux/tracker';
 
-const result = await window.TraceUX.feedback.expand('phone-call-quality', {
+const traceux = init({
+  siteKey: 'YOUR_SITE_KEY',
+  origin: 'https://your-server.example.com',
+  widget: true,
+});
+
+traceux.feedback({ rating: 5, comment: 'Loved it', surveyId: 'checkout' });
+
+const result = await traceux.feedback.expand('phone-call-quality', {
   occurrenceId: call.id, // optional idempotency key
 });
 ```
@@ -673,24 +703,33 @@ Multi-stage: frontend bundles built with esbuild/Vite, then a `CGO_ENABLED=0` Go
 
 **What about SPAs?** Route changes via the History API are detected and become page entries in the session timeline.
 
-**How can I add a demo “watch my visit” button?** The optional demo capability is disabled by default. Enable it only on an isolated demo deployment, then call `window.TraceUX.claimReplay()` from a button handler and redirect to the returned relative URL. The server stores only a keyed hash of the random capability, scopes it to the current site/session, rate-limits claims, and expires it automatically. This is intended for a private demo overlay, not as a replacement for dashboard authentication.
+**How can I add a demo “watch my visit” button?** The optional demo capability is disabled by default. Enable it only on an isolated demo deployment, then call `traceux.claimReplay()` from the npm handle in a button handler and redirect to the returned relative URL. The server stores only a keyed hash of the random capability, scopes it to the current site/session, rate-limits claims, and expires it automatically. This is intended for a private demo overlay, not as a replacement for dashboard authentication.
 
 ```html
 <button id="watch-my-visit" type="button">Watch my visit</button>
-<script>
-  document.querySelector('#watch-my-visit').addEventListener('click', async (event) => {
-    const button = event.currentTarget;
-    button.disabled = true;
-    try {
-      const link = await window.TraceUX.claimReplay();
-      // The server currently returns a same-origin relative path.
-      window.location.assign(new URL(link.url, window.location.origin).href);
-    } catch {
-      button.disabled = false;
-      button.textContent = 'Replay unavailable';
-    }
-  });
-</script>
+```
+
+```ts
+import { init } from '@trace-ux/tracker';
+
+const traceux = init({
+  siteKey: 'YOUR_SITE_KEY',
+  origin: 'https://your-server.example.com',
+});
+
+const button = document.querySelector<HTMLButtonElement>('#watch-my-visit');
+button?.addEventListener('click', async () => {
+  if (!button) return;
+  button.disabled = true;
+  try {
+    const link = await traceux.claimReplay();
+    // The server currently returns a same-origin relative path.
+    window.location.assign(new URL(link.url, window.location.origin).href);
+  } catch {
+    button.disabled = false;
+    button.textContent = 'Replay unavailable';
+  }
+});
 ```
 
 **Can I see who the user was?** By design, no. Sessions are anonymous; no cookies, no cross-site identity, no raw IPs.

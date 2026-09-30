@@ -10,9 +10,10 @@ self-hosted UX bundle. Recordings go to **your** server, not a vendor's.
 npm install @trace-ux/tracker
 ```
 
-You need a running TraceUX server and a site key from its dashboard. If you
-only want the script tag, you do not need this package — the server serves
-`/t.js` and nothing here changes that.
+You need a running TraceUX server and a site key from its dashboard. npm is the
+recommended integration when the application needs the complete tracker API,
+React support, or the `onAnnouncement` callback. If you only need browser
+tracking from a static page, the server also serves `/t.js`.
 
 ---
 
@@ -183,9 +184,10 @@ section.
 | Core — recording, identity, events, logs | ~27 KB |
 | Widget chunk, only when enabled | ~17 KB |
 
-## Script tag and Google Tag Manager
+## Script tag and Google Tag Manager (compatibility option)
 
-Unchanged, and still the simplest install. The server serves the bundle:
+The server still serves the browser bundle for static pages or environments
+where npm is not available:
 
 ```html
 <script async src="https://traceux.example.com/t.js" data-site="YOUR_SITE_KEY"></script>
@@ -193,6 +195,15 @@ Unchanged, and still the simplest install. The server serves the bundle:
 
 `data-user-id`, `data-client-id` and `data-remote-id` are read at load, and
 `window.TraceUX` exposes the same handle.
+
+For Google Tag Manager, create a *Custom HTML* tag with the snippet from the
+TraceUX site's GTM tab (it sets `data-site` via `setAttribute`, because GTM's
+script injection drops the attribute), trigger it on *All Pages*, and publish.
+The script and GTM paths cover browser tracking and the server-configured
+visitor widget, but do not expose npm/React-specific module imports, the React
+provider/hook, or the `onAnnouncement` callback. The script and GTM adapters
+enable the widget automatically; npm and React integrations must pass
+`widget: true`.
 
 If a page somehow has both the snippet and an npm integration, the first
 tracker to initialize owns the page; the second reuses that handle instead of
