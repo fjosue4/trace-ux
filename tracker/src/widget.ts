@@ -379,6 +379,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   let section: Section = sections[0].id;
   let panelOpen = false;
   let submitted = false;
+  let feedbackCloseTimer: ReturnType<typeof setTimeout> | undefined;
   let activeSurvey = host.survey;
   let activeDeliveryDone = false;
   let destroyed = false;
@@ -905,6 +906,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     if (destroyed) return;
     restorePlacement();
     placeOpenSurfaces();
+    moveTabMarker(false);
   };
   addEventListener('resize', onResize);
 
@@ -1018,17 +1020,21 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     ticketsCount.textContent = String(ticketsUnread);
     // A badge appearing widens the launcher; keep a moved one on screen.
     restorePlacement();
+    // Unread badges also change the tabs' widths and the active tab's position.
+    moveTabMarker();
   }
 
   function moveTabMarker(animated = true) {
     const active = tabButtons.get(section);
-    if (!active || tabs.hidden) return;
+    if (!active || !panelOpen || tabs.hidden || destroyed) return;
     // A fast tab switch, or the first layout snap after opening, can otherwise
     // leave two animations competing to write the marker's transform.
     tabMarkerAnimation?.stop();
     tabMarkerAnimation = null;
     const width = active.offsetWidth;
-    const offset = active.offsetLeft - tabs.offsetLeft;
+    // Both the tab and marker are positioned relative to the tab strip.
+    // offsetLeft already accounts for its padding and the rendered sections.
+    const offset = active.offsetLeft;
     if (!animated || reducedMotion()) {
       tabMarker.style.width = `${width}px`;
       tabMarker.style.transform = `translateX(${offset}px)`;
@@ -1816,9 +1822,11 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       if (mark) {
         animate(mark, { transform: ['scale(.6)', 'scale(1)'] }, { duration: dur(0.42), ease: EASE_POP });
       }
-      // Only auto-close when feedback is the whole widget; with multiple sections
-      // enabled the visitor may still want to read the updates.
-      if (sections.length < 2) setTimeout(() => closePanel(), 2200);
+      clearTimeout(feedbackCloseTimer);
+      feedbackCloseTimer = setTimeout(() => {
+        feedbackCloseTimer = undefined;
+        if (panelOpen && !destroyed) closePanel();
+      }, 3000);
     });
     form.appendChild(submit);
 
@@ -1888,6 +1896,8 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   }
 
   function closePanel(recordDismissal = true) {
+    clearTimeout(feedbackCloseTimer);
+    feedbackCloseTimer = undefined;
     if (!panelOpen) return;
     if (recordDismissal && !submitted) finishActiveDelivery('dismissed');
     const resetCampaign = !!activeSurvey.delivery_token;
@@ -2351,6 +2361,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       destroyed = true;
       clearTimeout(timer);
       clearTimeout(ticketTimer);
+      clearTimeout(feedbackCloseTimer);
       clearTimeout(toastTimer);
       clearTimeout(widgetSocketRetryTimer);
       clearTimeout(suppressTimer);
