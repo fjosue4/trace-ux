@@ -13,6 +13,7 @@ import { animate } from 'motion/mini';
 import notificationSoundURL from './assets/notification.mp3';
 import { markdownToPlainText, renderMarkdownHTML } from './markdown';
 import { widgetCSS } from './widget-styles';
+import { appendLinkedText } from './text-links';
 
 export type WidgetAppearanceCfg = {
   theme?: 'light' | 'dark';
@@ -218,6 +219,7 @@ function svg(paths: string, viewBox = '0 0 24 24'): SVGSVGElement {
 const ICONS = {
   close: '<path d="M18 6 6 18M6 6l12 12"/>',
   back: '<path d="M15 18l-6-6 6-6"/>',
+  arrowUp: '<path d="M0 0h24v24H0z" fill="none" stroke="none"/><path d="M12 20V4m-7 7l7-7l7 7"/>',
   heart: '<path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 1 0-7.8 7.8l1.1 1L12 21l7.7-7.6 1.1-1a5.5 5.5 0 0 0 0-7.8z"/>',
   comment: '<path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.4 8.4 0 0 1-3.8-.9L3 20.5l1.5-4.6A8.4 8.4 0 0 1 12 3.1a8.4 8.4 0 0 1 9 8.4z"/>',
   megaphone: '<path d="m3 11 15-7v16L3 13zM3 11v2a3 3 0 0 0 3 3h1v-6H6a3 3 0 0 0-3 1z"/>',
@@ -388,6 +390,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 	type TicketView = { kind: 'list' } | { kind: 'thread'; id: number } | { kind: 'new' };
 	let ticketView: TicketView = { kind: 'list' };
 	let ticketLoading = false;
+  let ticketListLoading = false;
 	let ticketError = '';
 	let lastTicketFetch = 0;
 	let hasLiveTicket = false;
@@ -396,6 +399,9 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 	const ticketBaseInterval = ticketInterval;
 	let ticketTimer: ReturnType<typeof setTimeout> | undefined;
 	let ticketRequest = 0;
+  const ticketThreads = new Map<number, TicketThread>();
+  let ticketLoadingTimer: ReturnType<typeof setTimeout> | undefined;
+  let ticketThreadLoad: { id: number; controller: AbortController } | undefined;
 	// Anything typed but not sent yet. Every ticket view is thrown away and
 	// rebuilt on each repaint — a background poll, a tab switch, the panel
 	// closing on a click elsewhere on the page — so a draft that lives only in
@@ -904,6 +910,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 
   const onResize = () => {
     if (destroyed) return;
+    resizeTicketComposer();
     restorePlacement();
     placeOpenSurfaces();
     moveTabMarker(false);
@@ -950,20 +957,22 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   // used to snap the top edge up or down in one frame. Tween the panel from the
   // height it had to the height the new view needs instead.
   let panelHeightAnimation: ReturnType<typeof animate> | null = null;
+  let ticketComposerHeightAnimation: ReturnType<typeof animate> | null = null;
+  let ticketComposerFrame = 0;
   // Opening already animates the whole panel in; a height tween on top of that
   // would start from whatever the previous open left behind.
   let panelOpening = false;
+  let panelOpeningAnimation: ReturnType<typeof animate> | null = null;
 
-  function swapView(build: () => HTMLElement, dir: 1 | -1) {
-    const next = build();
-    const tweenHeight = panelOpen && !panelOpening && !reducedMotion();
+  function replaceView(next: HTMLElement, animateHeight: boolean) {
+    const tweenHeight = animateHeight && panelOpen && !panelOpening && !reducedMotion();
+    const fromHeight = tweenHeight ? panel.offsetHeight : 0;
     panelHeightAnimation?.stop();
     panelHeightAnimation = null;
-    const fromHeight = tweenHeight ? panel.offsetHeight : 0;
     panel.style.height = '';
     body.classList.toggle('body--ticket-thread', next.classList.contains('ticket-view--thread'));
     body.replaceChildren(next);
-    body.scrollTop = 0;
+    resizeTicketComposer();
     // Beside a moved mid-edge tab the panel is centred by its own height,
     // which the new view just changed.
     if (panelOpen && launcherAt) placeSurface(panel);
@@ -983,10 +992,17 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
           if (panelHeightAnimation === tween) {
             panel.style.height = '';
             panelHeightAnimation = null;
+            if (panelOpen && launcherAt) placeSurface(panel);
           }
         });
       }
     }
+  }
+
+  function swapView(build: () => HTMLElement, dir: 1 | -1, animateHeight = true) {
+    const next = build();
+    replaceView(next, animateHeight);
+    body.scrollTop = 0;
     animate(
       next,
       { opacity: [0, 1], transform: [`scale(${dir === 1 ? 0.975 : 1.02})`, 'none'] },
@@ -1254,7 +1270,47 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     });
   }
 
-  function repaintTicketView() {
+  function resizeTicketComposer(animated = false) {
+    const input = body.querySelector<HTMLTextAreaElement>('.ticket-composer__input');
+    const fromHeight = input?.offsetHeight || 28;
+    ticketComposerHeightAnimation?.stop();
+    ticketComposerHeightAnimation = null;
+    cancelAnimationFrame(ticketComposerFrame);
+    ticketComposerFrame = 0;
+    if (!input || !input.offsetWidth) return;
+    const scrollTop = input.scrollTop;
+    // Reset before measuring so deleting text shrinks the field as well.
+    input.style.height = '28px';
+    const borderHeight = input.offsetHeight - input.clientHeight;
+    input.style.height = `${Math.max(28, input.scrollHeight + borderHeight)}px`;
+    const toHeight = input.offsetHeight;
+    if (animated && !reducedMotion() && Math.abs(toHeight - fromHeight) > 1) {
+      input.style.height = `${fromHeight}px`;
+      const tween = animate(input, { height: [`${fromHeight}px`, `${toHeight}px`] }, {
+        duration: dur(0.22), ease: EASE_OUT,
+      });
+      ticketComposerHeightAnimation = tween;
+      // A dragged launcher uses explicit panel coordinates; follow the animated
+      // height so the panel stays attached to it throughout the resize.
+      const followPlacement = () => {
+        if (destroyed || !panelOpen || ticketComposerHeightAnimation !== tween) return;
+        if (launcherAt) placeSurface(panel);
+        ticketComposerFrame = requestAnimationFrame(followPlacement);
+      };
+      if (launcherAt) ticketComposerFrame = requestAnimationFrame(followPlacement);
+      void tween.finished.then(() => {
+        if (ticketComposerHeightAnimation !== tween) return;
+        input.style.height = `${toHeight}px`;
+        ticketComposerHeightAnimation = null;
+        cancelAnimationFrame(ticketComposerFrame);
+        ticketComposerFrame = 0;
+        if (!destroyed && panelOpen && launcherAt) placeSurface(panel);
+      });
+    }
+    input.scrollTop = scrollTop;
+  }
+
+  function repaintTicketView(animateHeight = false) {
     if (destroyed || !panelOpen || section !== 'tickets') return;
     // Replacing the view moves focus to the panel, so remember which field the
     // visitor was in and where the caret sat, and put both back afterwards. A
@@ -1264,9 +1320,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     const caret = focusName && typeof focused?.selectionStart === 'number' ? focused.selectionStart : null;
 
     const next = buildTicketsView();
-    body.classList.toggle('body--ticket-thread', next.classList.contains('ticket-view--thread'));
-    body.replaceChildren(next);
-    if (launcherAt) placeSurface(panel);
+    replaceView(next, animateHeight);
 
     if (!focusName) return;
     const restored = body.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${focusName}"]`);
@@ -1347,9 +1401,11 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   function buildTicketMessage(message: TicketMessage): HTMLElement {
     const bubble = el('div', `ticket-message ticket-message--${message.author}`);
     const author = message.author === 'staff' ? message.author_name || 'Support' : 'You';
+    const messageBody = el('p', 'ticket-message__body');
+    appendLinkedText(messageBody, message.body);
     bubble.append(
       el('div', 'ticket-message__author', author),
-      el('p', 'ticket-message__body', message.body),
+      messageBody,
       el('div', 'ticket-message__time', ticketRelativeTime(message.created_at)),
     );
     return bubble;
@@ -1362,30 +1418,68 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     back.type = 'button';
     back.append(svg(ICONS.back), document.createTextNode('All tickets'));
     back.addEventListener('click', () => {
+      clearTimeout(ticketLoadingTimer);
+      ticketThreadLoad?.controller.abort();
+      ticketRequest += 1;
+      ticketLoading = false;
       ticketView = { kind: 'list' };
       ticketThread = null;
       ticketError = '';
       swapView(buildTicketsView, -1);
     });
-    detail.appendChild(back);
-
-    if (!ticketThread) {
-      detail.appendChild(el('p', 'ticket-loading', ticketError || 'Loading ticket…'));
+    const threadId = ticketView.kind === 'thread' ? ticketView.id : undefined;
+    const ticket = ticketThread?.ticket || tickets.find((item) => item.id === threadId);
+    const loadingState = () => {
+      const state = el('div', 'ticket-loading');
+      state.setAttribute('role', ticketError ? 'alert' : 'status');
+      if (ticketLoading && !ticketError) state.appendChild(el('span', 'ticket-loading__spinner'));
+      state.appendChild(el('span', undefined, ticketError || 'Loading conversation…'));
+      if (ticketError && ticketView.kind === 'thread') {
+        const id = ticketView.id;
+        const retry = markWidgetAction(el('button', 'back', 'Retry'), `ticket:${id}:retry`);
+        retry.type = 'button';
+        retry.addEventListener('click', () => void loadTicketThread(id));
+        state.appendChild(retry);
+      }
+      return state;
+    };
+    if (!ticket) {
+      detail.appendChild(back);
+      detail.appendChild(loadingState());
       view.appendChild(detail);
       return view;
     }
 
-    const ticket = ticketThread.ticket;
     const heading = el('div', 'ticket-thread__heading');
+    const ticketNumber = el('span', 'eyebrow', `Ticket #${ticket.id}`);
+    ticketNumber.title = `Ticket #${ticket.id}`;
     heading.append(
-      el('span', 'eyebrow', `Ticket #${ticket.id}`),
+      back,
+      ticketNumber,
       el('span', `ticket-status ticket-status--${ticket.status}`, ticketStatusLabel(ticket.status)),
     );
     detail.appendChild(heading);
-    detail.appendChild(el('h3', 'detail__title', ticket.subject));
+    const title = el('h3', 'detail__title', ticket.subject);
+    title.title = ticket.subject;
+    detail.appendChild(title);
     const meta = el('div', 'ticket-thread__meta');
     meta.append(el('span', undefined, ticketRelativeTime(ticket.created_at)));
     detail.appendChild(meta);
+
+    if (!ticketThread) {
+      detail.appendChild(loadingState());
+      view.appendChild(detail);
+      return view;
+    }
+    if (ticketError) {
+      const error = el('div', 'ticket-error', ticketError);
+      error.setAttribute('role', 'alert');
+      const retry = markWidgetAction(el('button', 'back', 'Retry'), `ticket:${ticket.id}:retry`);
+      retry.type = 'button';
+      retry.addEventListener('click', () => void loadTicketThread(ticket.id));
+      error.appendChild(retry);
+      detail.appendChild(error);
+    }
 
     const messages = el('div', 'ticket-messages');
     ticketThread.messages.forEach((message) => {
@@ -1400,6 +1494,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     } else {
       const composer = el('form', 'ticket-composer');
       const input = el('textarea', 'ticket-composer__input');
+      input.rows = 1;
       input.maxLength = 4000;
       input.placeholder = 'Reply to support…';
       input.setAttribute('aria-label', 'Reply to support');
@@ -1409,13 +1504,21 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
         () => ticketReplyDrafts.get(ticket.id) || '',
         (v) => ticketReplyDrafts.set(ticket.id, v),
       );
-      const actions = el('div', 'ticket-composer__actions');
+      input.addEventListener('input', () => {
+        resizeTicketComposer(true);
+        if (launcherAt) placeSurface(panel);
+      });
+      const field = el('div', 'ticket-composer__field');
       const error = el('div', 'ticket-error');
       error.hidden = true;
-      const send = markWidgetAction(el('button', 'submit', 'Send'), `ticket:${ticket.id}:reply`);
+      error.setAttribute('role', 'alert');
+      const send = markWidgetAction(el('button', 'submit ticket-composer__send'), `ticket:${ticket.id}:reply`);
       send.type = 'submit';
-      actions.append(error, send);
-      composer.append(input, actions);
+      send.setAttribute('aria-label', 'Send reply');
+      send.title = 'Send reply';
+      send.appendChild(svg(ICONS.arrowUp));
+      field.append(input, send);
+      composer.append(field, error);
       composer.addEventListener('submit', async (event) => {
         event.preventDefault();
         const bodyText = input.value.trim();
@@ -1437,7 +1540,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
           return;
         }
         try {
-          ticketThread = (await res.json()) as TicketThread;
+          rememberTicketThread((await res.json()) as TicketThread);
           ticketReplyDrafts.delete(ticket.id);
           tickets = tickets.map((item) => item.id === ticket.id ? ticketThread?.ticket || item : item);
           syncBadges();
@@ -1578,58 +1681,121 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   }
 
   function openTicketThread(id: number) {
+    clearTimeout(ticketLoadingTimer);
     const ticket = tickets.find((item) => item.id === id);
     if (ticket) markTicketRead(ticket);
     ticketView = { kind: 'thread', id };
-    ticketThread = null;
+    ticketThread = ticketThreads.get(id) || null;
+    if (ticketThread && ticket) rememberTicketThread({ ...ticketThread, ticket });
     ticketError = '';
     ticketLoading = true;
-    swapView(buildTicketsView, 1);
+    if (ticketThread) {
+      swapView(buildTicketsView, 1, false);
+      scrollTicketMessagesToLatest();
+    } else {
+      // Fast responses render the complete thread before a loading view is
+      // painted. Slow requests get a stable, full-sized conversation loader.
+      ticketLoadingTimer = setTimeout(() => {
+        if (ticketLoading && panelOpen && section === 'tickets' && ticketView.kind === 'thread' && ticketView.id === id) {
+          swapView(buildTicketsView, 1);
+        }
+      }, 120);
+    }
     void loadTicketThread(id, false);
+  }
+
+  function rememberTicketThread(thread: TicketThread) {
+    ticketThread = thread;
+    ticketThreads.set(thread.ticket.id, thread);
   }
 
   async function loadTicketThread(id: number, render = true) {
     if (destroyed || !cfg.tickets_enabled) return;
+    // Polling must not restart a conversation's automatic retry cycle.
+    if (!render && ticketThreadLoad?.id === id && !ticketThreadLoad.controller.signal.aborted) return;
+    ticketThreadLoad?.controller.abort();
+    const load = { id, controller: new AbortController() };
+    ticketThreadLoad = load;
+    const { signal } = load.controller;
     const request = ++ticketRequest;
     ticketLoading = true;
+    ticketError = '';
     if (render) repaintTicketView();
-    let res: Response;
+    let unavailable = false;
     try {
-      res = await fetch(`${ticketURL(`/${id}`)}?visitor=${encodeURIComponent(visitor)}`);
-    } catch {
-      if (request === ticketRequest) {
-        ticketLoading = false;
-        ticketError = 'Could not load this ticket.';
-        repaintTicketView();
+      // One initial request, then three retries with a short backoff. Keep the
+      // loader (or cached conversation) in place until this cycle finishes.
+      for (let attempt = 0; attempt <= 3; attempt += 1) {
+        if (signal.aborted || request !== ticketRequest || destroyed) return;
+        let thread: TicketThread | undefined;
+        try {
+          const res = await fetch(`${ticketURL(`/${id}`)}?visitor=${encodeURIComponent(visitor)}`, { signal });
+          unavailable = res.status === 404;
+          if (res.ok) {
+            const data = (await res.json()) as TicketThread;
+            if (data?.ticket?.id !== id || !Array.isArray(data.messages)) throw new Error('Invalid ticket response');
+            thread = data;
+          }
+        } catch {
+          unavailable = false;
+        }
+        if (signal.aborted || request !== ticketRequest || destroyed) return;
+        if (thread) {
+          clearTimeout(ticketLoadingTimer);
+          rememberTicketThread(thread);
+          ticketLoading = false;
+          ticketError = '';
+          if (panelOpen && section === 'tickets' && ticketView.kind === 'thread' && ticketView.id === id) {
+            markTicketRead(thread.ticket);
+          }
+          if (ticketView.kind === 'thread' && ticketView.id === id) {
+            // Fast responses open at their complete size; an existing loader
+            // transitions smoothly to the loaded conversation.
+            repaintTicketView(body.classList.contains('body--ticket-thread'));
+            scrollTicketMessagesToLatest();
+          }
+          return;
+        }
+        if (attempt < 3) await waitForTicketRetry(500 * 2 ** attempt, signal);
       }
-      return;
-    }
-    if (request !== ticketRequest || destroyed) return;
-    if (!res.ok) {
+      if (signal.aborted || request !== ticketRequest || destroyed) return;
+      clearTimeout(ticketLoadingTimer);
       ticketLoading = false;
-      ticketError = res.status === 404 ? 'This ticket is no longer available.' : 'Could not load this ticket.';
-      repaintTicketView();
-      return;
-    }
-    try {
-      ticketThread = (await res.json()) as TicketThread;
-      ticketLoading = false;
-      ticketError = '';
-      if (panelOpen && section === 'tickets' && ticketView.kind === 'thread' && ticketView.id === id) {
-        markTicketRead(ticketThread.ticket);
+      ticketError = unavailable ? 'This ticket is no longer available.' : 'Could not load this ticket.';
+      if (unavailable) {
+        ticketThreads.delete(id);
+        ticketThread = null;
       }
-      if (ticketView.kind === 'thread' && ticketView.id === id) {
-        repaintTicketView();
-        scrollTicketMessagesToLatest();
-      }
-    } catch {
-      ticketLoading = false;
-      ticketError = 'Could not load this ticket.';
-      repaintTicketView();
+      repaintTicketView(true);
+    } finally {
+      if (ticketThreadLoad === load) ticketThreadLoad = undefined;
     }
   }
 
+  function waitForTicketRetry(delay: number, signal: AbortSignal): Promise<void> {
+    return new Promise((resolve) => {
+      const finish = () => {
+        clearTimeout(timer);
+        signal.removeEventListener('abort', finish);
+        resolve();
+      };
+      const timer = setTimeout(finish, delay);
+      signal.addEventListener('abort', finish, { once: true });
+      if (signal.aborted) finish();
+    });
+  }
+
   async function loadTickets() {
+    if (ticketListLoading) return;
+    ticketListLoading = true;
+    try {
+      await fetchTickets();
+    } finally {
+      ticketListLoading = false;
+    }
+  }
+
+  async function fetchTickets() {
     if (!cfg.tickets_enabled || destroyed) return;
     let res: Response;
     try {
@@ -1654,12 +1820,19 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     ticketInterval = ticketBaseInterval;
     ticketRetryPending = false;
     tickets = next;
+    ticketThreads.forEach((thread, id) => {
+      const ticket = next.find((item) => item.id === id);
+      if (!ticket || ticket.message_count !== thread.messages.length) ticketThreads.delete(id);
+      else ticketThreads.set(id, { ...thread, ticket });
+    });
     hasLiveTicket = next.some(isTicketLive);
     lastTicketFetch = Date.now();
     syncBadges();
     if (panelOpen && section === 'tickets') {
       if (ticketView.kind === 'thread') {
-        void loadTicketThread(ticketView.id, false);
+        // After exhausting retries, leave the error and manual Retry action
+        // visible instead of starting another cycle on every background poll.
+        if (!ticketError) void loadTicketThread(ticketView.id, false);
       } else if (ticketView.kind === 'list') {
         // The compose form shows nothing the ticket list feeds, so a poll has
         // no reason to rebuild it underneath whoever is filling it in.
@@ -1888,10 +2061,15 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     launcher.setAttribute('aria-expanded', 'true');
     panelOpening = true;
     showSection(section);
-    panelOpening = false;
     placeSurface(panel);
     if (sections.length > 1) requestAnimationFrame(() => moveTabMarker(false));
-    animateIn(panel);
+    const opening = animateIn(panel);
+    panelOpeningAnimation = opening;
+    void opening.finished.then(() => {
+      if (panelOpeningAnimation !== opening) return;
+      panelOpeningAnimation = null;
+      panelOpening = false;
+    });
     animate(launcher, { transform: ['none', 'scale(.94)', 'none'] }, { duration: dur(0.22), ease: EASE_OUT });
   }
 
@@ -1902,6 +2080,9 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     if (recordDismissal && !submitted) finishActiveDelivery('dismissed');
     const resetCampaign = !!activeSurvey.delivery_token;
     panelOpen = false;
+    panelOpening = false;
+    panelOpeningAnimation?.stop();
+    panelOpeningAnimation = null;
     launcher.setAttribute('aria-expanded', 'false');
     void animateOut(panel).finished.then(() => {
       if (!panelOpen) panel.hidden = true;
@@ -2042,6 +2223,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       if (!res.ok || destroyed) return;
       const thread = (await res.json()) as TicketThread;
       if (!thread || !Array.isArray(thread.messages)) return;
+      if (thread.ticket?.id === ticket.id) ticketThreads.set(ticket.id, thread);
       const latest = thread.messages[thread.messages.length - 1];
       if (!latest || latest.author !== 'staff') return;
 
@@ -2064,6 +2246,11 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   }
 
   function upsertTicketFromSocket(ticket: Ticket) {
+    const cached = ticketThreads.get(ticket.id);
+    if (cached) {
+      if (ticket.message_count !== cached.messages.length) ticketThreads.delete(ticket.id);
+      else ticketThreads.set(ticket.id, { ...cached, ticket });
+    }
     tickets = [ticket, ...tickets.filter((item) => item.id !== ticket.id)].sort(
       (a, b) => b.last_message_at - a.last_message_at || b.id - a.id,
     );
@@ -2082,13 +2269,13 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     // unsent draft and the caret across.
     if (ticketView.kind !== 'thread' || ticketView.id !== ticket.id || !ticketThread) return;
     const statusChanged = ticketThread.ticket.status !== ticket.status;
-    ticketThread = { ...ticketThread, ticket };
+    rememberTicketThread({ ...ticketThread, ticket });
     if (statusChanged) repaintTicketView();
   }
 
   function appendTicketMessageToView(message: TicketMessage): boolean {
     if (!ticketThread || ticketThread.messages.some((item) => item.id === message.id)) return false;
-    ticketThread = { ...ticketThread, messages: [...ticketThread.messages, message] };
+    rememberTicketThread({ ...ticketThread, messages: [...ticketThread.messages, message] });
     const messageList = body.querySelector<HTMLElement>('.ticket-messages');
     if (messageList) {
       messageList.appendChild(buildTicketMessage(message));
@@ -2361,11 +2548,17 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
       destroyed = true;
       clearTimeout(timer);
       clearTimeout(ticketTimer);
+      clearTimeout(ticketLoadingTimer);
+      ticketThreadLoad?.controller.abort();
       clearTimeout(feedbackCloseTimer);
       clearTimeout(toastTimer);
       clearTimeout(widgetSocketRetryTimer);
       clearTimeout(suppressTimer);
       cancelAnimationFrame(dragFrame);
+      cancelAnimationFrame(ticketComposerFrame);
+      ticketComposerHeightAnimation?.stop();
+      panelHeightAnimation?.stop();
+      panelOpeningAnimation?.stop();
       glide?.stop();
       widgetSocketRetryTimer = undefined;
       widgetSocket?.close();
