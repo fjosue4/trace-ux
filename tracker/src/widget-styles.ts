@@ -13,6 +13,7 @@ export function widgetCSS(): string {
   --w-muted: color-mix(in srgb, var(--w-panel-text) 58%, transparent);
   --w-quiet: color-mix(in srgb, var(--w-panel-text) 42%, transparent);
   --w-announcement-text: color-mix(in srgb, var(--w-panel-text) 76%, transparent);
+  --w-unread: #dc2626;
   --w-hover: color-mix(in srgb, var(--w-panel-text) 5%, transparent);
   --w-field: color-mix(in srgb, var(--w-panel-text) 3%, transparent);
   font-family: var(--w-font);
@@ -48,16 +49,16 @@ export function widgetCSS(): string {
 .launcher__icon svg { width: 20px; height: 20px; display: block; }
 .launcher__badge {
   display: grid; place-items: center; flex: none;
-  min-width: 20px; height: 20px; padding: 0 6px; margin-inline-start: 2px;
-  border-radius: 999px;
-  background: var(--w-button-text); color: var(--w-button-bg);
+  width: 22px; height: 22px; padding: 0; margin-inline-start: 2px;
+  border-radius: 50%;
+  background: var(--w-unread); color: #fff;
   font-size: 11px; font-weight: 700; line-height: 1;
   /* Two reasons a centred digit still reads off-centre, both handled here.
      Vertically, place-items centres the line box, and the font box reserves
      descender space a digit never uses, landing the glyph ~0.06em low; the
      bottom padding trims twice that back off. Horizontally, tabular figures
      pad a narrow glyph like "1" asymmetrically inside a fixed advance, so
-     they are left off — min-width already stops the width jumping between
+     they are left off — fixed width stops the width jumping between
      counts, and a badge has no column to align to. */
   padding-bottom: 0.12em;
 }
@@ -73,10 +74,10 @@ export function widgetCSS(): string {
 .launcher--icon .launcher__icon svg { width: 22px; height: 22px; }
 .launcher--icon .launcher__badge {
   position: absolute; top: -3px; right: -2px; margin: 0;
-  min-width: 19px; height: 19px; padding: 0 5px 0.12em;
+  width: 22px; height: 22px; padding: 0 0 0.12em;
   border: 2px solid var(--w-panel-bg);
-  background: var(--w-accent); color: #fff;
-  font-size: 10.5px;
+  background: var(--w-unread); color: #fff;
+  font-size: 10px;
 }
 
 /* The launcher and the panel are position: fixed, so they anchor to the
@@ -192,9 +193,9 @@ export function widgetCSS(): string {
 .tab:focus-visible { outline: 2px solid var(--w-accent); outline-offset: -2px; border-radius: 6px; }
 .tab__count {
   display: inline-grid; place-items: center;
-  min-width: 17px; height: 17px; padding: 0 5px; margin-inline-start: 6px;
-  border-radius: 999px; background: var(--w-accent); color: #fff;
-  font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums;
+  width: 20px; height: 20px; padding: 0; margin-inline-start: 6px;
+  border-radius: 50%; background: var(--w-unread); color: #fff;
+  font-size: 9px; font-weight: 700; line-height: 1;
   vertical-align: 1px;
 }
 .tabs__marker {
@@ -233,7 +234,7 @@ export function widgetCSS(): string {
   color: var(--w-accent); font-size: 10.5px; font-weight: 750;
   text-transform: uppercase; letter-spacing: .07em;
 }
-.item__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--w-accent); flex: none; }
+.item__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--w-unread); flex: none; }
 .item__title { margin: 6px 0 0; font-size: 14.5px; font-weight: 620; line-height: 1.35; letter-spacing: -0.012em; }
 .item__excerpt {
   margin: 5px 0 0; font-size: 13px; line-height: 1.5; color: var(--w-announcement-text);

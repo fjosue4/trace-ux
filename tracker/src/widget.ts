@@ -15,6 +15,13 @@ import { markdownToPlainText, renderMarkdownHTML } from './markdown';
 import { widgetCSS } from './widget-styles';
 import { appendLinkedText } from './text-links';
 
+const ANNOUNCEMENT_UNREAD_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+
+function isAnnouncementUnread(announcement: Announcement, now = Date.now()): boolean {
+  const age = now - announcement.published_at * 1000;
+  return !announcement.read && announcement.published_at > 0 && age >= 0 && age < ANNOUNCEMENT_UNREAD_WINDOW_MS;
+}
+
 export type WidgetAppearanceCfg = {
   theme?: 'light' | 'dark';
   accent?: string;
@@ -378,6 +385,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   // ---- state ----
   let announcements: Announcement[] = [];
   let seenIds = new Set<number>();
+  let unreadExpiryTimer: ReturnType<typeof setTimeout> | undefined;
   let section: Section = sections[0].id;
   let panelOpen = false;
   let submitted = false;
@@ -482,7 +490,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 		syncBadges();
 	}
 
-  const unreadCount = () => announcements.filter((a) => !a.read).length;
+  const unreadCount = () => announcements.filter((a) => isAnnouncementUnread(a)).length;
   const playNotificationSound = createNotificationSound();
 
   // ---- launcher ----
@@ -1024,20 +1032,36 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   function syncBadges() {
     const n = unreadCount() + unreadTicketCount();
     launcherBadge.hidden = n === 0;
-    launcherBadge.textContent = String(n);
+    launcherBadge.textContent = n > 9 ? '9+' : String(n);
+    launcherBadge.title = `${n} unread`;
     if (hasCustomIcon) {
       launcher.setAttribute('aria-label', n ? `${launcherText} (${n} unread)` : launcherText);
     }
     const announcementsUnread = unreadCount();
     updatesCount.hidden = announcementsUnread === 0;
-    updatesCount.textContent = String(announcementsUnread);
+    updatesCount.textContent = announcementsUnread > 9 ? '9+' : String(announcementsUnread);
+    updatesCount.title = `${announcementsUnread} unread updates`;
     const ticketsUnread = unreadTicketCount();
     ticketsCount.hidden = ticketsUnread === 0;
-    ticketsCount.textContent = String(ticketsUnread);
+    ticketsCount.textContent = ticketsUnread > 9 ? '9+' : String(ticketsUnread);
+    ticketsCount.title = `${ticketsUnread} unread tickets`;
     // A badge appearing widens the launcher; keep a moved one on screen.
     restorePlacement();
     // Unread badges also change the tabs' widths and the active tab's position.
     moveTabMarker();
+    // The socket can keep polling disabled. Expire badges at the three-day
+    // boundary even when no further feed event arrives.
+    clearTimeout(unreadExpiryTimer);
+    const now = Date.now();
+    const expiries = announcements.filter((a) => isAnnouncementUnread(a, now))
+      .map((a) => a.published_at * 1000 + ANNOUNCEMENT_UNREAD_WINDOW_MS);
+    if (expiries.length) {
+      unreadExpiryTimer = setTimeout(() => {
+        if (destroyed) return;
+        syncBadges();
+        repaintUpdatesListIfVisible();
+      }, Math.max(1, Math.min(...expiries) - now));
+    }
   }
 
   function moveTabMarker(animated = true) {
@@ -1087,7 +1111,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 
       const top = el('div', 'item__top');
       top.appendChild(el('span', 'eyebrow', a.release_label || 'Update'));
-      if (!a.read) top.appendChild(el('span', 'item__dot'));
+      if (isAnnouncementUnread(a)) top.appendChild(el('span', 'item__dot'));
       item.appendChild(top);
 
       item.appendChild(el('h3', 'item__title', a.title));
@@ -2174,6 +2198,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   }
 
   function showToast(a: Announcement) {
+    if (!isAnnouncementUnread(a)) return;
     const excerpt = (a.summary || markdownToPlainText(a.body) || '').trim();
     showPreviewToast(a.release_label || 'New update', a.title, excerpt, 'Read update', () => {
       hideToast();
@@ -2481,7 +2506,8 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     }
     if (!initial) {
       [...fresh, ...changed.filter((a) => !fresh.some((item) => item.id === a.id))].forEach(notifyAnnouncement);
-      if (fresh.length) showToast(fresh[0]);
+      const recent = fresh.find((a) => isAnnouncementUnread(a));
+      if (recent) showToast(recent);
     }
   }
 
@@ -2498,6 +2524,8 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   const onVisibility = () => {
     if (destroyed) return;
     if (document.visibilityState === 'visible') {
+      syncBadges();
+      repaintUpdatesListIfVisible();
       if (!widgetSocket) connectWidgetSocket();
       if (!widgetSocketConnected) {
         void loadAnnouncements(false);
@@ -2547,6 +2575,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
     destroy: () => {
       destroyed = true;
       clearTimeout(timer);
+      clearTimeout(unreadExpiryTimer);
       clearTimeout(ticketTimer);
       clearTimeout(ticketLoadingTimer);
       ticketThreadLoad?.controller.abort();
