@@ -6,6 +6,7 @@ export type IconName =
   | 'copy'
   | 'check'
   | 'play'
+  | 'replay'
   | 'pause'
   | 'maximize'
   | 'minimize'

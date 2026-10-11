@@ -39,6 +39,17 @@
     &.is-viewed:hover td { background: $surface-2; }
   }
 }
+
+// Dark mode needs a full surface step to make played rows easy to scan.
+:root[data-theme='dark'] .sessions-table .table tbody tr.is-viewed {
+  td { background: $page-bg; }
+  &:hover td { background: $bg; }
+  .session-cell__primary { color: $muted; }
+  .session-context__icon {
+    background: $surface;
+    color: $muted;
+  }
+}
 .session-cell {
   display: grid;
   gap: 0.12rem;
@@ -123,7 +134,29 @@
   line-height: 0;
   border-radius: 50%;
 
-  svg { display: block; width: 12px; height: 12px; flex: 0 0 auto; margin: 0; }
+  svg { display: block; width: 18px; height: 18px; flex: 0 0 auto; margin: 0; }
+
+  &.play-btn--viewed {
+    background: $accent-soft;
+    color: $accent;
+    border-color: $accent-glow;
+
+    &:hover:not(:disabled) {
+      background: $accent-glow;
+      border-color: $accent;
+    }
+  }
+}
+
+:root[data-theme='dark'] .play-btn.play-btn--viewed {
+  background: var(--charcoal);
+  color: var(--on-charcoal);
+  border-color: color-mix(in srgb, var(--on-charcoal) 35%, var(--charcoal));
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--on-charcoal) 12%, var(--charcoal));
+    border-color: var(--on-charcoal);
+  }
 }
 
 .session-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1.2rem; }

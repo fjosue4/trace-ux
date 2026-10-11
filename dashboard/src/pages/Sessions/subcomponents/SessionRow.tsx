@@ -74,12 +74,12 @@ export function SessionRow({ session: s, showSite, from, onViewed, onOpen }: Ses
         <Link
           to={`/replay/${s.id}?autoplay=1`}
           state={{ from }}
-          className="btn btn--primary btn--sm play-btn"
+          className={`btn btn--primary btn--sm play-btn${s.viewed ? ' play-btn--viewed' : ''}`}
           onClick={onViewed}
-          aria-label={`Play session from ${fmtTime(s.started_at)}`}
-          title="Play recording"
+          aria-label={`${s.viewed ? 'Replay' : 'Play'} session from ${fmtTime(s.started_at)}${s.viewed ? ', already played' : ''}`}
+          title={s.viewed ? 'Replay recording · Already played' : 'Play recording'}
         >
-          <Icon name="play" size={12} />
+          <Icon name={s.viewed ? 'replay' : 'play'} size={18} />
         </Link>
       </td>
     </tr>

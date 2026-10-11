@@ -106,6 +106,9 @@
 }
 
 :root {
+  /* Green foreground on charcoal controls stays legible in both themes. */
+  --on-charcoal: #66c983;
+
   /* typography — self-hosted Inter, system fallbacks */
   --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
