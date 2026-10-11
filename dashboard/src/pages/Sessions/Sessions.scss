@@ -45,10 +45,6 @@
   td { background: $page-bg; }
   &:hover td { background: $bg; }
   .session-cell__primary { color: $muted; }
-  .session-context__icon {
-    background: $surface;
-    color: $muted;
-  }
 }
 .session-cell {
   display: grid;
@@ -92,33 +88,6 @@
     .session-cell__primary { display: block; font-variant-numeric: tabular-nums; }
     .session-cell__primary--plain { color: $ink; }
   }
-}
-
-.session-context {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.62rem;
-  min-width: 0;
-
-  &__icon {
-    flex: none;
-    width: 30px;
-    height: 30px;
-    display: grid;
-    place-items: center;
-    place-content: center;
-    padding: 0;
-    line-height: 0;
-    margin-top: 0.05rem;
-    border: 1px solid $line;
-    border-radius: $radius-pill;
-    background: $accent-soft;
-    color: $accent;
-
-    > svg { display: block; margin: 0; }
-  }
-
-  .session-cell { min-width: 0; }
 }
 
 .play-btn {

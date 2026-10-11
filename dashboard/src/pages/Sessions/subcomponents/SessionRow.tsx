@@ -32,19 +32,14 @@ export function SessionRow({ session: s, showSite, from, onViewed, onOpen }: Ses
         </div>
       </td>
       <td>
-        <div className="session-context" title={s.referrer || 'direct'}>
-          <span className="session-context__icon" aria-hidden>
-            <Icon name="globe" size={13} />
+        <div className="session-cell session-cell--context" title={s.referrer || 'direct'}>
+          {showSite && <span className="session-cell__primary">{s.site_name ?? '—'}</span>}
+          <span className={`${showSite ? 'session-cell__meta' : 'session-cell__primary'} mono`} title={visitorOf(s)}>
+            {truncate(visitorOf(s) || 'anonymous', 26)}
           </span>
-          <div className="session-cell session-cell--context">
-            {showSite && <span className="session-cell__primary">{s.site_name ?? '—'}</span>}
-            <span className={`${showSite ? 'session-cell__meta' : 'session-cell__primary'} mono`} title={visitorOf(s)}>
-              {truncate(visitorOf(s) || 'anonymous', 26)}
-            </span>
-            <span className="session-cell__meta session-cell__meta--truncate">
-              Referrer {s.referrer ? truncate(stripProto(s.referrer), 28) : 'direct'}
-            </span>
-          </div>
+          <span className="session-cell__meta session-cell__meta--truncate">
+            Referrer {s.referrer ? truncate(stripProto(s.referrer), 28) : 'direct'}
+          </span>
         </div>
       </td>
       <td>
