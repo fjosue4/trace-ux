@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
-import { spring } from '../../../../lib/motion';
 import { Icon } from '../../../ui/Icon';
 
 export function CopyButton({ text }: { text: string }) {
@@ -20,8 +19,6 @@ export function CopyButton({ text }: { text: string }) {
           })
           .catch(() => {});
       }}
-      whileTap={{ scale: 0.88 }}
-      transition={spring}
     >
       <Icon name={copied ? 'check' : 'copy'} size={12} />
     </motion.button>

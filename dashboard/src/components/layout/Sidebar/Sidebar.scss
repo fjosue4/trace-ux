@@ -66,21 +66,14 @@
     border-top: 1px solid $line;
   }
 
-  &__theme {
+  &__theme-control {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 0.55rem;
-    font: inherit;
     font-size: 0.88rem;
     color: $muted;
-    background: none;
-    border: none;
-    padding: 0.45rem 0.7rem;
-    cursor: pointer;
-    border-radius: $radius-sm;
-    transition: background-color $duration-fast $ease-out, color $duration-fast $ease-out;
-
-    &:hover { background: $surface-2; color: $ink; }
+    padding: 0 0.7rem;
   }
 
   &__user {
@@ -210,13 +203,10 @@
       &.is-active { color: $accent; background: $accent-soft; }
     }
     &__footer { margin-left: auto; padding: 0; }
-    &__theme {
-      width: 38px;
-      height: 38px;
-      justify-content: center;
+    &__theme-control {
       padding: 0;
 
-      span { display: none; }
+      .sidebar__theme-label { display: none; }
     }
     &__footer .btn { display: none; }
   }

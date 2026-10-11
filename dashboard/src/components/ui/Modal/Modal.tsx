@@ -49,7 +49,7 @@ export default function Modal({ open, onClose, title, className = '', children, 
           >
             <div className="modal__head">
               <h3>{title}</h3>
-              <motion.button className="modal__close" onClick={onClose} aria-label="Close dialog" whileHover={{ rotate: 8, scale: 1.08 }} whileTap={{ scale: 0.92 }}>
+              <motion.button className="modal__close" onClick={onClose} aria-label="Close dialog">
                 <Icon name="x" size={16} />
               </motion.button>
             </div>

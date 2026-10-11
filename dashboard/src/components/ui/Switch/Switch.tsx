@@ -6,7 +6,7 @@ import './Switch.scss';
 
 export default function Switch({ checked, onChange, label, disabled }: SwitchProps) {
   return (
-    <motion.label className={classNames('switch', { 'is-disabled': disabled })} whileTap={disabled ? undefined : { scale: 0.98 }}>
+    <motion.label className={classNames('switch', { 'is-disabled': disabled })}>
       <input
         type="checkbox"
         checked={checked}

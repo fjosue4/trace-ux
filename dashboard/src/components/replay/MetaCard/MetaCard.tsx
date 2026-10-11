@@ -1,5 +1,4 @@
 import { motion } from 'motion/react';
-import { spring } from '../../../lib/motion';
 import { formatCountry } from '../../../lib/format';
 import Card from '../../ui/Card';
 import { Icon } from '../../ui/Icon';
@@ -29,8 +28,6 @@ export default function MetaCard({ session }: MetaCardProps) {
         aria-expanded={false}
         title="Show session details"
         onClick={() => setCollapsed(false)}
-        whileTap={{ scale: 0.96 }}
-        transition={spring}
       >
         <Icon name="maximize" size={11} />
         Session details
@@ -49,9 +46,7 @@ export default function MetaCard({ session }: MetaCardProps) {
           aria-label="Hide session details"
           title="Hide session details (gives the space back to the player)"
           onClick={() => setCollapsed(true)}
-          whileTap={{ scale: 0.9 }}
-          transition={spring}
-        >
+          >
           <Icon name="minimize" size={12} />
         </motion.button>
       </div>

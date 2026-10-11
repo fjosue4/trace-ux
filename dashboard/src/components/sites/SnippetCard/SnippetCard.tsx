@@ -1,5 +1,4 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { spring } from '../../../lib/motion';
 import Card from '../../ui/Card';
 import Button from '../../ui/Button';
 import { Icon } from '../../ui/Icon';
@@ -30,8 +29,6 @@ export default function SnippetCard({ site, origin, title, onDismiss, embedded =
           aria-selected={method === 'npm'}
           className={`snippet-tab${method === 'npm' ? ' is-active' : ''}`}
           onClick={() => setMethod('npm')}
-          whileTap={{ scale: 0.96 }}
-          transition={spring}
         >
           NPM
         </motion.button>
@@ -41,8 +38,6 @@ export default function SnippetCard({ site, origin, title, onDismiss, embedded =
           aria-selected={method === 'gtm'}
           className={`snippet-tab${method === 'gtm' ? ' is-active' : ''}`}
           onClick={() => setMethod('gtm')}
-          whileTap={{ scale: 0.96 }}
-          transition={spring}
         >
           Google Tag Manager
         </motion.button>
@@ -52,8 +47,6 @@ export default function SnippetCard({ site, origin, title, onDismiss, embedded =
           aria-selected={method === 'manual'}
           className={`snippet-tab${method === 'manual' ? ' is-active' : ''}`}
           onClick={() => setMethod('manual')}
-          whileTap={{ scale: 0.96 }}
-          transition={spring}
         >
           Manual
         </motion.button>

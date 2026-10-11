@@ -74,7 +74,6 @@ pre {
   transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
 .icon-btn:hover { background: var(--surface-2); color: var(--ink); }
-.icon-btn:active { transform: scale(0.94); }
 .icon-btn.is-success { color: var(--success); }
 
 /* ---- layout primitives ---- */

@@ -1,0 +1,111 @@
+// Theme button shared visually with the TraceUX landing page navigation.
+.theme-toggle {
+  --theme-toggle-thumb: #fff0b4;
+  --theme-toggle-thumb-color: #91651e;
+  --theme-toggle-glow: rgba(218, 164, 46, 0.32);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--line);
+  background: linear-gradient(135deg, var(--surface-2), var(--surface));
+  color: var(--muted);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: background var(--duration-medium) var(--ease-out);
+  flex: none;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.theme-toggle::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 34px;
+  background: radial-gradient(circle at 50% 50%, var(--theme-toggle-glow), transparent 70%);
+  opacity: 0.8;
+  pointer-events: none;
+  transition: left var(--duration-medium) var(--ease-out), opacity var(--duration-medium) var(--ease-out);
+}
+
+.theme-toggle--dark {
+  --theme-toggle-thumb: #24462f;
+  --theme-toggle-thumb-color: #b1efbf;
+  --theme-toggle-glow: rgba(102, 201, 131, 0.3);
+}
+
+.theme-toggle--dark::before {
+  left: 29px;
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.theme-toggle__option {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  transform: translateY(-50%) scale(0.88);
+  pointer-events: none;
+  transition: color var(--duration-medium) var(--ease-out), opacity var(--duration-medium) var(--ease-out), transform var(--duration-medium) var(--ease-out);
+}
+
+.theme-toggle__option--sun {
+  left: 5px;
+  color: #be8122;
+}
+
+.theme-toggle__option--moon {
+  right: 5px;
+  color: #8997cc;
+}
+
+.theme-toggle--light .theme-toggle__option--sun {
+  opacity: 0.9;
+  transform: translateY(-50%) scale(0.98);
+}
+
+.theme-toggle--dark .theme-toggle__option--moon {
+  color: #a9e9b7;
+  opacity: 0.9;
+  transform: translateY(-50%) scale(0.98);
+}
+
+.theme-toggle__thumb {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--theme-toggle-thumb);
+  color: var(--theme-toggle-thumb-color);
+  box-shadow: 0 4px 12px var(--theme-toggle-glow), inset 0 0 0 1px rgb(255 255 255 / 0.18);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.theme-toggle__thumb-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+

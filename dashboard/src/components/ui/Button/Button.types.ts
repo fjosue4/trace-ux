@@ -1,6 +1,6 @@
-import type { HTMLMotionProps } from 'motion/react';
+import type { ComponentPropsWithoutRef } from 'react';
 
-export type ButtonProps = HTMLMotionProps<'button'> & {
+export type ButtonProps = ComponentPropsWithoutRef<'button'> & {
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'dangerGhost';
   size?: 'md' | 'sm';
   block?: boolean;

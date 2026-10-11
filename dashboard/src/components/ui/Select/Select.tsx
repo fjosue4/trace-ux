@@ -2,7 +2,7 @@ import { CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import classNames from 'classnames';
 import { AnimatePresence, motion } from 'motion/react';
-import { softSpring, spring } from '../../../lib/motion';
+import { softSpring } from '../../../lib/motion';
 import { useSelect } from './hooks/useSelect';
 import { SelectProps } from './Select.types';
 import './Select.scss';
@@ -51,8 +51,6 @@ export function Select({
         disabled={disabled}
         onClick={toggleOpen}
         onKeyDown={onKeyDown}
-        whileTap={disabled ? undefined : { scale: 0.985 }}
-        transition={spring}
       >
         <span className="select-trigger__label">{selectedLabel}</span>
       </motion.button>
@@ -68,7 +66,6 @@ export function Select({
         strokeLinejoin="round"
         aria-hidden
         animate={{ rotate: open ? 180 : 0 }}
-        transition={spring}
       >
         <path d="m6 9 6 6 6-6" />
       </motion.svg>
@@ -100,7 +97,6 @@ export function Select({
                       className={classNames('select-menu__option', { 'is-selected': isSelected })}
                       onMouseEnter={() => onOptionHover(index)}
                       onClick={() => onOptionSelect(option)}
-                      whileTap={{ scale: 0.98 }}
                     >
                       <span className="select-menu__label">{option.label}</span>
                       {isSelected && <CheckIcon />}

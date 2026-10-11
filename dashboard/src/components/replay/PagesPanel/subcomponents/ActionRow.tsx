@@ -48,7 +48,6 @@ export function ActionRow({ action, isActive, firstTs, setRowRef, onSeek, onOpen
             seek();
           }
         }}
-        whileTap={{ scale: 0.995 }}
       >
         <span
           className={`page-row__num action-row__num${action.kind === 'log' ? ` action-row__num--${action.severity}` : ''}`}
@@ -114,7 +113,6 @@ export function ActionRow({ action, isActive, firstTs, setRowRef, onSeek, onOpen
                 e.stopPropagation();
                 onOpenLogDetail(action);
               }}
-              whileTap={{ scale: 0.9 }}
             >
               <Icon name="code" size={12} />
             </motion.button>

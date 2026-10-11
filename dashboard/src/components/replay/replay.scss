@@ -211,9 +211,9 @@
   background: var(--player-accent);
   color: $on-accent;
   box-shadow: 0 10px 24px -8px $accent-glow, 0 0 0 10px $accent-soft;
-  transition: transform $duration-fast $ease-out, box-shadow $duration-fast $ease-out;
+  transition: box-shadow $duration-fast $ease-out;
 }
-.player-cover:hover .player-cover__btn { transform: scale(1.06); box-shadow: 0 14px 30px -8px $accent-glow, 0 0 0 12px $accent-soft; }
+.player-cover:hover .player-cover__btn { box-shadow: 0 14px 30px -8px $accent-glow, 0 0 0 12px $accent-soft; }
 .player-cover__label { font-size: 0.85rem; font-weight: 700; letter-spacing: 0; }
 
 /* Custom chrome keeps the skip-inactive action interactive while rrweb is
@@ -304,7 +304,6 @@
   background: var(--player-accent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--player-accent) 58%, transparent), 0 3px 8px rgb(0 0 0 / 0.24);
 }
-.replay-timeline__input:hover::-webkit-slider-thumb { transform: scale(1.16); }
 .replay-timeline__input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px $accent-soft, 0 3px 8px rgb(0 0 0 / 0.24); }
 
 .replay-controls__toolbar {
@@ -328,7 +327,6 @@
   transition: background-color $duration-fast $ease-out, border-color $duration-fast $ease-out, color $duration-fast $ease-out, transform $duration-fast $ease-out;
 }
 .replay-control-btn:hover { color: var(--player-ink); background: var(--player-panel-strong); border-color: var(--player-line); }
-.replay-control-btn:active { transform: scale(0.94); }
 .replay-control-btn:disabled {
   opacity: 0.45;
   cursor: wait;

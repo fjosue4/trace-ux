@@ -445,7 +445,6 @@ a.hub-row:hover { background: $surface-2; text-decoration: none; }
 
     &.is-selected {
       box-shadow: 0 0 0 2px $surface, 0 0 0 4px currentColor;
-      transform: scale(.92);
     }
   }
 }

@@ -9,7 +9,6 @@ export default function Badge({ tone = 'neutral', children }: BadgeProps) {
       className={`badge badge--${tone}`}
       initial={{ opacity: 0, scale: 0.85 }}
       animate={{ opacity: 1, scale: 1 }}
-      whileHover={{ scale: 1.04 }}
       transition={spring}
     >
       {children}

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { softSpring, spring } from '../../../../lib/motion';
+import { softSpring } from '../../../../lib/motion';
 import { Icon } from '../../../ui/Icon';
 import { SidebarNavItem } from '../Sidebar.types';
 
@@ -37,8 +37,6 @@ export function MobileNavMenu({ items }: { items: SidebarNavItem[] }) {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        whileTap={{ scale: 0.98 }}
-        transition={spring}
       >
         <Icon name="more" size={18} />
       </motion.button>

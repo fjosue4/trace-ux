@@ -1,6 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { spring, stagger } from '../../../lib/motion';
 import Badge from '../../ui/Badge';
 import Button from '../../ui/Button';
 import Logo from '../../ui/Logo';
@@ -31,16 +30,14 @@ export default function Sidebar({ user, onLogout }: SidebarProps) {
   const mobileMenuItems = secondaryItems.filter((item) => item.to !== mobileFeatured?.to);
 
   return (
-    <motion.aside className="sidebar" initial={{ opacity: 0, x: -18 }} animate={{ opacity: 1, x: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 26 }}>
-      <motion.div whileHover={{ x: 2 }} transition={spring}>
-        <NavLink to="/sites" className="sidebar__brand" aria-label="TraceUX home">
-          <Logo className="sidebar__logo" />
-        </NavLink>
-      </motion.div>
+    <motion.aside className="sidebar" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.12 }}>
+      <NavLink to="/sites" className="sidebar__brand" aria-label="TraceUX home">
+        <Logo className="sidebar__logo" />
+      </NavLink>
 
-      <motion.nav className="sidebar__nav sidebar__nav--desktop" variants={stagger} initial="hidden" animate="visible">
+      <nav className="sidebar__nav sidebar__nav--desktop">
         {navItems.map((item) => <NavItem key={item.to} {...item} />)}
-      </motion.nav>
+      </nav>
 
       <nav className="sidebar__mobile-nav" aria-label="Primary navigation">
         {primaryMobileItems.map((item) => <NavItem key={item.to} {...item} />)}
