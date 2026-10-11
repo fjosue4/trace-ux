@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useSyncExternalStore } from 'react';
 
 export type Theme = 'light' | 'dark';
 
 const STORAGE_KEY = 'trace_ux_theme';
+const listeners = new Set<() => void>();
 
 function initialTheme(): Theme {
   const attr = document.documentElement.dataset.theme;
@@ -10,23 +11,29 @@ function initialTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
-// Explicit light/dark theme with persistence. The initial attribute is set by
-// the pre-paint script in index.html; this hook owns it from then on.
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+
+function setTheme(next: Theme | ((current: Theme) => Theme)) {
+  const theme = typeof next === 'function' ? next(initialTheme()) : next;
+  document.documentElement.dataset.theme = theme;
+  try {
+    localStorage.setItem(STORAGE_KEY, theme);
+  } catch {
+    /* storage blocked — session-only theme */
+  }
+  listeners.forEach((listener) => listener());
+}
+
+function toggle() {
+  setTheme((theme) => theme === 'dark' ? 'light' : 'dark');
+}
+
+// Read the shared document theme so Settings and the sidebar always agree.
+// The pre-paint script initializes it; updates notify every mounted consumer.
 export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(initialTheme);
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    try {
-      localStorage.setItem(STORAGE_KEY, theme);
-    } catch {
-      /* storage blocked — session-only theme */
-    }
-  }, [theme]);
-
-  const toggle = useCallback(() => {
-    setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
-  }, []);
-
+  const theme = useSyncExternalStore(subscribe, initialTheme);
   return { theme, setTheme, toggle };
 }
