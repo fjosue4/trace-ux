@@ -51,15 +51,18 @@ type ExportSite struct {
 // API keys, integrations and dashboard credentials are deliberately absent.
 // Events are written separately, one chunk at a time, to bound memory usage.
 type SessionExport struct {
-	SchemaVersion int            `json:"schema_version"`
-	ExportedAt    time.Time      `json:"exported_at"`
-	Session       *Session       `json:"session"`
-	Site          ExportSite     `json:"site"`
-	Pages         []SessionPage  `json:"pages"`
-	CustomEvents  []CustomEvent  `json:"custom_events"`
-	Logs          []Log          `json:"logs"`
-	Tickets       []TicketThread `json:"tickets"`
-	Feedback      []Feedback     `json:"feedback"`
+	Format          string            `json:"format"`
+	SchemaVersion   int               `json:"schema_version"`
+	RecordingFormat string            `json:"recording_format"`
+	FormatGuide     ExportFormatGuide `json:"format_guide"`
+	ExportedAt      time.Time         `json:"exported_at"`
+	Session         *Session          `json:"session"`
+	Site            ExportSite        `json:"site"`
+	Pages           []SessionPage     `json:"pages"`
+	CustomEvents    []CustomEvent     `json:"custom_events"`
+	Logs            []Log             `json:"logs"`
+	Tickets         []TicketThread    `json:"tickets"`
+	Feedback        []Feedback        `json:"feedback"`
 }
 
 // WriteSessionExport writes one consistent database snapshot as JSON. A caller
@@ -82,7 +85,10 @@ func (s *Store) WriteSessionExportWithOptions(ctx context.Context, id string, ds
 	if err != nil {
 		return err
 	}
-	out := SessionExport{SchemaVersion: 1, ExportedAt: time.Now().UTC(), Session: sess, Tickets: []TicketThread{}}
+	out := SessionExport{
+		Format: "traceux-session-export", SchemaVersion: 1, RecordingFormat: "rrweb",
+		FormatGuide: sessionExportGuide(), ExportedAt: time.Now().UTC(), Session: sess, Tickets: []TicketThread{},
+	}
 	if err := tx.QueryRowContext(ctx, `SELECT id, name, url FROM sites WHERE id = ?`, sess.SiteID).
 		Scan(&out.Site.ID, &out.Site.Name, &out.Site.URL); err != nil {
 		return err

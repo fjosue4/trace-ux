@@ -160,6 +160,23 @@ func TestSessionExportCompleteAndScoped(t *testing.T) {
 	if out.SchemaVersion != 1 || out.ExportedAt.IsZero() || out.Session.ID != sid || !out.Session.Active || out.Site.ID != 1 || out.Site.Name != "S" {
 		t.Fatalf("wrong metadata: %+v", out.SessionExport)
 	}
+	if out.Format != "traceux-session-export" || out.RecordingFormat != "rrweb" {
+		t.Fatal("export does not identify its file/recording formats")
+	}
+	guide := out.FormatGuide
+	if guide.EventTypes[2] != "FullSnapshot" || guide.EventTypes[3] != "IncrementalSnapshot" || guide.NodeTypes[2] != "Element" || guide.IncrementalSources[0] != "Mutation" || guide.IncrementalSources[2] != "MouseInteraction" || guide.MouseInteractions[2] != "Click" {
+		t.Fatal("standalone JSON does not explain snapshot, element, mutation and click codes")
+	}
+	if !strings.Contains(guide.Interpretation["node_ids"], "attributes.id") || !strings.Contains(guide.Interpretation["clicks"], "x/y") || !strings.Contains(guide.Interpretation["modals"], "add/remove") {
+		t.Fatal("missing target-element, coordinate or modal-state interpretation")
+	}
+	if !strings.Contains(guide.TimeUnits["events[].timestamp"], "milliseconds") || guide.TimeUnits["session.started_at,session.last_seen"] != "Unix seconds" || guide.Collections["logs"] == "" || len(guide.AnalysisSteps) == 0 || len(guide.Limitations) == 0 || guide.Rendering == "" {
+		t.Fatal("AI interpretation depends on information outside the exported file")
+	}
+	guideJSON, err := json.Marshal(guide)
+	if err != nil || len(guideJSON) > 12<<10 {
+		t.Fatalf("interpretation guide must stay small: %d bytes, %v", len(guideJSON), err)
+	}
 	if out.Session.Browser != "Firefox" || out.Session.Country != "HN" || out.Session.Referrer != "https://example.com/ref" {
 		t.Fatalf("missing device/referral context: %+v", out.Session)
 	}
