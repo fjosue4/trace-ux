@@ -227,6 +227,10 @@ func (s *Store) ListVisitorTickets(siteID int64, visitorKey string) ([]Ticket, e
 // ListTicketsBySession returns the tickets opened from one recording, oldest
 // first, for the replay page's activity feed.
 func (s *Store) ListTicketsBySession(sessionID string) ([]Ticket, error) {
+	return (sessionReader{s.DB}).ListTicketsBySession(sessionID)
+}
+
+func (s sessionReader) ListTicketsBySession(sessionID string) ([]Ticket, error) {
 	rows, err := s.DB.Query(`SELECT `+ticketColumns+` FROM tickets t
 		WHERE t.session_id = ? ORDER BY t.created_at, t.id`, sessionID)
 	if err != nil {
@@ -261,6 +265,10 @@ func (s *Store) GetTicketForVisitor(siteID, id int64, visitorKey string) (Ticket
 }
 
 func (s *Store) ListTicketMessages(ticketID int64) ([]TicketMessage, error) {
+	return (sessionReader{s.DB}).ListTicketMessages(ticketID)
+}
+
+func (s sessionReader) ListTicketMessages(ticketID int64) ([]TicketMessage, error) {
 	rows, err := s.DB.Query(`SELECT id,ticket_id,author,user_id,author_name,body,created_at
 		FROM ticket_messages WHERE ticket_id=? ORDER BY created_at ASC,id ASC`, ticketID)
 	if err != nil {

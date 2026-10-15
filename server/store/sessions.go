@@ -128,6 +128,10 @@ func scanSessionNamed(row interface{ Scan(...any) error }) (*Session, error) {
 }
 
 func (s *Store) GetSession(id string) (*Session, error) {
+	return (sessionReader{s.DB}).GetSession(id)
+}
+
+func (s sessionReader) GetSession(id string) (*Session, error) {
 	sess, err := scanSession(s.DB.QueryRow(`SELECT `+sessionColsQualified+` FROM sessions s WHERE s.id = ?`, id))
 	if err != nil {
 		return nil, err
@@ -300,6 +304,10 @@ type SessionFilter struct {
 }
 
 func (s *Store) GetSessionPages(sessionID string) ([]SessionPage, error) {
+	return (sessionReader{s.DB}).GetSessionPages(sessionID)
+}
+
+func (s sessionReader) GetSessionPages(sessionID string) ([]SessionPage, error) {
 	rows, err := s.DB.Query(`SELECT idx, url, title, entered_at, left_at FROM pages WHERE session_id = ? ORDER BY idx`, sessionID)
 	if err != nil {
 		return nil, err
@@ -318,6 +326,10 @@ func (s *Store) GetSessionPages(sessionID string) ([]SessionPage, error) {
 
 // GetSessionChunk returns the decompressed rrweb events of one chunk.
 func (s *Store) GetSessionChunk(sessionID string, seq int) ([]json.RawMessage, error) {
+	return (sessionReader{s.DB}).GetSessionChunk(sessionID, seq)
+}
+
+func (s sessionReader) GetSessionChunk(sessionID string, seq int) ([]json.RawMessage, error) {
 	events, err := s.GetSessionChunkRaw(sessionID, seq)
 	if err != nil {
 		return nil, err
@@ -334,6 +346,10 @@ func (s *Store) GetSessionChunk(sessionID string, seq int) ([]json.RawMessage, e
 // client instead fetches each sheet once from /api/css-assets/{hash}, where it
 // is immutable and therefore cacheable across every recording of that site.
 func (s *Store) GetSessionChunkRaw(sessionID string, seq int) ([]json.RawMessage, error) {
+	return (sessionReader{s.DB}).GetSessionChunkRaw(sessionID, seq)
+}
+
+func (s sessionReader) GetSessionChunkRaw(sessionID string, seq int) ([]json.RawMessage, error) {
 	var data []byte
 	err := s.DB.QueryRow(`SELECT data FROM chunks WHERE session_id = ? AND seq = ?`, sessionID, seq).Scan(&data)
 	if err != nil {
@@ -357,6 +373,10 @@ func (s *Store) GetSessionChunkRaw(sessionID string, seq int) ([]json.RawMessage
 
 // GetSessionChunkSeqs lists the available chunk sequence numbers in order.
 func (s *Store) GetSessionChunkSeqs(sessionID string) ([]int, error) {
+	return (sessionReader{s.DB}).GetSessionChunkSeqs(sessionID)
+}
+
+func (s sessionReader) GetSessionChunkSeqs(sessionID string) ([]int, error) {
 	rows, err := s.DB.Query(`SELECT seq FROM chunks WHERE session_id = ? ORDER BY seq`, sessionID)
 	if err != nil {
 		return nil, err
@@ -415,6 +435,10 @@ func (s *Store) SaveCustomEvents(siteID int64, sessionID string, events []Custom
 }
 
 func (s *Store) GetCustomEvents(sessionID string) ([]CustomEvent, error) {
+	return (sessionReader{s.DB}).GetCustomEvents(sessionID)
+}
+
+func (s sessionReader) GetCustomEvents(sessionID string) ([]CustomEvent, error) {
 	rows, err := s.DB.Query(`SELECT ts, name, track_id, details FROM custom_events WHERE session_id = ? ORDER BY ts`, sessionID)
 	if err != nil {
 		return nil, err
@@ -438,6 +462,10 @@ func (s *Store) GetCustomEvents(sessionID string) ([]CustomEvent, error) {
 // GetSessionLogs returns browser logs in recording order so the replay sidebar
 // can place them on the same clock as tracked custom events.
 func (s *Store) GetSessionLogs(sessionID string) ([]Log, error) {
+	return (sessionReader{s.DB}).getSessionLogs(sessionID, MaxLogListLimit)
+}
+
+func (s sessionReader) getSessionLogs(sessionID string, limit int) ([]Log, error) {
 	rows, err := s.DB.Query(`SELECT l.id, l.session_id, l.site_id, si.name,
 		COALESCE(l.service_id, 0), COALESCE(sv.name, ''), l.environment, l.timestamp_ms,
 		l.severity, l.message, l.extra, l.url, l.created_at, se.started_at
@@ -447,7 +475,7 @@ func (s *Store) GetSessionLogs(sessionID string) ([]Log, error) {
 		LEFT JOIN services sv ON sv.id = l.service_id
 		WHERE l.session_id = ?
 		ORDER BY l.timestamp_ms, l.id
-		LIMIT ?`, sessionID, MaxLogListLimit)
+		LIMIT ?`, sessionID, limit)
 	if err != nil {
 		return nil, err
 	}

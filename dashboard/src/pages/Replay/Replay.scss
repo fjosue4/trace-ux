@@ -4,6 +4,44 @@
 
 .replay-main { min-width: 0; }
 
+.session-export {
+  margin-bottom: 1.25rem;
+  padding: 1rem 1.2rem;
+  border: 1px solid $line;
+  border-radius: $radius;
+  background: $surface;
+
+  &__head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 0.75rem; }
+  &__copy { display: flex; flex-direction: column; gap: 0.3rem; }
+  &__copy strong { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
+  &__head .btn { flex: none; }
+  &__actions { display: flex; align-items: center; gap: 0.65rem; flex: none; }
+  &__track {
+    position: relative;
+    height: 8px;
+    overflow: hidden;
+    border-radius: $radius-pill;
+    background: $surface-2;
+
+    > span { display: block; height: 100%; border-radius: inherit; background: $accent; transition: width $duration-fast $ease-out; }
+    &.is-indeterminate > span { position: absolute; width: 35%; animation: session-export-indeterminate 1.2s ease-in-out infinite; }
+  }
+}
+
+@keyframes session-export-indeterminate {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(310%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-export__track > span { transition: none; }
+  .session-export__track.is-indeterminate > span { animation: none; }
+}
+
+@media (max-width: 620px) {
+  .session-export__head { align-items: flex-start; flex-direction: column; }
+}
+
 /* Public token replay keeps the current player, without the authenticated
    dashboard shell. Keep the intro explicit so it remains readable in either
    theme and preserve the Trace UX casing. */

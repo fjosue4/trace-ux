@@ -97,6 +97,10 @@ func (s *Store) DedupeCSS(sessionID string, events []json.RawMessage) ([]json.Ra
 // send somebody hunting through their own stylesheets for a fault that is not
 // there; failing loudly points at the actual problem.
 func (s *Store) RehydrateCSS(events []json.RawMessage) ([]json.RawMessage, error) {
+	return (sessionReader{s.DB}).RehydrateCSS(events)
+}
+
+func (s sessionReader) RehydrateCSS(events []json.RawMessage) ([]json.RawMessage, error) {
 	out := make([]json.RawMessage, len(events))
 	copy(out, events)
 	for i, raw := range events {
@@ -243,6 +247,10 @@ func (s *Store) SessionHasCSSAsset(sessionID, hash string) (bool, error) {
 var ErrNoCSSAsset = errors.New("no such stylesheet")
 
 func (s *Store) getCSSAsset(hash string) (string, error) {
+	return (sessionReader{s.DB}).getCSSAsset(hash)
+}
+
+func (s sessionReader) getCSSAsset(hash string) (string, error) {
 	var data []byte
 	if err := s.DB.QueryRow(`SELECT data FROM css_assets WHERE hash = ?`, hash).Scan(&data); err != nil {
 		if err == sql.ErrNoRows {

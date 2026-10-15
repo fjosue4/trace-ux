@@ -36,6 +36,12 @@ type Server struct {
 	indexMu    sync.Mutex
 	indexCache map[string]cachedIndex
 
+	exportMu      sync.Mutex
+	exportBusy    bool
+	exportClosed  bool
+	exportJobs    map[string]*sessionExportJob
+	exportWorkers sync.WaitGroup
+
 	securityOnce            sync.Once
 	loginIPLimiter          *requestLimiter
 	loginUserLimiter        *requestLimiter
@@ -354,6 +360,11 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/sessions/countries", s.auth(s.handleListSessionCountries))
 	mux.HandleFunc("GET /api/sessions/stats", s.auth(s.handleSessionStats))
 	mux.HandleFunc("GET /api/sessions/{id}", s.auth(s.handleGetSession))
+	mux.HandleFunc("GET /api/sessions/{id}/export", s.auth(s.handleExportSession))
+	mux.HandleFunc("POST /api/sessions/{id}/export", s.auth(s.handlePrepareSessionExport))
+	mux.HandleFunc("GET /api/session-exports/{exportID}", s.auth(s.handleSessionExportStatus))
+	mux.HandleFunc("GET /api/session-exports/{exportID}/download", s.auth(s.handleDownloadSessionExport))
+	mux.HandleFunc("DELETE /api/session-exports/{exportID}", s.auth(s.handleCancelSessionExport))
 	mux.HandleFunc("POST /api/sessions/{id}/viewed", s.auth(s.handleMarkSessionViewed))
 	mux.HandleFunc("GET /api/sessions/{id}/events", s.auth(s.handleSessionEvents))
 	mux.HandleFunc("GET /api/sessions/{id}/index", s.auth(s.handleSessionIndex))

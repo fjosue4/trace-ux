@@ -34,6 +34,7 @@ func newTestServer(t *testing.T) (*Server, *httptest.Server) {
 	}
 	ts := httptest.NewServer(srv.routes())
 	t.Cleanup(ts.Close)
+	t.Cleanup(srv.closeSessionExports)
 	return srv, ts
 }
 

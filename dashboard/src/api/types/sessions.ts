@@ -50,6 +50,16 @@ export type SessionPage = {
   left_at: number;
 };
 
+export type SessionExportStatus = {
+  id: string;
+  state: 'preparing' | 'ready' | 'failed';
+  chunks_done: number;
+  chunks_total: number;
+  bytes: number;
+  error?: string;
+  download_url?: string;
+};
+
 export type SessionFilter = {
   browser?: string;
   os?: string;

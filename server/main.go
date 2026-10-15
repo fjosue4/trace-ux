@@ -75,6 +75,7 @@ func main() {
 		secret: secret,
 		static: newStaticHandler(cfg),
 	}
+	defer srv.closeSessionExports()
 
 	// Disk budget backstop. Separate from the 6-hour retention loop and much
 	// faster, because a store fills on its own schedule: sizing the data dir is a

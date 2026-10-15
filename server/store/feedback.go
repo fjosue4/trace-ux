@@ -164,6 +164,10 @@ func (s *Store) ListFeedback(f FeedbackFilter) ([]Feedback, error) {
 // ListFeedbackBySession returns the feedback linked to one recording, oldest
 // first, for the replay page's activity feed.
 func (s *Store) ListFeedbackBySession(sessionID string) ([]Feedback, error) {
+	return (sessionReader{s.DB}).ListFeedbackBySession(sessionID)
+}
+
+func (s sessionReader) ListFeedbackBySession(sessionID string) ([]Feedback, error) {
 	rows, err := s.DB.Query(`SELECT `+feedbackCols+` FROM feedback f
 		JOIN sites si ON si.id = f.site_id
 		LEFT JOIN sessions se ON se.id = f.session_id

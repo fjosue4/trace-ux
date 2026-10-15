@@ -1,4 +1,5 @@
 import { useUser } from '../../App';
+import { useParams } from 'react-router-dom';
 import { fmtTime } from '../../lib/format';
 import Breadcrumbs from '../../components/ui/Breadcrumbs';
 import PageHeader from '../../components/ui/PageHeader';
@@ -11,11 +12,15 @@ import PagesPanel from '../../components/replay/PagesPanel';
 import ReplayPlayer from '../../components/replay/ReplayPlayer';
 import { Icon } from '../../components/ui/Icon';
 import { useReplay } from './hooks/useReplay';
+import { useSessionExport } from './hooks/useSessionExport';
+import SessionExportProgress from './SessionExportProgress';
 import './Replay.scss';
 
 export default function Replay() {
   const { user } = useUser();
   const isAdmin = user.role === 'admin';
+  const { sessionId } = useParams();
+  const { exporting, downloading, exportError, exportStatus, exportSession, cancelExport, dismissExport, onDownloadStart } = useSessionExport(sessionId);
   const {
     backTo,
     meta,
@@ -70,26 +75,47 @@ export default function Replay() {
       <PageHeader
         leading={crumbs(`Recording · ${fmtTime(session.started_at)}`)}
         actions={
-          isAdmin && (
+          <>
             <Button
-              variant="danger"
+              variant="secondary"
               size="sm"
-              disabled={!!session.active}
-              title={
-                session.active
-                  ? 'Recording is in progress — it can be deleted once completed'
-                  : 'Delete recording'
-              }
-              onClick={() => setConfirmingDelete(true)}
+              disabled={exporting || downloading || deleting}
+              aria-busy={exporting || downloading}
+              title="Download recording, actions, and logs as JSON for AI-assisted debugging"
+              onClick={exportSession}
             >
-              <Icon name="trash" size={13} />
-              Delete
+              <Icon name="fileSparkles" size={13} />
+              {exporting ? 'Preparing export…' : downloading ? 'Saving export…' : 'Export for AI'}
             </Button>
-          )
+            {isAdmin && (
+              <Button
+                variant="danger"
+                size="sm"
+                disabled={!!session.active || exporting || downloading || deleting}
+                title={
+                  session.active
+                    ? 'Recording is in progress — it can be deleted once completed'
+                    : 'Delete recording'
+                }
+                onClick={() => setConfirmingDelete(true)}
+              >
+                <Icon name="trash" size={13} />
+                Delete
+              </Button>
+            )}
+          </>
         }
       />
 
       {deleteError && <Notice tone="error">{deleteError}</Notice>}
+      {exportError && <Notice tone="error">{exportError}</Notice>}
+      <SessionExportProgress
+        status={exportStatus}
+        preparing={exporting}
+        onCancel={cancelExport}
+        onDismiss={dismissExport}
+        onDownload={onDownloadStart}
+      />
 
       <ConfirmDialog
         open={confirmingDelete}

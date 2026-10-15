@@ -1,5 +1,5 @@
 import { request } from '../client';
-import { CustomEvent, Session, SessionFilter, SessionPage, SharedSession } from '../types/sessions';
+import { CustomEvent, Session, SessionExportStatus, SessionFilter, SessionPage, SharedSession } from '../types/sessions';
 import { Log, SharedLog } from '../types/logs';
 import { Ticket } from '../types/tickets';
 import { Feedback } from '../types/feedback';
@@ -44,6 +44,15 @@ export const sessionsEndpoints = {
 
   deleteSession: (id: string) =>
     request<{ ok: boolean }>(`/api/sessions/${id}`, { method: 'DELETE' }),
+
+  prepareSessionExport: (id: string) =>
+    request<SessionExportStatus>(`/api/sessions/${encodeURIComponent(id)}/export`, { method: 'POST' }),
+
+  getSessionExport: (id: string, signal?: AbortSignal) =>
+    request<SessionExportStatus>(`/api/session-exports/${encodeURIComponent(id)}`, { signal }),
+
+  cancelSessionExport: (id: string) =>
+    request<{ ok: boolean }>(`/api/session-exports/${encodeURIComponent(id)}`, { method: 'DELETE', keepalive: true }),
 
   // The seek table: which chunk covers which moment, and which chunks are
   // FullSnapshots and therefore valid places to start rendering. ~10 KB for a

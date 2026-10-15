@@ -6,7 +6,7 @@ export class ApiError extends Error {
   }
 }
 
-export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function requestResponse(path: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(path, {
     credentials: 'same-origin',
     ...init,
@@ -27,5 +27,10 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new ApiError(res.status, msg);
   }
+  return res;
+}
+
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await requestResponse(path, init);
   return res.json() as Promise<T>;
 }
