@@ -70,3 +70,9 @@ export type SessionFilter = {
   identity?: string; // matches userId / clientId / remoteId
   min_duration_ms?: number;
 };
+
+export type SessionQuery = SessionFilter & {
+  limit?: number;
+  before?: number;
+  before_id?: string;
+};

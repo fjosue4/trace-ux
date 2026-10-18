@@ -37,9 +37,19 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		f.MinDurationMs, _ = strconv.ParseInt(v, 10, 64)
 	}
 	if v := q.Get("before"); v != "" {
-		f.Before, _ = strconv.ParseInt(v, 10, 64)
+		before, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || before <= 0 {
+			writeErr(w, http.StatusBadRequest, "invalid before")
+			return
+		}
+		f.Before = before
 	}
-	f.Limit = 50
+	f.BeforeID = q.Get("before_id")
+	if f.BeforeID != "" && f.Before == 0 {
+		writeErr(w, http.StatusBadRequest, "before_id requires before")
+		return
+	}
+	f.Limit = 40
 	if v := q.Get("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
 			f.Limit = n

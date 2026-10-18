@@ -87,29 +87,39 @@ func (s *Store) listSessionsIndexed(ctx context.Context, q sessionSearchQueryer,
 	// Keep the candidate IN clause below SQLite's conservative 999-variable
 	// limit even after the ordinary filters and additional terms are appended.
 	const driverBatch = 500
-	cursor := maxSearchCursor()
+	before := f.Before
+	beforeID := f.BeforeID
 	accepted := make([]indexedSession, 0, f.Limit)
-	seen := make(map[int64]bool)
 
 	for len(accepted) < f.Limit {
-		rows, err := q.QueryContext(ctx, `SELECT rowid FROM session_search
-			WHERE session_search MATCH ? AND rowid < ? ORDER BY rowid DESC LIMIT ?`,
-			quoteFTSTerm(terms[0]), cursor, driverBatch)
+		// Candidate batches must use the same order as the returned pages.
+		// Rowid order can skip newer sessions (or ties) outside the first batch
+		// once the dashboard starts requesting subsequent pages by start time.
+		query := `SELECT DISTINCT s.rowid, s.started_at, s.id FROM session_search
+			JOIN sessions s ON s.rowid = (session_search.rowid >> 24)
+			WHERE session_search MATCH ?`
+		args := []any{quoteFTSTerm(terms[0])}
+		if beforeID != "" {
+			query += ` AND (s.started_at < ? OR (s.started_at = ? AND s.id < ?))`
+			args = append(args, before, before, beforeID)
+		} else if before != 0 {
+			query += ` AND s.started_at < ?`
+			args = append(args, before)
+		}
+		query += ` ORDER BY s.started_at DESC, s.id DESC LIMIT ?`
+		args = append(args, driverBatch)
+		rows, err := q.QueryContext(ctx, query, args...)
 		if err != nil {
 			return nil, err
 		}
 		candidateIDs := make([]int64, 0, 128)
 		for rows.Next() {
-			var ftsRowID int64
-			if err := rows.Scan(&ftsRowID); err != nil {
+			var sessionRowID int64
+			if err := rows.Scan(&sessionRowID, &before, &beforeID); err != nil {
 				rows.Close()
 				return nil, err
 			}
-			sessionRowID := ftsRowID >> 24
-			if !seen[sessionRowID] {
-				seen[sessionRowID] = true
-				candidateIDs = append(candidateIDs, sessionRowID)
-			}
+			candidateIDs = append(candidateIDs, sessionRowID)
 		}
 		if err := rows.Err(); err != nil {
 			rows.Close()
@@ -131,14 +141,11 @@ func (s *Store) listSessionsIndexed(ctx context.Context, q sessionSearchQueryer,
 				accepted = append(accepted, indexedSession{rowID: rowID, session: session})
 			}
 		}
-		// We already evaluated the oldest session represented in this driver
-		// batch, so skip the rest of its matching item rows on the next pass.
-		cursor = candidateIDs[len(candidateIDs)-1] << 24
 	}
 
 	sort.Slice(accepted, func(i, j int) bool {
 		if accepted[i].session.StartedAt == accepted[j].session.StartedAt {
-			return accepted[i].rowID > accepted[j].rowID
+			return accepted[i].session.ID > accepted[j].session.ID
 		}
 		return accepted[i].session.StartedAt > accepted[j].session.StartedAt
 	})
@@ -244,7 +251,10 @@ func appendIndexedSessionFilters(query string, args []any, f SessionFilter) (str
 		query += ` AND ` + sessionDurationExprQualified + ` >= ?`
 		args = append(args, f.MinDurationMs)
 	}
-	if f.Before != 0 {
+	if f.Before != 0 && f.BeforeID != "" {
+		query += ` AND (s.started_at < ? OR (s.started_at = ? AND s.id < ?))`
+		args = append(args, f.Before, f.Before, f.BeforeID)
+	} else if f.Before != 0 {
 		query += ` AND s.started_at < ?`
 		args = append(args, f.Before)
 	}

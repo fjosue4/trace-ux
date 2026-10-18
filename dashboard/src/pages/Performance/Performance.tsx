@@ -59,6 +59,16 @@ export default function Performance() {
         }
       />
 
+      {report && report.endpoints.length > 0 && (
+        <div className="performance-metrics">
+          <MetricCard label="Requests" value={fmtNumber(report.summary.requests)} detail={`${fmtNumber(report.summary.errors)} errors`} />
+          <MetricCard label="p50" value={fmtLatency(report.summary.p50_ms)} detail="Typical request" />
+          <MetricCard label="p95" value={fmtLatency(report.summary.p95_ms)} detail="Slow-tail latency" tone="warm" />
+          <MetricCard label="p99" value={fmtLatency(report.summary.p99_ms)} detail="Worst-tail latency" tone="hot" />
+          <MetricCard label="Error rate" value={`${report.summary.error_rate.toFixed(1)}%`} detail={`Average ${fmtLatency(report.summary.avg_ms)}`} tone={report.summary.error_rate > 0 ? 'hot' : ''} />
+        </div>
+      )}
+
       <FilterPanel
         title="Filter performance"
         actions={(
@@ -128,14 +138,6 @@ export default function Performance() {
         </Card>
       ) : (
         <>
-          <div className="performance-metrics">
-            <MetricCard label="Requests" value={fmtNumber(report.summary.requests)} detail={`${fmtNumber(report.summary.errors)} errors`} />
-            <MetricCard label="p50" value={fmtLatency(report.summary.p50_ms)} detail="Typical request" />
-            <MetricCard label="p95" value={fmtLatency(report.summary.p95_ms)} detail="Slow-tail latency" tone="warm" />
-            <MetricCard label="p99" value={fmtLatency(report.summary.p99_ms)} detail="Worst-tail latency" tone="hot" />
-            <MetricCard label="Error rate" value={`${report.summary.error_rate.toFixed(1)}%`} detail={`Average ${fmtLatency(report.summary.avg_ms)}`} tone={report.summary.error_rate > 0 ? 'hot' : ''} />
-          </div>
-
           {selected && (
             <Card className="performance-chart-card">
               <div className="performance-section-head">

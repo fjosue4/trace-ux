@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/ui/PageHeader';
 import Table from '../../components/ui/Table';
@@ -6,10 +6,12 @@ import Notice from '../../components/ui/Notice';
 import Loading from '../../components/ui/Loading';
 import EmptyState from '../../components/ui/EmptyState';
 import Card from '../../components/ui/Card';
+import Button from '../../components/ui/Button';
 import FiltersBar from '../../components/sessions/FiltersBar';
 import { Select } from '../../components/ui/fields';
 import { markCachedSessionViewed, useSessions } from './hooks/useSessions';
 import { SessionRow } from './subcomponents/SessionRow';
+import { SESSION_PAGE_SIZE } from './Sessions.constants';
 import './Sessions.scss';
 
 // Global sessions browser: every session across every site, filterable per
@@ -17,11 +19,25 @@ import './Sessions.scss';
 export default function Sessions() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { sites, sessions, countries, error, selected, setSelected, filter, set, stats, searching } = useSessions();
+  const { sites, sessions, countries, error, selected, setSelected, filter, set, stats, searching, hasMore, loadingMore, loadMore, loadMoreError } = useSessions();
+  const loadMoreRef = useRef<HTMLDivElement>(null);
   const [typing, setTyping] = useState(false);
   const showSite = selected === 'all';
   // The replay's back link returns here with the same filters applied.
   const from = `${location.pathname}${location.search}`;
+
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || !hasMore || loadingMore || loadMoreError || searching || typing) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) void loadMore();
+      },
+      { rootMargin: '500px 0px' },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loadMoreError, loadMore, searching, typing]);
 
   return (
     <main className="page">
@@ -85,31 +101,47 @@ export default function Sessions() {
           description="Install the site snippet and visit the site — sessions show up here within seconds."
         />
       ) : (
-        <Table
-          fixed
-          className="sessions-table"
-          widths={
-            showSite
-              ? ['19%', '28%', '18%', '15%', '13%', '64px']
-              : ['19%', '30%', '18%', '15%', '13%', '64px']
-          }
-          headers={
-            showSite
-              ? ['Visit', 'Context', 'Device', 'Country', 'Actions', '']
-              : ['Visit', 'Visitor / referrer', 'Device', 'Country', 'Actions', '']
-          }
-        >
-          {sessions.map((s) => (
-            <SessionRow
-              key={s.id}
-              session={s}
-              showSite={showSite}
-              from={from}
-              onViewed={() => markCachedSessionViewed(s.id)}
-              onOpen={() => navigate(`/replay/${s.id}`, { state: { from } })}
-            />
-          ))}
-        </Table>
+        <>
+          <Table
+            fixed
+            className="sessions-table"
+            widths={
+              showSite
+                ? ['19%', '28%', '18%', '15%', '13%', '64px']
+                : ['19%', '30%', '18%', '15%', '13%', '64px']
+            }
+            headers={
+              showSite
+                ? ['Visit', 'Context', 'Device', 'Country', 'Actions', '']
+                : ['Visit', 'Visitor / referrer', 'Device', 'Country', 'Actions', '']
+            }
+          >
+            {sessions.map((s) => (
+              <SessionRow
+                key={s.id}
+                session={s}
+                showSite={showSite}
+                from={from}
+                onViewed={() => markCachedSessionViewed(s.id)}
+                onOpen={() => navigate(`/replay/${s.id}`, { state: { from } })}
+              />
+            ))}
+          </Table>
+          <div ref={loadMoreRef} className="sessions-load-more" aria-live="polite">
+            {loadingMore ? (
+              <Loading label="Loading older sessions…" />
+            ) : loadMoreError ? (
+              <>
+                <span className="muted small">{loadMoreError}</span>
+                <Button variant="ghost" size="sm" onClick={() => void loadMore()}>Retry</Button>
+              </>
+            ) : hasMore ? (
+              <span className="muted small">{sessions.length.toLocaleString()} loaded · Scroll for older sessions · {SESSION_PAGE_SIZE} per request</span>
+            ) : (
+              <span className="muted small">All {sessions.length.toLocaleString()} matching sessions loaded</span>
+            )}
+          </div>
+        </>
       )}
     </main>
   );

@@ -266,11 +266,14 @@ func (s *Store) listSessionsStandard(ctx context.Context, f SessionFilter) ([]Se
 		query += ` AND ` + sessionDurationExprQualified + ` >= ?`
 		args = append(args, f.MinDurationMs)
 	}
-	if f.Before != 0 {
+	if f.Before != 0 && f.BeforeID != "" {
+		query += ` AND (s.started_at < ? OR (s.started_at = ? AND s.id < ?))`
+		args = append(args, f.Before, f.Before, f.BeforeID)
+	} else if f.Before != 0 {
 		query += ` AND s.started_at < ?`
 		args = append(args, f.Before)
 	}
-	query += ` ORDER BY s.started_at DESC, s.rowid DESC LIMIT ?`
+	query += ` ORDER BY s.started_at DESC, s.id DESC LIMIT ?`
 	args = append(args, f.Limit)
 
 	rows, err := s.readDB.QueryContext(ctx, query, args...)
@@ -299,7 +302,8 @@ type SessionFilter struct {
 	Action        string // matches any custom event, page visit, or browser log in the session
 	Identity      string // matches user_id / client_id / remote_id
 	MinDurationMs int64
-	Before        int64 // pagination cursor: started_at of the last row shown
+	Before        int64  // pagination cursor: started_at of the last row shown
+	BeforeID      string // breaks ties between sessions started in the same second
 	Limit         int
 }
 

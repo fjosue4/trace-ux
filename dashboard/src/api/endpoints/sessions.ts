@@ -1,12 +1,12 @@
 import { request } from '../client';
-import { CustomEvent, Session, SessionExportStatus, SessionFilter, SessionPage, SharedSession } from '../types/sessions';
+import { CustomEvent, Session, SessionExportStatus, SessionQuery, SessionPage, SharedSession } from '../types/sessions';
 import { Log, SharedLog } from '../types/logs';
 import { Ticket } from '../types/tickets';
 import { Feedback } from '../types/feedback';
 
 export const sessionsEndpoints = {
   // siteId === null lists sessions across all sites (rows carry site_name).
-  listSessions: (siteId: number | null, f: SessionFilter = {}, signal?: AbortSignal) => {
+  listSessions: (siteId: number | null, f: SessionQuery = {}, signal?: AbortSignal) => {
     const q = new URLSearchParams();
     if (siteId) q.set('site_id', String(siteId));
     if (f.browser) q.set('browser', f.browser);
@@ -17,6 +17,9 @@ export const sessionsEndpoints = {
     if (f.action) q.set('action', f.action);
     if (f.identity) q.set('visitor', f.identity);
     if (f.min_duration_ms) q.set('min_duration_ms', String(f.min_duration_ms));
+    if (f.limit) q.set('limit', String(f.limit));
+    if (f.before !== undefined) q.set('before', String(f.before));
+    if (f.before_id) q.set('before_id', f.before_id);
     return request<Session[]>(`/api/sessions?${q}`, { signal });
   },
 
