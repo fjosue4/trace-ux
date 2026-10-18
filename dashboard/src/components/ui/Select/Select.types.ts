@@ -30,4 +30,4 @@ export type SelectHookProps = {
   disabled?: boolean;
 };
 
-export type MenuPos = { top: number; left: number; minWidth: number };
+export type MenuPos = { top: number; left: number; minWidth: number; maxWidth: number };

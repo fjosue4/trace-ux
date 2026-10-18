@@ -20,7 +20,7 @@ function computeMenuPos(wrap: HTMLElement, optionCount: number): { pos: MenuPos;
   const top = up
     ? rect.top + scrollTop - menuH - 6
     : rect.bottom + scrollTop + 6;
-  const pos: MenuPos = { top, left, minWidth: rect.width };
+  const pos: MenuPos = { top, left, minWidth: rect.width, maxWidth: window.innerWidth - (left - scrollLeft) - 8 };
   return { pos, up };
 }
 

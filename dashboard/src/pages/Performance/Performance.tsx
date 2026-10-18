@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { PerformanceEndpoint } from '../../api';
 import PageHeader from '../../components/ui/PageHeader';
 import Card from '../../components/ui/Card';
 import Notice from '../../components/ui/Notice';
@@ -6,20 +8,21 @@ import EmptyState from '../../components/ui/EmptyState';
 import Badge from '../../components/ui/Badge';
 import Switch from '../../components/ui/Switch';
 import Button from '../../components/ui/Button';
-import Table from '../../components/ui/Table';
 import FilterPanel from '../../components/ui/FilterPanel';
 import { Icon } from '../../components/ui/Icon';
 import { Select } from '../../components/ui/fields';
 import { usePerformance } from './hooks/usePerformance';
 import { LatencyChart } from './subcomponents/LatencyChart';
 import { MetricCard } from './subcomponents/MetricCard';
-import { EndpointRow } from './subcomponents/EndpointRow';
+import { EndpointList } from './subcomponents/EndpointList';
+import { EndpointDetailModal } from './subcomponents/EndpointDetailModal';
 import { endpointKey, fmtLatency, fmtNumber } from './Performance.helpers';
 import { timeRangeOptions, rangeLabels } from './Performance.constants';
 import { TimeRange } from './Performance.types';
 import './Performance.scss';
 
 export default function Performance() {
+  const [openEndpoint, setOpenEndpoint] = useState<PerformanceEndpoint | null>(null);
   const {
     report,
     siteSel,
@@ -32,7 +35,6 @@ export default function Performance() {
     setVersion,
     range,
     setRange,
-    selectedKey,
     setSelectedKey,
     live,
     setLive,
@@ -99,6 +101,17 @@ export default function Performance() {
           onChange={setVersion}
           options={[{ value: 'all', label: 'All versions' }, ...filterOptions.versions.map((value) => ({ value, label: value }))]}
         />
+        <Select
+          className="performance-endpoint-filter"
+          ariaLabel="Endpoint trend"
+          value={selected ? endpointKey(selected) : ''}
+          onChange={setSelectedKey}
+          disabled={!report?.endpoints.length}
+          options={report?.endpoints.length ? report.endpoints.map((endpoint) => ({
+            value: endpointKey(endpoint),
+            label: `${endpoint.endpoint} · ${endpoint.site_name || `Site ${endpoint.site_id}`} · ${endpoint.environment} · ${endpoint.service} · ${endpoint.version}`,
+          })) : [{ value: '', label: 'No endpoints' }]}
+        />
       </FilterPanel>
 
       {error && <Notice tone="error">{error}</Notice>}
@@ -127,7 +140,7 @@ export default function Performance() {
             <Card className="performance-chart-card">
               <div className="performance-section-head">
                 <div className="performance-section-head__title">
-                  <span className="performance-eyebrow">Selected endpoint</span>
+                  <span className="performance-eyebrow">Endpoint trend</span>
                   <h2 title={selected.endpoint}>{selected.endpoint}</h2>
                   <p className="muted small" title={`${selected.service} · ${selected.environment} · ${selected.version}`}>
                     {selected.service} · {selected.environment} · {selected.version}
@@ -142,24 +155,10 @@ export default function Performance() {
             </Card>
           )}
 
-          <div className="performance-table-head">
-            <div>
-              <h2>Endpoints</h2>
-              <p className="muted small">Sorted by p95 latency. Select a row to inspect its trend.</p>
-            </div>
-          </div>
-          <Table
-            className="performance-table"
-            fixed
-            widths={['27%', '12%', '13%', '13%', '11%', '7%', '7%', '7%', '8%']}
-            headers={['Endpoint', 'Site', 'Environment', 'Service', 'Version', 'Requests', 'p50', 'p95', 'p99']}
-          >
-            {report.endpoints.map((endpoint) => (
-              <EndpointRow key={endpointKey(endpoint)} endpoint={endpoint} isSelected={endpointKey(endpoint) === selectedKey} onSelect={setSelectedKey} />
-            ))}
-          </Table>
+          <EndpointList endpoints={report.endpoints} onOpen={setOpenEndpoint} />
         </>
       )}
+      <EndpointDetailModal endpoint={openEndpoint} range={range} onClose={() => setOpenEndpoint(null)} />
     </main>
   );
 }

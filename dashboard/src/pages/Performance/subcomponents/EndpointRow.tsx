@@ -1,17 +1,24 @@
+import { KeyboardEvent } from 'react';
 import { PerformanceEndpoint } from '../../../api';
-import { endpointKey, fmtLatency, fmtNumber } from '../Performance.helpers';
+import { fmtLatency, fmtNumber } from '../Performance.helpers';
 
 type EndpointRowProps = {
   endpoint: PerformanceEndpoint;
-  isSelected: boolean;
-  onSelect: (key: string) => void;
+  onOpen: (endpoint: PerformanceEndpoint) => void;
 };
 
-export function EndpointRow({ endpoint, isSelected, onSelect }: EndpointRowProps) {
-  const key = endpointKey(endpoint);
+export function EndpointRow({ endpoint, onOpen }: EndpointRowProps) {
+  function onKeyDown(event: KeyboardEvent<HTMLTableRowElement>) {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onOpen(endpoint);
+    }
+  }
+
   return (
-    <tr className={isSelected ? 'is-selected' : ''} onClick={() => onSelect(key)}>
-      <td><button type="button" className="performance-endpoint" title={endpoint.endpoint}>{endpoint.endpoint}</button></td>
+    <tr tabIndex={0} onClick={() => onOpen(endpoint)} onKeyDown={onKeyDown} aria-label={`Open details for ${endpoint.endpoint}`}>
+      <td><span className="performance-endpoint" title={endpoint.endpoint}>{endpoint.endpoint}</span></td>
       <td className="muted">{endpoint.site_name || '—'}</td>
       <td><span className="performance-dimension">{endpoint.environment}</span></td>
       <td><span className="performance-dimension">{endpoint.service}</span></td>
