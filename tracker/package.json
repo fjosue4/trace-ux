@@ -82,7 +82,7 @@
   },
   "dependencies": {
     "@rrweb/record": "^2.1.1",
-    "dompurify": "^3.4.16",
+    "dompurify": "^3.4.17",
     "marked": "^15.0.12",
     "motion": "^13.2.0"
   },
