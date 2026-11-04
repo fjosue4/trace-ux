@@ -1,8 +1,9 @@
 import { motion } from 'motion/react';
+import classNames from 'classnames';
 import { fmtDuration, fmtTime } from '../../../lib/format';
-import { stagger } from '../../../lib/motion';
 import Card from '../../ui/Card';
 import DebouncedTextInput from '../../ui/DebouncedTextInput';
+import { InlineSpinner } from '../../ui/Loading';
 import { usePagesPanel } from './hooks/usePagesPanel';
 import { ActionRow } from './subcomponents/ActionRow';
 import { ActionDetailModal } from './subcomponents/ActionDetailModal';
@@ -24,7 +25,7 @@ export default function PagesPanel({
   currentTimeMs,
   onSeekMs,
 }: PagesPanelProps) {
-  const { selectedLog, setSelectedLog, query, setQuery, listRef, setRowRef, actions, visible, activeKey } =
+  const { selectedLog, setSelectedLog, query, setQuery, searchPending, setSearchPending, listRef, setRowRef, actions, visible, activeKey } =
     usePagesPanel({ activity, logs, pages, tickets, feedback, firstTs, currentTimeMs });
 
   return (
@@ -44,21 +45,31 @@ export default function PagesPanel({
             aria-label="Search actions and pages"
             value={query}
             onDebouncedChange={setQuery}
+            onPendingChange={setSearchPending}
           />
         )}
       </div>
       {!eventsReady ? (
-        <p className="muted small actions-empty">Loading actions…</p>
+        <p className="muted small actions-empty actions-loading" role="status">
+          <InlineSpinner />
+          Loading actions…
+        </p>
       ) : actions.length === 0 ? (
         <p className="muted small actions-empty">No tracked actions in this recording.</p>
       ) : visible.length === 0 ? (
-        <p className="muted small actions-empty">No actions match “{query.trim()}”.</p>
+        <p className="muted small actions-empty actions-loading" role="status">
+          {searchPending ? <><InlineSpinner />Searching actions…</> : <>No actions match “{query.trim()}”.</>}
+        </p>
       ) : (
+        // While a search is on its way the current rows stay in place, dimmed:
+        // swapping them for a spinner on every keystroke made the list
+        // flicker and threw away its scroll position.
         <motion.ol
           ref={listRef}
-          className="pages-list actions-list"
-          variants={stagger}
-          initial="hidden"
+          className={classNames('pages-list actions-list', { 'is-searching': searchPending })}
+          aria-busy={searchPending}
+          // Long recordings must not stagger hundreds of rows before showing a match.
+          initial={false}
           animate="visible"
         >
           {visible.map((action) => (

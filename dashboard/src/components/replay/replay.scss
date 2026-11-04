@@ -493,7 +493,15 @@
 .page-row__meta { font-size: 0.76rem; color: $muted; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .actions-empty { margin: 0.2rem 0.35rem 0; }
-.actions-list { max-height: 34rem; overflow-y: auto; padding-right: 0.15rem; }
+.actions-loading { display: flex; align-items: center; gap: 0.45rem; }
+.actions-list {
+  max-height: 34rem;
+  overflow-y: auto;
+  padding-right: 0.15rem;
+  transition: opacity $duration-fast $ease-out;
+
+  &.is-searching { opacity: 0.5; }
+}
 .action-row {
   align-items: flex-start;
   transition: background-color $duration-fast $ease-out;

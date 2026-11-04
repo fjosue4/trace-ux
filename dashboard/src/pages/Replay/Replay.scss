@@ -120,3 +120,95 @@
 .page.page--wide {
   padding-bottom: 2rem;
 }
+
+@property --export-ai-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+// One quick turn of the ring, then a long rest: noticeable, not busy.
+@keyframes export-ai-orbit {
+  0% { --export-ai-angle: 0deg; }
+  20%, 100% { --export-ai-angle: 360deg; }
+}
+
+$export-ai-ring: conic-gradient(from var(--export-ai-angle), #a78bfa, #60a5fa, #5eead4, #a78bfa);
+
+// The hover fill's colours: the ring's hues in deep shades, each dark enough
+// for the white label to keep at least 4.5:1 contrast.
+$export-ai-fill: #4f46e5, #7c3aed, #2563eb, #0e7490;
+
+// The fill layer is three buttons wide and holds the colour cycle twice;
+// sliding it by half its width moves exactly one cycle, so the loop is
+// seamless and runs on transform alone.
+@keyframes export-ai-flow {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+// The gradient ring is the button's own border: the surface fills the
+// padding box and the conic gradient shows only in the border box around
+// it. Ring and button therefore share one edge and one curve, so the corners
+// stay round -- a separate ring element sits a pixel inside the border with
+// the outer radius, and its corners pull away from the edge.
+.btn.export-ai-button {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid transparent;
+  background: linear-gradient($surface, $surface) padding-box, $export-ai-ring border-box;
+  animation: export-ai-orbit 8s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  transition: color $duration-medium $ease-out, box-shadow $duration-medium $ease-out;
+
+  // The hover fill: a flowing blend of the AI colours. overflow clips it to
+  // the padding box with the border's inner radius, so it meets the ring
+  // with no gap at the corners. It only moves while it is visible.
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    z-index: -1;
+    width: 300%;
+    background: linear-gradient(90deg, $export-ai-fill, $export-ai-fill, nth($export-ai-fill, 1));
+    opacity: 0;
+    animation: export-ai-flow 5s linear infinite paused;
+    transition: opacity $duration-medium $ease-out;
+  }
+
+  // Content above the sheen.
+  > :not(.export-ai-button__sheen) { position: relative; }
+
+  // Restates the background: the secondary variant's hover would replace
+  // both layers, ring included.
+  &:hover:not(:disabled),
+  &:focus-visible {
+    background: linear-gradient($surface, $surface) padding-box, $export-ai-ring border-box;
+    border-color: transparent;
+    color: #fff;
+    box-shadow: 0 8px 22px -10px rgba(79, 70, 229, 0.65), 0 6px 18px -10px rgba(14, 116, 144, 0.5);
+
+    &::before { opacity: 1; animation-play-state: running; }
+  }
+
+  &:focus-visible { outline: 2px solid $accent; outline-offset: 2px; }
+
+  // Busy or disabled: the ring holds where it is instead of snapping back.
+  &:disabled { animation-play-state: paused; }
+
+  .export-ai-button__sheen {
+    position: absolute;
+    inset: -50% auto -50% 0;
+    width: 45%;
+    background: linear-gradient(110deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+    pointer-events: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn.export-ai-button {
+    animation: none;
+    &, &::before { transition: none; }
+    &::before { animation: none; }
+  }
+}

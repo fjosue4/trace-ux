@@ -13,6 +13,7 @@ export function usePagesPanel({
 }: Pick<PagesPanelProps, 'activity' | 'logs' | 'pages' | 'tickets' | 'feedback' | 'firstTs' | 'currentTimeMs'>) {
   const [selectedLog, setSelectedLog] = useState<ReplayLog | null>(null);
   const [query, setQuery] = useState('');
+  const [searchPending, setSearchPending] = useState(false);
   const listRef = useRef<HTMLOListElement | null>(null);
   const rowRefs = useRef<Record<string, HTMLLIElement | null>>({});
 
@@ -131,6 +132,8 @@ export function usePagesPanel({
     setSelectedLog,
     query,
     setQuery,
+    searchPending,
+    setSearchPending,
     listRef,
     setRowRef,
     actions,

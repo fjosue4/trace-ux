@@ -14,6 +14,7 @@ import { Icon } from '../../components/ui/Icon';
 import { useReplay } from './hooks/useReplay';
 import { useSessionExport } from './hooks/useSessionExport';
 import SessionExportProgress from './SessionExportProgress';
+import ExportForAIButton from './ExportForAIButton';
 import './Replay.scss';
 
 export default function Replay() {
@@ -76,17 +77,11 @@ export default function Replay() {
         leading={crumbs(`Recording · ${fmtTime(session.started_at)}`)}
         actions={
           <>
-            <Button
-              variant="secondary"
-              size="sm"
+            <ExportForAIButton
+              state={exporting ? 'preparing' : downloading ? 'saving' : 'idle'}
               disabled={exporting || downloading || deleting}
-              aria-busy={exporting || downloading}
-              title="Download recording, actions, and logs as JSON for AI-assisted debugging"
-              onClick={exportSession}
-            >
-              <Icon name="fileSparkles" size={13} />
-              {exporting ? 'Preparing export…' : downloading ? 'Saving export…' : 'Export for AI'}
-            </Button>
+              onExport={exportSession}
+            />
             {isAdmin && (
               <Button
                 variant="danger"

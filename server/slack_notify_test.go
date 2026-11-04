@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -118,14 +119,61 @@ func TestTicketSlackRequesterIncludesSessionIdentityAndEmail(t *testing.T) {
 
 func TestBuildLogsSlackText(t *testing.T) {
 	logs := []store.Log{
-		{Severity: "error", Message: "Payment failed", URL: "https://x.test/checkout", SessionID: "sess-1"},
+		{ID: 42, Severity: "error", Message: "Payment failed", URL: "https://x.test/checkout", SessionID: "sess-1"},
 	}
 	text := buildLogsSlackText("Acme", logs, "https://dash.example.com")
-	for _, want := range []string{"Acme", "ERROR", "Payment failed", "https://x.test/checkout", "https://dash.example.com/replay/sess-1"} {
+	for _, want := range []string{"Acme", "ERROR", "Payment failed", "https://x.test/checkout", "https://dash.example.com/replay/sess-1", "<https://dash.example.com/logs/log/42|Open log>"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("logs message missing %q:\n%s", want, text)
 		}
 	}
+}
+
+func TestBuildLogsSlackMessageLinksEachLog(t *testing.T) {
+	message := buildLogsSlackMessage("Acme", []store.Log{
+		{ID: 42, Severity: "error", Message: "Browser failure", SessionID: "sess-1"},
+		{ID: 73, Severity: "error", Message: "Service failure", ServiceName: "billing-api"},
+		{Severity: "warn", Message: "No saved ID"},
+	}, "https://dash.example.com")
+	for _, want := range []string{
+		"<https://dash.example.com/logs/log/42|Open log>",
+		"<https://dash.example.com/logs/log/73|Open log>",
+		"<https://dash.example.com/replay/sess-1|Replay>",
+	} {
+		if !strings.Contains(message.Message, want) {
+			t.Errorf("logs message missing %q:\n%s", want, message.Message)
+		}
+	}
+	if strings.Count(message.Message, "|Open log>") != 2 {
+		t.Fatalf("expected links only for saved logs: %s", message.Message)
+	}
+	if message.Button == nil || message.Button.Text != "Open log" || message.Button.URL != "https://dash.example.com/logs/log/42" {
+		t.Fatalf("logs message missing first log button: %+v", message.Button)
+	}
+}
+
+func TestBuildLogsSlackMessageButtonRequiresSavedLog(t *testing.T) {
+	for _, logs := range [][]store.Log{nil, {{Severity: "error", Message: "No saved ID"}}} {
+		message := buildLogsSlackMessage("Acme", logs, "https://dash.example.com")
+		if message.Button != nil {
+			t.Fatalf("expected no button without a saved log: %+v", message.Button)
+		}
+	}
+}
+
+func assertSlackLogButton(t *testing.T, body, wantURL string) {
+	t.Helper()
+	var payload SlackAdvancedMessage
+	if err := json.Unmarshal([]byte(body), &payload); err != nil {
+		t.Fatalf("decode Slack payload: %v", err)
+	}
+	for _, block := range payload.Blocks {
+		if button := block.Accessory; block.Type == "section" && button != nil &&
+			button.Type == "button" && button.Text.Text == "Open log" && button.URL == wantURL {
+			return
+		}
+	}
+	t.Fatalf("Slack payload missing Open log button to %q: %s", wantURL, body)
 }
 
 func TestSystemHealthSlackMessageMatchesDashboardFields(t *testing.T) {
@@ -688,6 +736,56 @@ func TestNotifySlackLogsMatchesAnyRule(t *testing.T) {
 	}
 }
 
+func TestBrowserLogIngestNotifiesSlackWithLogLinks(t *testing.T) {
+	srv, ts := newTestServer(t)
+	site := mustCreateNotifyTestSite(t, srv)
+	site.Settings.Logs.Enabled = true
+	if err := srv.store.UpdateSiteSettings(site.ID, site.Settings); err != nil {
+		t.Fatal(err)
+	}
+	receiver := newSlackReceiver(t, 0)
+	setSiteSlackIntegrationForTest(t, srv, site.ID, receiver.URL, store.SiteSlackIntegrationUpdate{
+		RoutingMode: store.SlackRoutingSingle,
+		LogsEnabled: true,
+	})
+	ingestURL := fmt.Sprintf("%s/api/ingest/%s", ts.URL, site.SiteKey)
+	payload := `{"type":"logs","session_id":"linked-log-session","logs":[
+		{"client_seq":1,"timestamp_ms":1000,"severity":"error","message":"First failure"},
+		{"client_seq":2,"timestamp_ms":2000,"severity":"error","message":"Second failure"}
+	]}`
+	resp := postJSON(t, ingestURL, payload, false)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("browser ingest: got %d", resp.StatusCode)
+	}
+	logs, err := srv.store.ListLogs(store.LogFilter{SiteID: site.ID})
+	if err != nil || len(logs) != 2 {
+		t.Fatalf("stored logs = %+v, %v; want two", logs, err)
+	}
+	body := waitForSlackDelivery(t, receiver)
+	for _, item := range logs {
+		want := fmt.Sprintf("%s/logs/log/%d|Open log", ts.URL, item.ID)
+		if !strings.Contains(body, want) {
+			t.Fatalf("Slack payload missing saved log link %q: %s", want, body)
+		}
+	}
+	if !strings.Contains(body, ts.URL+"/replay/linked-log-session|Replay") {
+		t.Fatalf("Slack payload missing replay link: %s", body)
+	}
+	// ListLogs is newest first; the button follows the original batch order.
+	assertSlackLogButton(t, body, fmt.Sprintf("%s/logs/log/%d", ts.URL, logs[1].ID))
+	resp = postJSON(t, ingestURL, payload, false)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("retried browser ingest: got %d", resp.StatusCode)
+	}
+	select {
+	case body := <-receiver.bodies:
+		t.Fatalf("retried logs must not send another notification: %s", body)
+	case <-time.After(300 * time.Millisecond):
+	}
+}
+
 // Service logs share the site's Slack log alert with browser logs: the same
 // rules apply, and each line names the service and environment it came from.
 func TestServiceLogIngestNotifiesSlackLogs(t *testing.T) {
@@ -730,6 +828,14 @@ func TestServiceLogIngestNotifiesSlackLogs(t *testing.T) {
 	if strings.Contains(body, "Unrelated failure") {
 		t.Fatalf("expected the non-matching service log to be filtered out: %s", body)
 	}
+	logs, err := srv.store.ListLogs(store.LogFilter{SiteID: site.ID, Search: "Payment"})
+	if err != nil || len(logs) != 1 {
+		t.Fatalf("stored matching logs = %+v, %v; want one", logs, err)
+	}
+	if want := fmt.Sprintf("%s/logs/log/%d|Open log", ts.URL, logs[0].ID); !strings.Contains(body, want) {
+		t.Fatalf("Slack payload missing saved log link %q: %s", want, body)
+	}
+	assertSlackLogButton(t, body, fmt.Sprintf("%s/logs/log/%d", ts.URL, logs[0].ID))
 }
 
 // The CPU alert compares TraceUX's share of the whole machine against the

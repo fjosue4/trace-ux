@@ -111,6 +111,9 @@ func buildLogsSlackText(siteName string, logs []store.Log, origin string) string
 		if l.URL != "" {
 			line += " — " + truncateForSlack(l.URL, 150)
 		}
+		if l.ID > 0 {
+			line += fmt.Sprintf(" (<%s/logs/log/%d|Open log>)", origin, l.ID)
+		}
 		if l.SessionID != "" {
 			line += fmt.Sprintf(" (<%s/replay/%s|replay>)", origin, l.SessionID)
 		}
@@ -321,6 +324,7 @@ func buildLogsSlackMessage(siteName string, logs []store.Log, origin string) Not
 		shown = shown[:maxSlackLogLines]
 	}
 	lines := make([]string, 0, len(shown))
+	var button *NotificationButton
 	for _, item := range shown {
 		line := fmt.Sprintf("• *%s* %s", strings.ToUpper(item.Severity), slackMrkdwn(truncateForSlack(item.Message, slackMaxFieldLen)))
 		// Browser and service logs share this alert, so each line says where
@@ -336,6 +340,17 @@ func buildLogsSlackMessage(siteName string, logs []store.Log, origin string) Not
 		if item.URL != "" {
 			line += " · " + slackMrkdwn(truncateForSlack(item.URL, 150))
 		}
+		if item.ID > 0 {
+			line += fmt.Sprintf(" · <%s/logs/log/%d|Open log>", origin, item.ID)
+			// Like custom event alerts, the primary button opens the first
+			// available item. Inline links keep every log in a batch reachable.
+			if button == nil {
+				button = &NotificationButton{
+					Text: "Open log",
+					URL:  fmt.Sprintf("%s/logs/log/%d", origin, item.ID),
+				}
+			}
+		}
 		if item.SessionID != "" {
 			line += fmt.Sprintf(" · <%s/replay/%s|Replay>", origin, urlPathSegment(item.SessionID))
 		}
@@ -347,6 +362,7 @@ func buildLogsSlackMessage(siteName string, logs []store.Log, origin string) Not
 	return NotificationMessage{
 		Header:  "Matching logs",
 		Message: strings.Join(lines, "\n"),
+		Button:  button,
 		Footer:  fmt.Sprintf("TraceUX · %s · %d log(s)", slackMrkdwn(truncateForSlack(siteName, 120)), len(logs)),
 	}
 }

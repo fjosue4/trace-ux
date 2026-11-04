@@ -257,6 +257,10 @@ func (s *Store) SaveLogs(siteID int64, sessionID string, logs []Log) ([]Log, err
 			return nil, err
 		}
 		if n, err := res.RowsAffected(); err == nil && n > 0 {
+			item.ID, err = res.LastInsertId()
+			if err != nil {
+				return nil, err
+			}
 			item.SessionID = sessionID
 			item.SiteID = siteID
 			item.CreatedAt = now
