@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { fmtLocalDateTime, stripProto, truncate } from '../../../../lib/format';
 import { Icon } from '../../../ui/Icon';
@@ -14,7 +15,15 @@ type ActionRowProps = {
 };
 
 export function ActionRow({ action, isActive, firstTs, setRowRef, onSeek, onOpenLogDetail }: ActionRowProps) {
+  const [copyStatus, setCopyStatus] = useState('');
+  useEffect(() => {
+    if (!copyStatus) return;
+    const timer = window.setTimeout(() => setCopyStatus(''), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copyStatus]);
+
   const label = truncate(actionLabel(action), 92);
+  const pageURL = action.kind === 'page' ? action.url : '';
   const title =
     action.kind === 'custom'
       ? actionLabel(action)
@@ -43,6 +52,7 @@ export function ActionRow({ action, isActive, firstTs, setRowRef, onSeek, onOpen
         title="Jump to this moment"
         onClick={seek}
         onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             seek();
@@ -102,6 +112,25 @@ export function ActionRow({ action, isActive, firstTs, setRowRef, onSeek, onOpen
           </span>
         </span>
         <span className="action-row__actions">
+          {pageURL && (
+            <motion.button
+              type="button"
+              className="action-row__button"
+              aria-label={copyStatus || 'Copy page URL'}
+              title={copyStatus || 'Copy page URL'}
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await navigator.clipboard.writeText(pageURL);
+                  setCopyStatus('Copied');
+                } catch {
+                  setCopyStatus('Could not copy URL. Try again.');
+                }
+              }}
+            >
+              <Icon name={copyStatus === 'Copied' ? 'check' : 'copy'} size={12} />
+            </motion.button>
+          )}
           {action.kind === 'log' && (
             <motion.button
               type="button"
