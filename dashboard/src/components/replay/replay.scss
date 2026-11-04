@@ -22,10 +22,11 @@
 }
 
 @media (min-width: 961px) {
-  /* The header and page padding consume the rest; the replay itself owns the
-     remaining viewport so metadata does not get pushed below the fold. */
+  /* Only the page's own padding (2rem above, 2rem below) sits outside the
+     replay: the recorded browser's tab strip stands in for a header row, so
+     the grid takes the rest of the viewport. */
   .replay-grid {
-    height: calc(100dvh - 8rem);
+    height: calc(100dvh - 4rem);
     min-height: 0;
   }
   .replay-main,
@@ -128,6 +129,243 @@
    dashboard's width, so responsive breakpoints fire and every element moves
    out from under the replayed cursor. .rr-player__frame already clips it. */
 .player-host iframe { display: block; border: 0; }
+
+/* ---- Recorded browser: a Chrome-style tab strip and toolbar above the
+   replay, showing the page and URL on screen at the playhead ---- */
+.browser-bar {
+  --browser-strip: color-mix(in srgb, var(--player-shell) 82%, var(--player-ink));
+  position: relative;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--player-line);
+  color: var(--player-ink);
+  font-size: 0.78rem;
+  user-select: text;
+}
+
+.browser-bar__strip {
+  /* The tab hangs from the strip's bottom edge, so the lights and the +
+     centre on the tab's line (as in Chrome), not on the strip's middle. */
+  --browser-tab-h: 32px;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.6rem;
+  height: 42px;
+  padding: 0 0.85rem;
+  background: var(--browser-strip);
+}
+
+/* macOS window lights. The red one closes the recording and, as on a Mac,
+   shows its × while the lights are hovered or it has keyboard focus. */
+.browser-bar__lights {
+  display: flex;
+  gap: 7px;
+  margin: 0 0.35rem calc((var(--browser-tab-h) - 12px) / 2) 0;
+}
+
+.browser-bar__light {
+  display: grid;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 0.5px rgb(0 0 0 / 0.18);
+
+  &--close { background: #ff5f57; color: rgb(77 0 0 / 0.8); }
+  &--minimize { background: #febc2e; }
+  &--zoom { background: #28c840; }
+
+  svg { stroke-width: 3.2; opacity: 0; transition: opacity $duration-fast $ease-out; }
+}
+
+button.browser-bar__light {
+  cursor: pointer;
+
+  &:focus-visible { outline: 2px solid var(--player-accent); outline-offset: 2px; }
+}
+
+.browser-bar__lights:hover .browser-bar__light svg,
+.browser-bar__light:focus-visible svg { opacity: 1; }
+
+.browser-bar__new-tab {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  margin-bottom: calc((var(--browser-tab-h) - 20px) / 2);
+  place-items: center;
+  border-radius: 50%;
+  color: var(--player-muted);
+}
+
+/* The active tab joins the toolbar below it: same fill, rounded top, and the
+   concave flares at its feet that make Chrome's tabs read as one surface. */
+.browser-tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: clamp(8.5rem, 26%, 14rem);
+  height: var(--browser-tab-h);
+  padding: 0 0.6rem 0 0.75rem;
+  border-radius: 9px 9px 0 0;
+  background: var(--player-panel);
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    width: 9px;
+    height: 9px;
+    pointer-events: none;
+  }
+  &::before { left: -9px; background: radial-gradient(circle at 0 0, transparent 8.5px, var(--player-panel) 9px); }
+  &::after { right: -9px; background: radial-gradient(circle at 100% 0, transparent 8.5px, var(--player-panel) 9px); }
+}
+
+.browser-tab__favicon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  color: var(--player-accent);
+}
+
+.browser-tab__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-tab__close {
+  display: grid;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--player-muted);
+}
+
+button.browser-tab__close {
+  cursor: pointer;
+  transition: background-color $duration-fast $ease-out, color $duration-fast $ease-out;
+
+  &:hover { background: var(--player-panel-strong); color: var(--player-ink); }
+  &:focus-visible { outline: 2px solid var(--player-accent); outline-offset: 1px; }
+}
+
+.browser-bar__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  height: 42px;
+  padding: 0 0.6rem;
+  background: var(--player-panel);
+}
+
+.browser-bar__nav {
+  display: grid;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--player-ink);
+  cursor: pointer;
+  transition: background-color $duration-fast $ease-out, color $duration-fast $ease-out;
+
+  &:hover:not(:disabled) { background: var(--player-panel-strong); }
+  &:focus-visible { outline: 2px solid var(--player-accent); outline-offset: 1px; }
+  &:disabled { color: var(--player-line-strong); cursor: default; }
+}
+
+.browser-address {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  height: 30px;
+  margin-left: 0.35rem;
+  padding: 0 0.35rem 0 0.8rem;
+  border-radius: $radius-pill;
+  background: var(--player-panel-strong);
+}
+
+.browser-address__security {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--player-muted);
+
+  &.is-insecure { color: var(--player-muted); }
+}
+
+.browser-address__insecure {
+  padding-right: 0.45rem;
+  border-right: 1px solid var(--player-line-strong);
+  font-weight: 600;
+}
+
+.browser-address__url {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-address__host { color: var(--player-ink); }
+.browser-address__rest { color: var(--player-muted); }
+
+.browser-address__copy {
+  display: grid;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--player-muted);
+  cursor: pointer;
+  transition: background-color $duration-fast $ease-out, color $duration-fast $ease-out;
+
+  &:hover { background: var(--player-panel); color: var(--player-ink); }
+  &:focus-visible { outline: 2px solid var(--player-accent); outline-offset: 1px; }
+  &.is-success { color: var(--player-accent); }
+}
+
+.browser-bar__progress {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--player-accent);
+  pointer-events: none;
+  transform-origin: left center;
+}
+
+@media (max-width: 640px) {
+  .browser-bar__lights,
+  .browser-bar__new-tab,
+  .browser-address__insecure { display: none; }
+  /* The tab's × still closes the recording without the red light. */
+  .browser-bar__strip { padding-left: 0.6rem; }
+  .browser-tab { width: min(100%, 15rem); }
+}
 
 @media (min-width: 961px) {
   .player-frame {
@@ -492,6 +730,29 @@
 }
 .page-row__meta { font-size: 0.76rem; color: $muted; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* Recording-wide controls (export, delete) under the visit summary. */
+/* The visit summary and the recording's own controls, set apart from the
+   actions feed below by a hairline. */
+.replay-side__header {
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid $line;
+
+  h3 { margin: 0; }
+  p { margin: 0.2rem 0 0; }
+}
+
+/* Two equal buttons spanning the panel, so they read as one toolbar. */
+.replay-side__toolbar {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+
+  .btn { width: 100%; height: 34px; }
+  .btn--dangerGhost { border-color: color-mix(in srgb, #{$danger} 35%, #{$line}); }
+}
+
 .actions-empty { margin: 0.2rem 0.35rem 0; }
 .actions-loading { display: flex; align-items: center; gap: 0.45rem; }
 .actions-list {
@@ -596,31 +857,80 @@
 .actions-head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.6rem;
-  margin: 0.9rem 0 0.45rem;
+  margin: 0.95rem 0 0.5rem;
 }
-.actions-head h4 {
-  margin: 0;
-  flex: none;
+.actions-head h4 { margin: 0; }
+.actions-head__count {
+  color: $muted;
+  font-size: 0.74rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
+
+/* Full-width search with its icon inside the field, and a spinner in place
+   while the typed text is still on its way to the filter. */
 .actions-search {
-  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+.actions-search__icon {
+  position: absolute;
+  left: 0.65rem;
+  display: grid;
+  color: $muted;
+  pointer-events: none;
+}
+.actions-search__input {
+  width: 100%;
   min-width: 0;
-  height: 28px;
-  padding: 0 0.6rem;
+  height: 34px;
+  padding: 0 2rem 0 2rem;
   border: 1px solid $line;
-  border-radius: 0.5rem;
-  background: $surface-2;
-  color: var(--text);
+  border-radius: $radius-sm;
+  background: $field-bg;
+  color: $ink;
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
+  transition: border-color $duration-fast $ease-out, box-shadow $duration-fast $ease-out;
+
+  &::placeholder { color: $muted; }
+  &:hover:not(:focus) { border-color: $line-strong; }
+  &:focus {
+    outline: none;
+    border-color: $accent;
+    box-shadow: 0 0 0 3px $accent-soft;
+  }
+  // Replaced by .actions-search__clear, which sits flush with the field's
+  // right edge and shares its spot with the pending spinner.
+  &::-webkit-search-cancel-button { appearance: none; display: none; }
 }
-.actions-search::placeholder { color: var(--text-dim); }
-.actions-search:focus {
-  outline: none;
-  border-color: $accent;
-  box-shadow: 0 0 0 3px color-mix(in srgb, #{$accent} 18%, transparent);
+.actions-search__status,
+.actions-search__clear {
+  position: absolute;
+  right: 0.45rem;
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  color: $muted;
 }
+.actions-search__clear {
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color $duration-fast $ease-out, color $duration-fast $ease-out;
+
+  &:hover { background: $surface-2; color: $ink; }
+  &:focus-visible { outline: 2px solid $accent; outline-offset: 1px; }
+}
+
+.actions-empty.is-stale { opacity: 0.5; }
 
 /* The feed scrolls inside its own box so following playback never drags the
    whole page around under the viewer. */

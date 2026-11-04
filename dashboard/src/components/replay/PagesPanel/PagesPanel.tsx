@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import classNames from 'classnames';
 import { fmtDuration, fmtTime } from '../../../lib/format';
 import Card from '../../ui/Card';
+import { Icon } from '../../ui/Icon';
 import DebouncedTextInput from '../../ui/DebouncedTextInput';
 import { InlineSpinner } from '../../ui/Loading';
 import { usePagesPanel } from './hooks/usePagesPanel';
@@ -15,6 +16,7 @@ import '../replay.scss';
 // so selecting it seeks the player to the matching moment.
 export default function PagesPanel({
   session,
+  actions: recordingActions,
   activity,
   logs,
   pages,
@@ -30,25 +32,49 @@ export default function PagesPanel({
 
   return (
     <Card className="replay-side">
-      <h3>{fmtDuration(session.duration_ms)} visit</h3>
-      <p className="muted small">
-        {fmtTime(session.started_at)} · {actions.length} {actions.length === 1 ? 'action' : 'actions'}
-      </p>
+      <header className="replay-side__header">
+        <h3>{fmtDuration(session.duration_ms)} visit</h3>
+        <p className="muted small">
+          {fmtTime(session.started_at)} · {actions.length} {actions.length === 1 ? 'action' : 'actions'}
+        </p>
+        {recordingActions && <div className="replay-side__toolbar">{recordingActions}</div>}
+      </header>
 
       <div className="actions-head">
         <h4>Actions</h4>
         {actions.length > 0 && (
+          <span className="actions-head__count">
+            {query.trim() && !searchPending ? `${visible.length} of ${actions.length}` : actions.length}
+          </span>
+        )}
+      </div>
+      {actions.length > 0 && (
+        <div className={classNames('actions-search', { 'is-pending': searchPending })}>
+          <span className="actions-search__icon" aria-hidden="true">
+            <Icon name="search" size={13} />
+          </span>
           <DebouncedTextInput
             type="search"
-            className="actions-search"
+            className="actions-search__input"
             placeholder="Search actions and pages"
             aria-label="Search actions and pages"
             value={query}
             onDebouncedChange={setQuery}
             onPendingChange={setSearchPending}
           />
-        )}
-      </div>
+          {/* One slot at the field's right edge: the spinner while the typed
+              text is on its way to the filter, then a clear button. */}
+          {searchPending ? (
+            <span className="actions-search__status" role="status" aria-label="Searching actions">
+              <InlineSpinner />
+            </span>
+          ) : query && (
+            <button type="button" className="actions-search__clear" aria-label="Clear search" title="Clear search" onClick={() => setQuery('')}>
+              <Icon name="x" size={12} />
+            </button>
+          )}
+        </div>
+      )}
       {!eventsReady ? (
         <p className="muted small actions-empty actions-loading" role="status">
           <InlineSpinner />
@@ -57,8 +83,9 @@ export default function PagesPanel({
       ) : actions.length === 0 ? (
         <p className="muted small actions-empty">No tracked actions in this recording.</p>
       ) : visible.length === 0 ? (
-        <p className="muted small actions-empty actions-loading" role="status">
-          {searchPending ? <><InlineSpinner />Searching actions…</> : <>No actions match “{query.trim()}”.</>}
+        // The search box carries the pending spinner; here only the result.
+        <p className={classNames('muted small actions-empty', { 'is-stale': searchPending })}>
+          No actions match “{query.trim()}”.
         </p>
       ) : (
         // While a search is on its way the current rows stay in place, dimmed:

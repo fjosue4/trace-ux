@@ -1,7 +1,10 @@
+import type { ReactNode } from 'react';
 import { CustomEvent, Feedback, Log, Session, SessionPage, Ticket } from '../../../api';
 
 export type PagesPanelProps = {
   session: Pick<Session, 'started_at' | 'duration_ms'>;
+  /** Controls for the whole recording, under the visit summary. */
+  actions?: ReactNode;
   activity: CustomEvent[];
   logs: ReplayLog[];
   pages: SessionPage[];

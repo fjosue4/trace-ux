@@ -15,7 +15,7 @@ import '../replay.scss';
 // and the recorded-viewport handling exist once rather than in two copies that
 // drift apart.
 const ReplayPlayer = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(function ReplayPlayer(props, ref) {
-  const { progress, buffering } = props;
+  const { header, progress, buffering } = props;
   const {
     playerFrame,
     playerStage,
@@ -42,6 +42,7 @@ const ReplayPlayer = forwardRef<ReplayPlayerHandle, ReplayPlayerProps>(function 
 
   return (
     <div ref={playerFrame} className="player-frame">
+      {header}
       {playerError && <Notice tone="error">{playerError}</Notice>}
       <div ref={playerStage} className="player-stage">
         {playerReady && <div ref={playerHost} className="player-host" />}

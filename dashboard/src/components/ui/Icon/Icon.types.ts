@@ -37,6 +37,10 @@ export type IconName =
   | 'grip'
   | 'chevronUp'
   | 'chevronDown'
+  | 'arrowLeft'
+  | 'arrowRight'
+  | 'rotateCw'
+  | 'lock'
   | 'eye';
 
 export type IconProps = { name: IconName; size?: number };

@@ -1,5 +1,6 @@
 // Shared by Replay and ShareReplay (the public share page reuses this same
 // shell). Kept as one stylesheet since both pages import it today.
+@use 'sass:list';
 @use 'abstracts' as *;
 
 .replay-main { min-width: 0; }
@@ -170,7 +171,7 @@ $export-ai-fill: #4f46e5, #7c3aed, #2563eb, #0e7490;
     inset: 0 auto 0 0;
     z-index: -1;
     width: 300%;
-    background: linear-gradient(90deg, $export-ai-fill, $export-ai-fill, nth($export-ai-fill, 1));
+    background: linear-gradient(90deg, $export-ai-fill, $export-ai-fill, list.nth($export-ai-fill, 1));
     opacity: 0;
     animation: export-ai-flow 5s linear infinite paused;
     transition: opacity $duration-medium $ease-out;

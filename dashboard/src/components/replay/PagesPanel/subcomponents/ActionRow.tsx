@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
+import { useClipboardCopy } from '../../../../hooks/useClipboardCopy';
 import { fmtLocalDateTime, stripProto, truncate } from '../../../../lib/format';
 import { Icon } from '../../../ui/Icon';
 import { actionLabel, formatReplayOffset, logIcon } from '../actionHelpers';
@@ -15,12 +15,8 @@ type ActionRowProps = {
 };
 
 export function ActionRow({ action, isActive, firstTs, setRowRef, onSeek, onOpenLogDetail }: ActionRowProps) {
-  const [copyStatus, setCopyStatus] = useState('');
-  useEffect(() => {
-    if (!copyStatus) return;
-    const timer = window.setTimeout(() => setCopyStatus(''), 2000);
-    return () => window.clearTimeout(timer);
-  }, [copyStatus]);
+  const { status: copyStatus, copy } = useClipboardCopy();
+  const copyLabel = copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Could not copy URL. Try again.' : 'Copy page URL';
 
   const label = truncate(actionLabel(action), 92);
   const pageURL = action.kind === 'page' ? action.url : '';
@@ -116,19 +112,14 @@ export function ActionRow({ action, isActive, firstTs, setRowRef, onSeek, onOpen
             <motion.button
               type="button"
               className="action-row__button"
-              aria-label={copyStatus || 'Copy page URL'}
-              title={copyStatus || 'Copy page URL'}
-              onClick={async (e) => {
+              aria-label={copyLabel}
+              title={copyLabel}
+              onClick={(e) => {
                 e.stopPropagation();
-                try {
-                  await navigator.clipboard.writeText(pageURL);
-                  setCopyStatus('Copied');
-                } catch {
-                  setCopyStatus('Could not copy URL. Try again.');
-                }
+                copy(pageURL);
               }}
             >
-              <Icon name={copyStatus === 'Copied' ? 'check' : 'copy'} size={12} />
+              <Icon name={copyStatus === 'copied' ? 'check' : 'copy'} size={12} />
             </motion.button>
           )}
           {action.kind === 'log' && (

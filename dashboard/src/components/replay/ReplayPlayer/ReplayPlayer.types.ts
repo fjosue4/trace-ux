@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { eventWithTime } from '@rrweb/types';
 
 // The parts of the rrweb-player wrapper we need. Different builds expose
@@ -40,6 +41,11 @@ export type ReplayPlayerHandle = {
 };
 
 export type ReplayPlayerProps = {
+  /**
+   * Rendered above the recording, inside the player frame, so it stays with
+   * the replay in fullscreen (the dashboard puts a browser bar here).
+   */
+  header?: ReactNode;
   events: eventWithTime[] | null;
   loaded: boolean;
   progress: string;
