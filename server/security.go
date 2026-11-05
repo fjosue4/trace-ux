@@ -64,8 +64,17 @@ func (s *Server) initSecurity() {
 		minute := time.Minute
 		s.loginIPLimiter = newRequestLimiter(30, minute)
 		s.loginUserLimiter = newRequestLimiter(10, minute)
-		s.ingestIPLimiter = newRequestLimiter(120, minute)
-		s.ingestSiteLimiter = newRequestLimiter(2_000, minute)
+		ingestIP, ingestSite := defaultIngestIPPerMinute, defaultIngestSitePerMinute
+		if s.cfg != nil {
+			if s.cfg.IngestIPPerMinute > 0 {
+				ingestIP = s.cfg.IngestIPPerMinute
+			}
+			if s.cfg.IngestSitePerMinute > 0 {
+				ingestSite = s.cfg.IngestSitePerMinute
+			}
+		}
+		s.ingestIPLimiter = newRequestLimiter(ingestIP, minute)
+		s.ingestSiteLimiter = newRequestLimiter(ingestSite, minute)
 		s.demoClaimLimiter = newRequestLimiter(12, minute)
 		// Replaying a shared link is paged: the viewer fetches the metadata
 		// once and then walks the event stream a page at a time, so a single

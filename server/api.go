@@ -74,30 +74,39 @@ type Server struct {
 }
 
 type Config struct {
-	Addr               string
-	DataDir            string
-	Password           string // bootstrap admin password (TRACE_UX_PASSWORD)
-	ResetAdmin         bool   // TRACE_UX_RESET_ADMIN=1: re-point admin at TRACE_UX_PASSWORD
-	RetentionDays      int
-	DevStaticDir       string // serve dashboard/tracker from disk instead of embed (dev)
-	SecureCookies      bool
-	TrustedProxyCIDRs  []*net.IPNet
-	DemoReplayEnabled  bool
-	DemoReplayTTL      time.Duration
-	MaxDiskBytes       uint64 // TRACE_UX_MAX_GB_DISK; 0 disables the disk budget
-	SpaceFloorDays     int    // TRACE_UX_SPACE_FLOOR_DAYS; never prune newer than this
-	MaxEventBytes      int    // TRACE_UX_MAX_EVENT_MB; ceiling on one rrweb event
-	CheckoutIntervalMS int    // TRACE_UX_CHECKOUT_INTERVAL_MS; rrweb re-snapshot cadence
-	InlineStylesheet   bool   // TRACE_UX_INLINE_STYLESHEET; copy CSS into every snapshot
-	SlimDOM            bool   // TRACE_UX_SLIM_DOM; drop comments/scripts/meta from snapshots
-	PublicURL          string // TRACE_UX_PUBLIC_URL; absolute origin used for links in Slack notifications
-	SlackSigningSecret string // TRACE_UX_SLACK_SIGNING_SECRET; fallback for Slack button callbacks
+	Addr                string
+	DataDir             string
+	Password            string // bootstrap admin password (TRACE_UX_PASSWORD)
+	ResetAdmin          bool   // TRACE_UX_RESET_ADMIN=1: re-point admin at TRACE_UX_PASSWORD
+	RetentionDays       int
+	DevStaticDir        string // serve dashboard/tracker from disk instead of embed (dev)
+	SecureCookies       bool
+	TrustedProxyCIDRs   []*net.IPNet
+	DemoReplayEnabled   bool
+	DemoReplayTTL       time.Duration
+	MaxDiskBytes        uint64 // TRACE_UX_MAX_GB_DISK; 0 disables the disk budget
+	SpaceFloorDays      int    // TRACE_UX_SPACE_FLOOR_DAYS; never prune newer than this
+	MaxEventBytes       int    // TRACE_UX_MAX_EVENT_MB; ceiling on one rrweb event
+	CheckoutIntervalMS  int    // TRACE_UX_CHECKOUT_INTERVAL_MS; rrweb re-snapshot cadence
+	InlineStylesheet    bool   // TRACE_UX_INLINE_STYLESHEET; copy CSS into every snapshot
+	SlimDOM             bool   // TRACE_UX_SLIM_DOM; drop comments/scripts/meta from snapshots
+	PublicURL           string // TRACE_UX_PUBLIC_URL; absolute origin used for links in Slack notifications
+	SlackSigningSecret  string // TRACE_UX_SLACK_SIGNING_SECRET; fallback for Slack button callbacks
+	IngestIPPerMinute   int    // TRACE_UX_INGEST_IP_PER_MINUTE; ingest requests one address may send a minute
+	IngestSitePerMinute int    // TRACE_UX_INGEST_SITE_PER_MINUTE; ingest requests one site or service may receive a minute
 }
 
 const (
 	// Unchanged defaults: setting neither variable behaves exactly as before.
 	defaultMaxEventMB         = 4
 	defaultCheckoutIntervalMS = 30_000
+
+	// Ingest rate limits, in requests per minute. Every ingest endpoint
+	// (browser recordings, campaign feedback, performance, service logs) counts
+	// against both: the per-address one, and the per-site (or per-service) one.
+	defaultIngestIPPerMinute   = 120
+	defaultIngestSitePerMinute = 2_000
+	maxIngestPerMinute         = 1_000_000
 
 	// A decoded request body is held in memory per in-flight request, so the
 	// event cap is bounded rather than free-form.
@@ -127,8 +136,10 @@ func loadConfig() Config {
 		// origin -- which the replay page's CSP (style-src 'self') blocks, so
 		// replays come back unstyled. Only worth switching off once the server
 		// stores stylesheets itself.
-		InlineStylesheet: true,
-		SlimDOM:          true,
+		InlineStylesheet:    true,
+		SlimDOM:             true,
+		IngestIPPerMinute:   defaultIngestIPPerMinute,
+		IngestSitePerMinute: defaultIngestSitePerMinute,
 	}
 	if v := os.Getenv("TRACE_UX_DEMO_REPLAY_TTL"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 60 && n <= 3600 {
@@ -208,6 +219,11 @@ func loadConfig() Config {
 			cfg.CheckoutIntervalMS = n
 		}
 	}
+	// A backend that posts from one address (a service sending its logs or
+	// performance data) shares the per-address budget with everything else it
+	// sends, so a busy one can need more than a browser does.
+	cfg.IngestIPPerMinute = envPerMinute("TRACE_UX_INGEST_IP_PER_MINUTE", defaultIngestIPPerMinute)
+	cfg.IngestSitePerMinute = envPerMinute("TRACE_UX_INGEST_SITE_PER_MINUTE", defaultIngestSitePerMinute)
 	cfg.DevStaticDir = os.Getenv("TRACE_UX_DEV_STATIC")
 	cfg.TrustedProxyCIDRs = parseTrustedProxyCIDRs(os.Getenv("TRACE_UX_TRUSTED_PROXIES"))
 	cfg.SlackSigningSecret = strings.TrimSpace(os.Getenv("TRACE_UX_SLACK_SIGNING_SECRET"))
@@ -226,6 +242,23 @@ func loadConfig() Config {
 		log.Println("WARNING: TRACE_UX_PASSWORD is not set; a fresh database will refuse to start until it is configured")
 	}
 	return cfg
+}
+
+// envPerMinute reads a requests-per-minute limit. A value that is not a whole
+// number between 1 and maxIngestPerMinute keeps the default, with a warning:
+// a typo must not silently remove a rate limit.
+func envPerMinute(key string, def int) int {
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 1 || n > maxIngestPerMinute {
+		log.Printf("WARNING: %s=%q is not a whole number between 1 and %d; keeping %d a minute",
+			key, v, maxIngestPerMinute, def)
+		return def
+	}
+	return n
 }
 
 func envBool(key string, def bool) bool {

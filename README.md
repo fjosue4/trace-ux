@@ -325,6 +325,8 @@ No external database, no queue, no other services — SQLite lives in `/var/lib/
 | `TRACE_UX_DEV_STATIC`    | —         | Dev only: serve frontend builds from disk             |
 | `TRACE_UX_PUBLIC_URL`    | —         | Public `http(s)` origin used in Slack links            |
 | `TRACE_UX_SLACK_SIGNING_SECRET` | — | Optional fallback Slack app signing secret; the System health UI is preferred |
+| `TRACE_UX_INGEST_IP_PER_MINUTE` | `120` | Ingest requests (recordings, feedback, performance, service logs) one address may send per minute; over it, `429` |
+| `TRACE_UX_INGEST_SITE_PER_MINUTE` | `2000` | Ingest requests one site or service may receive per minute, from all addresses |
 
 ### Snapshot size and cadence
 
