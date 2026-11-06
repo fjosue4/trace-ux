@@ -12,6 +12,7 @@ import { Select } from '../../components/ui/fields';
 import { markCachedSessionViewed, useSessions } from './hooks/useSessions';
 import { SessionRow } from './subcomponents/SessionRow';
 import { SESSION_PAGE_SIZE } from './Sessions.constants';
+import { replayPath } from './Sessions.helpers';
 import './Sessions.scss';
 
 // Global sessions browser: every session across every site, filterable per
@@ -122,8 +123,9 @@ export default function Sessions() {
                 session={s}
                 showSite={showSite}
                 from={from}
+                actionFilter={filter.action ?? ''}
                 onViewed={() => markCachedSessionViewed(s.id)}
-                onOpen={() => navigate(`/replay/${s.id}`, { state: { from } })}
+                onOpen={() => navigate(replayPath(s.id, { action: filter.action }), { state: { from } })}
               />
             ))}
           </Table>

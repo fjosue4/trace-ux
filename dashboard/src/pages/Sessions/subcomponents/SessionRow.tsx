@@ -3,12 +3,15 @@ import { Session } from '../../../api';
 import { fmtDuration, fmtTime, formatCountry, stripProto, truncate } from '../../../lib/format';
 import Badge from '../../../components/ui/Badge';
 import { Icon } from '../../../components/ui/Icon';
+import { replayPath } from '../Sessions.helpers';
 
 type SessionRowProps = {
   session: Session;
   showSite: boolean;
   // Where the replay's back link should return, filters included.
   from: string;
+  // The list's action filter, carried into the replay's actions search.
+  actionFilter: string;
   onViewed: () => void;
   onOpen: () => void;
 };
@@ -17,7 +20,7 @@ function visitorOf(s: Session) {
   return s.user_id || s.remote_id || s.client_id || '';
 }
 
-export function SessionRow({ session: s, showSite, from, onViewed, onOpen }: SessionRowProps) {
+export function SessionRow({ session: s, showSite, from, actionFilter, onViewed, onOpen }: SessionRowProps) {
   const actionCount = s.action_count ?? s.page_count;
   return (
     <tr className={`is-clickable${s.viewed ? ' is-viewed' : ''}`} onClick={() => { onViewed(); onOpen(); }}>
@@ -67,7 +70,7 @@ export function SessionRow({ session: s, showSite, from, onViewed, onOpen }: Ses
       </td>
       <td onClick={(e) => e.stopPropagation()}>
         <Link
-          to={`/replay/${s.id}?autoplay=1`}
+          to={replayPath(s.id, { autoplay: true, action: actionFilter })}
           state={{ from }}
           className={`btn btn--primary btn--sm play-btn${s.viewed ? ' play-btn--viewed' : ''}`}
           onClick={onViewed}

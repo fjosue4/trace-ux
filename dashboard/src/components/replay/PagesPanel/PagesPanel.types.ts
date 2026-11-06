@@ -14,6 +14,9 @@ export type PagesPanelProps = {
   firstTs: number;
   currentTimeMs: number;
   onSeekMs: (offsetMs: number) => void;
+  /** The search the feed opens with, such as the Sessions list's action
+   *  filter the recording was opened from. The viewer can change it freely. */
+  initialQuery?: string;
 };
 
 export type ReplayLog = Pick<Log, 'id' | 'timestamp_ms' | 'severity' | 'message' | 'url'>;

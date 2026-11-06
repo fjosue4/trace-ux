@@ -10,9 +10,10 @@ export function usePagesPanel({
   feedback,
   firstTs,
   currentTimeMs,
-}: Pick<PagesPanelProps, 'activity' | 'logs' | 'pages' | 'tickets' | 'feedback' | 'firstTs' | 'currentTimeMs'>) {
+  initialQuery = '',
+}: Pick<PagesPanelProps, 'activity' | 'logs' | 'pages' | 'tickets' | 'feedback' | 'firstTs' | 'currentTimeMs' | 'initialQuery'>) {
   const [selectedLog, setSelectedLog] = useState<ReplayLog | null>(null);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [searchPending, setSearchPending] = useState(false);
   const listRef = useRef<HTMLOListElement | null>(null);
   const rowRefs = useRef<Record<string, HTMLLIElement | null>>({});
