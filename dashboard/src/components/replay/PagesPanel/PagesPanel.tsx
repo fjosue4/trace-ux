@@ -26,9 +26,10 @@ export default function PagesPanel({
   firstTs,
   currentTimeMs,
   onSeekMs,
+  initialQuery,
 }: PagesPanelProps) {
   const { selectedLog, setSelectedLog, query, setQuery, searchPending, setSearchPending, listRef, setRowRef, actions, visible, activeKey } =
-    usePagesPanel({ activity, logs, pages, tickets, feedback, firstTs, currentTimeMs });
+    usePagesPanel({ activity, logs, pages, tickets, feedback, firstTs, currentTimeMs, initialQuery });
 
   return (
     <Card className="replay-side">

@@ -1,5 +1,5 @@
 import { useUser } from '../../App';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { fmtTime } from '../../lib/format';
 import Breadcrumbs from '../../components/ui/Breadcrumbs';
 import Notice from '../../components/ui/Notice';
@@ -27,6 +27,10 @@ export default function Replay() {
   const isAdmin = user.role === 'admin';
   const { sessionId } = useParams();
   const navigate = useNavigate();
+  // Set when the recording was opened from a Sessions list filtered by
+  // action: the actions panel starts out searching for the same text.
+  const [params] = useSearchParams();
+  const actionQuery = params.get('action') ?? '';
   const { exporting, downloading, exportError, exportStatus, exportSession, cancelExport, dismissExport, onDownloadStart } = useSessionExport(sessionId);
   const {
     backTo,
@@ -180,6 +184,7 @@ export default function Replay() {
             eventsReady={loaded}
             currentTimeMs={currentTime}
             onSeekMs={(ms) => playerRef.current?.seekToOffset(ms)}
+            initialQuery={actionQuery}
             firstTs={firstTs.current}
           />
         </aside>
