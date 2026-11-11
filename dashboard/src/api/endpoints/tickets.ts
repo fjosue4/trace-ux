@@ -3,10 +3,11 @@ import { Ticket, TicketStatus, TicketThread } from '../types/tickets';
 
 export const ticketsEndpoints = {
   // Support tickets.
-  listTickets: (siteId: number | null, status: TicketStatus | '') => {
+  listTickets: (siteId: number | null, status: TicketStatus | '', limit?: number) => {
     const q = new URLSearchParams();
     if (siteId) q.set('site_id', String(siteId));
     if (status) q.set('status', status);
+    if (limit) q.set('limit', String(limit));
     return request<Ticket[]>(`/api/tickets${q.toString() ? `?${q}` : ''}`);
   },
   getTicket: (id: number) => request<TicketThread>(`/api/tickets/${id}`),

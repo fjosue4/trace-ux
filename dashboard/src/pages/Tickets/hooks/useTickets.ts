@@ -2,15 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, Site, Ticket, TicketStatus, TicketThread } from '../../../api';
 import { playNotificationSound } from '../../../lib/notificationSound';
-import { ticketPollIntervalMs } from '../Tickets.constants';
-import { sortTickets, ticketMatchesFilters } from '../Tickets.helpers';
-import { DashboardTicketEvent, SiteSelection, StatusSelection } from '../Tickets.types';
+import { ticketListLimit, ticketPollIntervalMs } from '../Tickets.constants';
+import { countByView, inboxSections, sortTickets, ticketMatchesSite, viewOf } from '../Tickets.helpers';
+import { DashboardTicketEvent, SiteSelection, TicketView } from '../Tickets.types';
 
 export function useTickets() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sites, setSites] = useState<Site[]>([]);
   const [siteSel, setSiteSel] = useState<SiteSelection>('all');
-  const [statusSel, setStatusSel] = useState<StatusSelection>('all');
+  const [view, setView] = useState<TicketView>('open');
+  const [query, setQuery] = useState('');
   const [items, setItems] = useState<Ticket[] | null>(null);
   const [thread, setThread] = useState<TicketThread | null>(null);
   const [loadingThread, setLoadingThread] = useState(false);
@@ -18,18 +19,15 @@ export function useTickets() {
   const [error, setError] = useState('');
   const [pendingArchive, setPendingArchive] = useState<Ticket | null>(null);
   const [archiving, setArchiving] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const selectedId = Number(searchParams.get('ticket')) || null;
   const selectedIdRef = useRef<number | null>(selectedId);
   const siteSelRef = useRef<SiteSelection>(siteSel);
-  const statusSelRef = useRef<StatusSelection>(statusSel);
   const refreshTicketsRef = useRef<() => void>(() => {});
   const refreshThreadRef = useRef<() => void>(() => {});
   const dashboardSocketConnectedRef = useRef(false);
 
   selectedIdRef.current = selectedId;
   siteSelRef.current = siteSel;
-  statusSelRef.current = statusSel;
 
   const siteOptions = useMemo(
     () => [{ value: 'all', label: 'All sites' }, ...sites.map((site) => ({ value: String(site.id), label: site.name }))],
@@ -47,7 +45,9 @@ export function useTickets() {
 
     const fetchTickets = async (initial: boolean) => {
       try {
-        const rows = await api.listTickets(siteSel === 'all' ? null : siteSel, statusSel === 'all' ? '' : statusSel);
+        // Every status at once: the tabs, their counts and the search all
+        // filter this one list, so switching tabs never waits on the server.
+        const rows = await api.listTickets(siteSel === 'all' ? null : siteSel, '', ticketListLimit);
         if (!cancelled) setItems(rows);
       } catch {
         // A transient polling failure should not replace a usable inbox. Show
@@ -69,7 +69,7 @@ export function useTickets() {
       window.clearInterval(poll);
       if (refreshTicketsRef.current === refresh) refreshTicketsRef.current = () => {};
     };
-  }, [siteSel, statusSel]);
+  }, [siteSel]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -166,8 +166,8 @@ export function useTickets() {
         setItems((current) => {
           if (!current) return current;
           const remaining = current.filter((item) => item.id !== ticket.id);
-          if (!ticketMatchesFilters(ticket, siteSelRef.current, statusSelRef.current)) return remaining;
-          return sortTickets([ticket, ...remaining]).slice(0, 100);
+          if (!ticketMatchesSite(ticket, siteSelRef.current)) return remaining;
+          return sortTickets([ticket, ...remaining]).slice(0, ticketListLimit);
         });
 
         if (selectedIdRef.current !== ticket.id) return;
@@ -200,8 +200,30 @@ export function useTickets() {
     };
   }, [setSearchParams]);
 
+  // A ticket opened from a link (Slack, a replay) may sit in another tab than
+  // the one showing; move to its tab once so its row is visible and selected.
+  const loadedTicketId = thread?.ticket.id;
+  useEffect(() => {
+    if (!thread || thread.ticket.id !== selectedIdRef.current) return;
+    const ticketView = viewOf(thread.ticket);
+    setView((current) => (current === 'all' || current === ticketView ? current : ticketView));
+    // Only when a different ticket finishes loading: closing the open ticket
+    // must not pull the inbox over to the Closed tab.
+  }, [loadedTicketId]);
+
+  const counts = useMemo(() => countByView(items ?? []), [items]);
+  // A search looks through every tab: a ticket the user is hunting for may
+  // be closed or archived, and an empty result on the wrong tab reads as
+  // "it does not exist".
+  const searching = query.trim() !== '';
+  const sections = useMemo(() => inboxSections(items ?? [], searching ? 'all' : view, query), [items, view, query, searching]);
+
   function openTicket(id: number) {
     setSearchParams({ ticket: String(id) });
+  }
+
+  function closeTicket() {
+    setSearchParams({});
   }
 
   async function updateStatus(status: TicketStatus) {
@@ -215,11 +237,20 @@ export function useTickets() {
     }
   }
 
-  async function reply(body: string) {
+  async function reply(body: string, thenClose = false) {
     if (!thread) return;
     setSending(true);
     try {
-      const updated = await api.replyToTicket(thread.ticket.id, body);
+      let updated = await api.replyToTicket(thread.ticket.id, body);
+      // The reply is already sent if closing fails, so that failure is
+      // reported on its own rather than as a failed reply.
+      if (thenClose) {
+        try {
+          updated = { ...updated, ticket: await api.updateTicket(thread.ticket.id, 'closed') };
+        } catch {
+          setError('Your reply was sent, but the ticket could not be closed.');
+        }
+      }
       setThread(updated);
       setItems((current) => current?.map((item) => (item.id === updated.ticket.id ? updated.ticket : item)) ?? current);
     } finally {
@@ -235,8 +266,8 @@ export function useTickets() {
       setItems((current) => {
         if (!current) return current;
         const remaining = current.filter((item) => item.id !== updated.id);
-        if (!ticketMatchesFilters(updated, siteSelRef.current, statusSelRef.current)) return remaining;
-        return sortTickets([updated, ...remaining]).slice(0, 100);
+        if (!ticketMatchesSite(updated, siteSelRef.current)) return remaining;
+        return sortTickets([updated, ...remaining]).slice(0, ticketListLimit);
       });
       setThread((current) => (current ? { ...current, ticket: updated } : current));
       setPendingArchive(null);
@@ -251,8 +282,12 @@ export function useTickets() {
     sites,
     siteSel,
     setSiteSel,
-    statusSel,
-    setStatusSel,
+    view,
+    setView,
+    query,
+    setQuery,
+    counts,
+    sections,
     items,
     thread,
     loadingThread,
@@ -261,11 +296,10 @@ export function useTickets() {
     pendingArchive,
     setPendingArchive,
     archiving,
-    filtersOpen,
-    setFiltersOpen,
     selectedId,
     siteOptions,
     openTicket,
+    closeTicket,
     updateStatus,
     reply,
     confirmArchive,

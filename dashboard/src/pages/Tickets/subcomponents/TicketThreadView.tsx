@@ -1,139 +1,105 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { TicketStatus, TicketThread } from '../../../api';
-import { fmtClock, fmtTime } from '../../../lib/format';
+import { useClipboardCopy } from '../../../hooks/useClipboardCopy';
+import { fmtTime } from '../../../lib/format';
 import Button from '../../../components/ui/Button';
 import { Icon } from '../../../components/ui/Icon';
-import Notice from '../../../components/ui/Notice';
 import { Select } from '../../../components/ui/fields';
 import { statusOptions } from '../Tickets.constants';
-import { requester, requesterLabel } from '../Tickets.helpers';
+import { requester } from '../Tickets.helpers';
+import { TicketComposer } from './TicketComposer';
+import { TicketMessages } from './TicketMessages';
 
 type TicketThreadViewProps = {
   thread: TicketThread;
-  userRole: string;
+  isAdmin: boolean;
   onStatus: (status: TicketStatus) => void;
-  onReply: (body: string) => Promise<void>;
+  onReply: (body: string, thenClose?: boolean) => Promise<void>;
   onArchive: () => void;
+  /** Leaves the conversation; shown where the inbox is not beside it. */
+  onBack: () => void;
   archiving: boolean;
   sending: boolean;
 };
 
-export function TicketThreadView({ thread, userRole, onStatus, onReply, onArchive, archiving, sending }: TicketThreadViewProps) {
-  const [body, setBody] = useState('');
-  const [replyError, setReplyError] = useState('');
-  const messagesRef = useRef<HTMLDivElement>(null);
+/** One ticket: who and where, the conversation, and what can be done next. */
+export function TicketThreadView({ thread, isAdmin, onStatus, onReply, onArchive, onBack, archiving, sending }: TicketThreadViewProps) {
   const { ticket, messages } = thread;
-
-  useEffect(() => {
-    setBody('');
-    setReplyError('');
-  }, [ticket.id, messages.length]);
-
-  useLayoutEffect(() => {
-    const messagesPane = messagesRef.current;
-    if (messagesPane) messagesPane.scrollTop = messagesPane.scrollHeight;
-  }, [ticket.id, messages.length]);
-
-  async function submitReply() {
-    const value = body.trim();
-    if (!value) {
-      setReplyError('Write a reply before sending.');
-      return;
-    }
-    if (value.length > 4000) {
-      setReplyError('Replies must be 4,000 characters or fewer.');
-      return;
-    }
-    setReplyError('');
-    try {
-      await onReply(value);
-    } catch {
-      setReplyError('Could not send the reply.');
-    }
-  }
+  const { status: copyStatus, copy } = useClipboardCopy();
+  const who = requester(ticket);
+  const copyLabel = copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Could not copy. Try again.' : 'Copy requester';
 
   return (
     <div className="ticket-thread">
       <div className="ticket-thread__header">
         <div className="ticket-thread__title-row">
-          <div>
-            <span className="ticket-kicker">Ticket #{ticket.id}</span>
-            <h2>{ticket.subject}</h2>
-          </div>
+          <button type="button" className="icon-btn ticket-thread__back" aria-label="Back to tickets" onClick={onBack}>
+            <Icon name="arrowLeft" size={16} />
+          </button>
+          <h2 title={ticket.subject}>
+            <span className="ticket-thread__id">#{ticket.id}</span>
+            {ticket.subject}
+          </h2>
           <Select
             className="ticket-status-select"
             ariaLabel="Ticket status"
             value={ticket.status}
             onChange={(value) => onStatus(value as TicketStatus)}
-            options={statusOptions.filter((option) => option.value !== 'all')}
-            disabled={ticket.status === 'archived' && userRole !== 'admin'}
+            options={statusOptions}
+            disabled={ticket.status === 'archived' && !isAdmin}
           />
+          {isAdmin && ticket.status !== 'archived' && (
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Archive ticket"
+              title={archiving ? 'Archiving…' : 'Archive ticket'}
+              disabled={archiving}
+              onClick={onArchive}
+            >
+              <Icon name="archive" size={16} />
+            </button>
+          )}
         </div>
         <div className="ticket-thread__meta">
-          <span className="ticket-thread__requester" title={requesterLabel(ticket)}>{requesterLabel(ticket)}</span>
+          <span className="ticket-thread__requester">
+            <span title={who}>{who}</span>
+            <button type="button" className="ticket-thread__copy" aria-label={copyLabel} title={copyLabel} onClick={() => copy(ticket.email || who)}>
+              <Icon name={copyStatus === 'copied' ? 'check' : 'copy'} size={11} />
+            </button>
+          </span>
+          {ticket.site_name && <span>{ticket.site_name}</span>}
           <span>Opened {fmtTime(ticket.created_at)}</span>
           {ticket.page_url && (
-            <a href={ticket.page_url} target="_blank" rel="noreferrer" className="ticket-link">
-              Current page ↗
+            <a href={ticket.page_url} target="_blank" rel="noreferrer" className="ticket-link" title={ticket.page_url}>
+              Page ↗
             </a>
           )}
           {ticket.session_id && (
             <Link to={`/replay/${ticket.session_id}`} className="ticket-link">
-              <Icon name="play" size={11} /> Replay
+              <Icon name="play" size={10} /> Replay
             </Link>
           )}
         </div>
       </div>
 
-      <div ref={messagesRef} className="ticket-messages">
-        {messages.map((message) => (
-          <div key={message.id} className={`ticket-message ticket-message--${message.author}`}>
-            <div className="ticket-message__meta">
-              <strong title={message.author === 'staff' ? message.author_name || 'Staff' : requester(ticket)}>
-                {message.author === 'staff' ? message.author_name || 'Staff' : requester(ticket)}
-              </strong>
-              <span>{fmtClock(message.created_at) || fmtTime(message.created_at)}</span>
-            </div>
-            <p>{message.body}</p>
-          </div>
-        ))}
-      </div>
+      <TicketMessages ticket={ticket} messages={messages} />
 
       {ticket.status === 'closed' ? (
-        <div className="ticket-closed-note">This ticket is closed. Reopen it to continue the conversation.</div>
-      ) : ticket.status === 'archived' ? (
-        <div className="ticket-closed-note">This ticket is archived. Its conversation is retained for transparency.</div>
-      ) : (
-        <div className="ticket-reply">
-          <textarea
-            className="field-control"
-            value={body}
-            maxLength={4000}
-            onChange={(event) => setBody(event.currentTarget.value)}
-            placeholder="Reply to the visitor…"
-            aria-label="Reply to ticket"
-            onKeyDown={(event) => {
-              if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') void submitReply();
-            }}
-          />
-          <div className="ticket-reply__bottom">
-            <span className="muted small">⌘↵ to send</span>
-            {replyError && <Notice tone="error">{replyError}</Notice>}
-            <Button size="sm" onClick={() => void submitReply()} disabled={sending || !body.trim()}>
-              {sending ? 'Sending…' : 'Send reply'}
-              {!sending && <Icon name="send" size={12} />}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {userRole === 'admin' && ticket.status !== 'archived' && (
-        <div className="ticket-thread__archive">
-          <Button size="sm" variant="secondary" onClick={onArchive} disabled={archiving}>
-            <Icon name="archive" size={13} /> {archiving ? 'Archiving…' : 'Archive ticket'}
+        <div className="ticket-resolution">
+          <Icon name="check" size={14} />
+          <span>This ticket is closed</span>
+          <Button size="sm" variant="secondary" onClick={() => onStatus('open')}>
+            Reopen
           </Button>
         </div>
+      ) : ticket.status === 'archived' ? (
+        <div className="ticket-resolution">
+          <Icon name="archive" size={14} />
+          <span>Archived. The conversation is kept for the record.</span>
+        </div>
+      ) : (
+        <TicketComposer resetKey={`${ticket.id}:${messages.length}`} sending={sending} onReply={onReply} />
       )}
     </div>
   );
