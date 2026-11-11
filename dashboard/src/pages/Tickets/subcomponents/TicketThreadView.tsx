@@ -45,7 +45,10 @@ export function TicketThreadView({ thread, isAdmin, onStatus, onReply, onArchive
             ariaLabel="Ticket status"
             value={ticket.status}
             onChange={(value) => onStatus(value as TicketStatus)}
-            options={statusOptions}
+            // Archiving goes through the archive button, which asks first; the
+            // menu would do it without a warning. "Archived" is listed only
+            // so an archived ticket can show its own status.
+            options={statusOptions.filter((option) => option.value !== 'archived' || ticket.status === 'archived')}
             disabled={ticket.status === 'archived' && !isAdmin}
           />
           {isAdmin && ticket.status !== 'archived' && (
