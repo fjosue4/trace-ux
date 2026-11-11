@@ -48,7 +48,8 @@
   margin: 0 1rem 0.6rem;
   color: $muted;
 
-  svg { position: absolute; top: 50%; left: 0.7rem; transform: translateY(-50%); pointer-events: none; }
+  // Above the input: its focused fill would otherwise paint over the icon.
+  svg { position: absolute; top: 50%; left: 0.7rem; z-index: 1; transform: translateY(-50%); pointer-events: none; }
   .field-control { height: 34px; padding-left: 2.1rem; font-size: 0.82rem; }
 }
 
@@ -390,8 +391,11 @@
 .tickets-list-card > .empty,
 .ticket-thread-card > .loading,
 .ticket-thread-card > .empty { flex: 1; min-height: 0; }
+// The empty state is already 100% wide, so side margins would push it off
+// centre and past the panel; it sits in a card here, so it needs no border
+// or fill of its own either.
 .tickets-list-card .empty,
-.ticket-thread-card .empty { margin: 2rem 1rem; }
+.ticket-thread-card .empty { margin: 0; border: 0; border-radius: 0; background: transparent; }
 
 // Narrow screens: the list and the conversation take turns, with a back
 // arrow on the conversation, instead of stacking two scrolling panels.
