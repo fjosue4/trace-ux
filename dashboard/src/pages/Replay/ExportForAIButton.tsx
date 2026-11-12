@@ -13,8 +13,10 @@ type Props = {
 
 const LABELS: Record<ExportForAIState, string> = {
   idle: 'Export for AI',
-  preparing: 'Preparing export…',
-  saving: 'Saving export…',
+  // Short enough for a third of the panel; the progress strip above the
+  // replay carries the detail.
+  preparing: 'Exporting…',
+  saving: 'Saving…',
 };
 
 /** The Replay header's export action, styled apart from the plain buttons
@@ -57,7 +59,7 @@ export default function ExportForAIButton({ state, disabled, onExport }: Props) 
         />
       )}
       {busy ? <InlineSpinner /> : <Icon name="fileSparkles" size={13} />}
-      <span>{LABELS[state]}</span>
+      <span className="export-ai-button__label">{LABELS[state]}</span>
     </motion.button>
   );
 }

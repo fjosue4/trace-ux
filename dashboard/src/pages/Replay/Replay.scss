@@ -180,6 +180,11 @@ $export-ai-fill: #4f46e5, #7c3aed, #2563eb, #0e7490;
   // Content above the sheen.
   > :not(.export-ai-button__sheen) { position: relative; }
 
+  // The icon or spinner keeps its size; the label gives way with an
+  // ellipsis rather than pushing both past the edges.
+  > svg, > .loading__spinner { flex: none; }
+  .export-ai-button__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
   // Restates the background: the secondary variant's hover would replace
   // both layers, ring included.
   &:hover:not(:disabled),
