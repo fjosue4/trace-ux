@@ -50,6 +50,20 @@ export type SessionPage = {
   left_at: number;
 };
 
+/** Who to address a ticket to, for one opened from a recording. */
+export type SessionContact = {
+  site_id: number;
+  /** Addresses the ticket to a widget. A stand-in when in_widget is false. */
+  visitor_key: string;
+  /** False when this visitor never used the widget: the ticket cannot reach
+   *  them there, so the conversation goes on by email. */
+  in_widget: boolean;
+  /** Always set: only identified visitors can be ticketed from a recording. */
+  user_id: string;
+  /** The address they gave on an earlier ticket, if any. */
+  email?: string;
+};
+
 export type SessionExportStatus = {
   id: string;
   state: 'preparing' | 'ready' | 'failed';

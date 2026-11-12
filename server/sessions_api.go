@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -404,4 +405,23 @@ func (s *Server) handleDeleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// GET /api/sessions/{id}/contact — who to address a ticket to, for opening
+// one from a recording. See store.SessionContact for how the visitor is found.
+func (s *Server) handleSessionContact(w http.ResponseWriter, r *http.Request) {
+	contact, err := s.store.SessionContact(r.PathValue("id"))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeErr(w, http.StatusNotFound, "session not found")
+			return
+		}
+		if errors.Is(err, store.ErrSessionNotIdentified) {
+			writeErr(w, http.StatusConflict, err.Error())
+			return
+		}
+		writeErr(w, http.StatusInternalServerError, "could not look up this visitor")
+		return
+	}
+	writeJSON(w, http.StatusOK, contact)
 }

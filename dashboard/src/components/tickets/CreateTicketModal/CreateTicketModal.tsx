@@ -7,7 +7,7 @@ import { useCreateTicketModal } from './hooks/useCreateTicketModal';
 import './CreateTicketModal.scss';
 
 export default function CreateTicketModal(props: CreateTicketModalProps) {
-  const { showModal, toggleModalOpen, userId } = props;
+  const { showModal, toggleModalOpen, userId, inWidget = true } = props;
   const { email, setEmail, subject, setSubject, body, setBody, error, busy, canSave, save } =
     useCreateTicketModal(props);
 
@@ -20,8 +20,9 @@ export default function CreateTicketModal(props: CreateTicketModalProps) {
       footer={<Button onClick={save} disabled={!canSave}>{busy ? 'Creating…' : 'Create ticket'}</Button>}
     >
       <p className="create-ticket-modal__intro">
-        The ticket appears in this visitor's widget the next time they open your site. TraceUX does
-        not send email — the address is stored so you can reach them if they don't come back.
+        {inWidget
+          ? "The ticket appears in this visitor's widget the next time they open your site. TraceUX does not send email — the address is stored so you can reach them if they don't come back."
+          : "This visitor is identified but never used the widget, so the ticket can't reach them there. It keeps the conversation and the recording together here — TraceUX does not send email, so write to the address yourself."}
       </p>
 
       <Field label="Email" hint={userId ? `Identified as ${userId}` : 'This visitor was never identified, so an address is the only way to contact them'}>

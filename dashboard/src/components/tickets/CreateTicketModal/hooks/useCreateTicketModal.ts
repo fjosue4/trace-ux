@@ -13,6 +13,7 @@ export function useCreateTicketModal({
   email: knownEmail,
   name,
   sessionId,
+  pageUrl,
   defaultSubject,
   defaultBody,
   onCreated,
@@ -52,11 +53,12 @@ export function useCreateTicketModal({
         user_id: userId || undefined,
         name: name || undefined,
         session_id: sessionId || undefined,
+        page_url: pageUrl || undefined,
         email: email.trim(),
         subject: subject.trim(),
         body: body.trim(),
       });
-      onCreated?.(ticket.id);
+      onCreated?.(ticket);
       toggleModalOpen();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not create the ticket.');

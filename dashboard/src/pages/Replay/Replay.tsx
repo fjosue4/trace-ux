@@ -1,5 +1,5 @@
 import { useUser } from '../../App';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { fmtTime } from '../../lib/format';
 import Breadcrumbs from '../../components/ui/Breadcrumbs';
 import Notice from '../../components/ui/Notice';
@@ -16,6 +16,8 @@ import { useReplay } from './hooks/useReplay';
 import { useSessionExport } from './hooks/useSessionExport';
 import SessionExportProgress from './SessionExportProgress';
 import ExportForAIButton from './ExportForAIButton';
+import CreateTicketModal from '../../components/tickets/CreateTicketModal';
+import { useRecordingTicket } from './hooks/useRecordingTicket';
 import './Replay.scss';
 
 // Stable while the session loads, so the page lookup's memo is not rebuilt
@@ -31,6 +33,7 @@ export default function Replay() {
   // action: the actions panel starts out searching for the same text.
   const [params] = useSearchParams();
   const actionQuery = params.get('action') ?? '';
+  const ticket = useRecordingTicket(sessionId);
   const { exporting, downloading, exportError, exportStatus, exportSession, cancelExport, dismissExport, onDownloadStart } = useSessionExport(sessionId);
   const {
     backTo,
@@ -94,6 +97,28 @@ export default function Replay() {
     <main className="page page--wide">
       {deleteError && <Notice tone="error">{deleteError}</Notice>}
       {exportError && <Notice tone="error">{exportError}</Notice>}
+      {ticket.error && <Notice tone="error">{ticket.error}</Notice>}
+      {ticket.created && (
+        <Notice tone="success" floating>
+          Ticket #{ticket.created.id} opened.{' '}
+          <Link to={`/tickets?ticket=${ticket.created.id}`}>View in Tickets</Link>
+        </Notice>
+      )}
+      {ticket.contact && (
+        <CreateTicketModal
+          showModal
+          toggleModalOpen={ticket.close}
+          siteId={ticket.contact.site_id}
+          visitorKey={ticket.contact.visitor_key}
+          inWidget={ticket.contact.in_widget}
+          userId={ticket.contact.user_id}
+          email={ticket.contact.email}
+          sessionId={session.id}
+          pageUrl={browser.page?.url}
+          defaultSubject="About your recent visit"
+          onCreated={ticket.onCreated}
+        />
+      )}
       <SessionExportProgress
         status={exportStatus}
         preparing={exporting}
@@ -153,6 +178,22 @@ export default function Replay() {
             session={session}
             actions={
               <>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  // Only an identified visitor (a user_id from the site) can
+                  // be ticketed: otherwise nobody knows who to follow up with.
+                  disabled={!session.user_id || ticket.looking || deleting}
+                  title={
+                    session.user_id
+                      ? `Open a ticket with ${session.user_id}`
+                      : 'Only identified visitors can get a ticket. This visitor was never identified.'
+                  }
+                  onClick={() => void ticket.open()}
+                >
+                  <Icon name="lifebuoy" size={13} />
+                  {ticket.looking ? 'Opening…' : 'Open ticket'}
+                </Button>
                 <ExportForAIButton
                   state={exporting ? 'preparing' : downloading ? 'saving' : 'idle'}
                   disabled={exporting || downloading || deleting}
@@ -162,6 +203,8 @@ export default function Replay() {
                   <Button
                     variant="dangerGhost"
                     size="sm"
+                    className="replay-side__icon-action"
+                    aria-label="Delete recording"
                     disabled={!!session.active || exporting || downloading || deleting}
                     title={
                       session.active
@@ -170,8 +213,7 @@ export default function Replay() {
                     }
                     onClick={() => setConfirmingDelete(true)}
                   >
-                    <Icon name="trash" size={13} />
-                    Delete
+                    <Icon name="trash" size={14} />
                   </Button>
                 )}
               </>

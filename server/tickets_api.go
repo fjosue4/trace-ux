@@ -429,6 +429,21 @@ func (s *Server) handleCreateStaffTicket(w http.ResponseWriter, r *http.Request)
 		writeErr(w, http.StatusBadRequest, "an email address is required to contact this visitor")
 		return
 	}
+	// A stand-in key comes from opening a ticket on a recording, which is
+	// only allowed for identified visitors. Check it here too, so the rule
+	// does not depend on the dashboard.
+	if sessionID, ok := strings.CutPrefix(input.VisitorKey, store.SessionContactKeyPrefix); ok {
+		session, err := s.store.GetSession(sessionID)
+		if err != nil || session.SiteID != input.SiteID || sessionID != input.SessionID {
+			writeErr(w, http.StatusBadRequest, "this ticket does not match its recording")
+			return
+		}
+		if strings.TrimSpace(session.UserID) == "" {
+			writeErr(w, http.StatusConflict, store.ErrSessionNotIdentified.Error())
+			return
+		}
+		input.UserID = session.UserID
+	}
 
 	user := currentUser(r)
 	input.Author = "staff"

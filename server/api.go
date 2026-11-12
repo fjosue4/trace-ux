@@ -394,6 +394,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/sessions/stats", s.auth(s.handleSessionStats))
 	mux.HandleFunc("GET /api/sessions/{id}", s.auth(s.handleGetSession))
 	mux.HandleFunc("GET /api/sessions/{id}/export", s.auth(s.handleExportSession))
+	mux.HandleFunc("GET /api/sessions/{id}/contact", s.auth(s.handleSessionContact))
 	mux.HandleFunc("POST /api/sessions/{id}/export", s.auth(s.handlePrepareSessionExport))
 	mux.HandleFunc("GET /api/session-exports/{exportID}", s.auth(s.handleSessionExportStatus))
 	mux.HandleFunc("GET /api/session-exports/{exportID}/download", s.auth(s.handleDownloadSessionExport))

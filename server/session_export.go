@@ -16,13 +16,21 @@ import (
 )
 
 const (
-	maxSessionExportBytes = 64 << 20
-	maxSessionExportJobs  = 4
-	sessionExportTimeout  = 5 * time.Minute
-	sessionExportTTL      = 5 * time.Minute
+	maxSessionExportJobs = 4
+	// Background preparation is throttled to about a quarter of one core, so
+	// a very large recording legitimately takes many minutes. The deadline
+	// only stops a job that can never finish.
+	sessionExportTimeout = 2 * time.Hour
+	sessionExportTTL     = 5 * time.Minute
+	// There is no size cap: an export streams to a temp file, never memory.
+	// What it must not do is fill the disk the database lives on, so writing
+	// stops while this much space would still be free.
+	sessionExportDiskReserve = 1 << 30
+	// Free space is checked once per this many written bytes, not per write.
+	sessionExportDiskCheckEvery = 32 << 20
 )
 
-var errSessionExportTooLarge = errors.New("recording exceeds the 64 MiB export limit")
+var errSessionExportDiskFull = errors.New("not enough free disk space to finish the export")
 
 type sessionExportStatus struct {
 	ID          string `json:"id"`
@@ -241,8 +249,8 @@ func (s *Server) handleExportSession(w http.ResponseWriter, r *http.Request) {
 		code := http.StatusInternalServerError
 		if errors.Is(err, sql.ErrNoRows) {
 			code = http.StatusNotFound
-		} else if errors.Is(err, errSessionExportTooLarge) {
-			code = http.StatusRequestEntityTooLarge
+		} else if errors.Is(err, errSessionExportDiskFull) {
+			code = http.StatusInsufficientStorage
 		} else if errors.Is(err, context.DeadlineExceeded) {
 			code = http.StatusGatewayTimeout
 		}
@@ -256,8 +264,8 @@ func (s *Server) handleExportSession(w http.ResponseWriter, r *http.Request) {
 
 func sessionExportError(err error) string {
 	switch {
-	case errors.Is(err, errSessionExportTooLarge):
-		return "This recording exceeds the 64 MiB export limit. No partial file was created."
+	case errors.Is(err, errSessionExportDiskFull):
+		return "The server is low on disk space, so the export stopped. No partial file was created."
 	case errors.Is(err, context.DeadlineExceeded):
 		return "Preparing this export took too long. No partial file was created."
 	case errors.Is(err, context.Canceled):
@@ -269,21 +277,21 @@ func sessionExportError(err error) string {
 	}
 }
 
-// No successful response is sent until a complete, bounded file exists. A
-// buffered writer avoids one disk syscall per event while the byte cap and
-// context also apply to the final buffer flush.
+// No successful response is sent until a complete file exists. A buffered
+// writer avoids one disk syscall per event, while the disk guard and context
+// also apply to the final buffer flush.
 func (s *Server) prepareSessionExport(ctx context.Context, id string, progress func(store.SessionExportProgress, int64)) (*os.File, error) {
 	file, err := os.CreateTemp("", "traceux-session-export-*.json")
 	if err != nil {
 		return nil, err
 	}
-	limited := &sessionExportWriter{ctx: ctx, dst: file, remaining: maxSessionExportBytes}
-	buffer := bufio.NewWriterSize(limited, 64<<10)
+	guarded := &sessionExportWriter{ctx: ctx, dst: file, freeBytes: freeDiskBytes(file.Name())}
+	buffer := bufio.NewWriterSize(guarded, 64<<10)
 	err = s.store.WriteSessionExportWithOptions(ctx, id, buffer, store.SessionExportOptions{
 		Throttle: true,
 		Progress: func(p store.SessionExportProgress) {
 			if progress != nil {
-				progress(p, int64(maxSessionExportBytes)-limited.remaining+int64(buffer.Buffered()))
+				progress(p, guarded.written+int64(buffer.Buffered()))
 			}
 		},
 	})
@@ -298,21 +306,29 @@ func (s *Server) prepareSessionExport(ctx context.Context, id string, progress f
 	return file, nil
 }
 
+// sessionExportWriter counts what reaches the file, stops on cancellation,
+// and refuses to eat into the disk reserve. freeBytes reports the free space
+// on the file's volume, or ok=false where that cannot be measured.
 type sessionExportWriter struct {
 	ctx       context.Context
 	dst       io.Writer
-	remaining int64
+	freeBytes func() (free int64, ok bool)
+	written   int64
+	nextCheck int64
 }
 
 func (w *sessionExportWriter) Write(data []byte) (int, error) {
 	if err := w.ctx.Err(); err != nil {
 		return 0, err
 	}
-	if int64(len(data)) > w.remaining {
-		return 0, errSessionExportTooLarge
+	if w.freeBytes != nil && w.written+int64(len(data)) >= w.nextCheck {
+		if free, ok := w.freeBytes(); ok && free-int64(len(data)) < sessionExportDiskReserve {
+			return 0, errSessionExportDiskFull
+		}
+		w.nextCheck = w.written + int64(len(data)) + sessionExportDiskCheckEvery
 	}
 	n, err := w.dst.Write(data)
-	w.remaining -= int64(n)
+	w.written += int64(n)
 	return n, err
 }
 

@@ -1,5 +1,5 @@
 import { request } from '../client';
-import { CustomEvent, Session, SessionExportStatus, SessionQuery, SessionPage, SharedSession } from '../types/sessions';
+import { CustomEvent, Session, SessionContact, SessionExportStatus, SessionQuery, SessionPage, SharedSession } from '../types/sessions';
 import { Log, SharedLog } from '../types/logs';
 import { Ticket } from '../types/tickets';
 import { Feedback } from '../types/feedback';
@@ -35,6 +35,8 @@ export const sessionsEndpoints = {
       tickets: Ticket[];
       feedback: Feedback[];
     }>(`/api/sessions/${id}`),
+
+  getSessionContact: (id: string) => request<SessionContact>(`/api/sessions/${encodeURIComponent(id)}/contact`),
 
   markSessionViewed: (id: string) =>
     request<{ ok: boolean }>(`/api/sessions/${id}/viewed`, { method: 'POST' }),

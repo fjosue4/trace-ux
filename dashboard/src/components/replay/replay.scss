@@ -741,16 +741,17 @@ button.browser-tab__close {
   p { margin: 0.2rem 0 0; }
 }
 
-/* Two equal buttons spanning the panel, so they read as one toolbar. */
+/* Equal buttons spanning the panel, so they read as one toolbar; the
+   destructive one is a square icon at the end, kept apart from the rest. */
 .replay-side__toolbar {
-  display: grid;
-  grid-auto-columns: minmax(0, 1fr);
-  grid-auto-flow: column;
+  display: flex;
   gap: 0.5rem;
   margin-top: 0.85rem;
 
+  > * { flex: 1 1 0; min-width: 0; }
   .btn { width: 100%; height: 34px; }
   .btn--dangerGhost { border-color: color-mix(in srgb, #{$danger} 35%, #{$line}); }
+  .replay-side__icon-action { flex: none; width: 34px; padding: 0; }
 }
 
 .actions-empty { margin: 0.2rem 0.35rem 0; }

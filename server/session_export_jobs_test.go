@@ -42,7 +42,7 @@ func awaitExportJob(t *testing.T, baseURL, id string, cookie *http.Cookie) sessi
 		if resp.StatusCode != http.StatusOK || err != nil {
 			t.Fatalf("status: %d %v", resp.StatusCode, err)
 		}
-		if status.ChunksDone < lastDone || status.ChunksDone > status.ChunksTotal || status.Bytes > maxSessionExportBytes {
+		if status.ChunksDone < lastDone || status.ChunksDone > status.ChunksTotal || status.Bytes < 0 {
 			t.Fatalf("invalid progress: %+v", status)
 		}
 		lastDone = status.ChunksDone
@@ -217,24 +217,44 @@ func TestSessionExportBackgroundFailureAndRetainedFileLimit(t *testing.T) {
 	}
 }
 
-func TestSessionExportWriterLimitsAndCancellation(t *testing.T) {
+func TestSessionExportWriterDiskGuardAndCancellation(t *testing.T) {
+	// No size cap: plenty of free space lets every byte through, counted.
 	var dst bytes.Buffer
-	writer := &sessionExportWriter{ctx: context.Background(), dst: &dst, remaining: 4}
-	if _, err := writer.Write([]byte("1234")); err != nil {
-		t.Fatal(err)
+	roomy := func() (int64, bool) { return 100 << 30, true }
+	writer := &sessionExportWriter{ctx: context.Background(), dst: &dst, freeBytes: roomy}
+	big := bytes.Repeat([]byte("x"), 1<<20)
+	for range 80 {
+		if _, err := writer.Write(big); err != nil {
+			t.Fatalf("large export refused: %v", err)
+		}
 	}
-	if n, err := writer.Write([]byte("5")); n != 0 || !errors.Is(err, errSessionExportTooLarge) || dst.String() != "1234" {
-		t.Fatalf("size cap failed: n=%d err=%v bytes=%s", n, err, dst.String())
+	if writer.written != 80<<20 || dst.Len() != 80<<20 {
+		t.Fatalf("written = %d, buffered = %d; want 80 MiB", writer.written, dst.Len())
 	}
+
+	// Writing stops before the disk reserve, and nothing of that write lands.
+	dst.Reset()
+	free := int64(sessionExportDiskReserve + 10)
+	writer = &sessionExportWriter{ctx: context.Background(), dst: &dst, freeBytes: func() (int64, bool) { return free, true }}
+	if n, err := writer.Write([]byte("0123456789x")); n != 0 || !errors.Is(err, errSessionExportDiskFull) || dst.Len() != 0 {
+		t.Fatalf("disk guard failed: n=%d err=%v bytes=%d", n, err, dst.Len())
+	}
+
+	// Where free space cannot be measured, the export is not blocked.
+	writer = &sessionExportWriter{ctx: context.Background(), dst: &dst, freeBytes: func() (int64, bool) { return 0, false }}
+	if _, err := writer.Write([]byte("ok")); err != nil {
+		t.Fatalf("unmeasurable disk blocked the export: %v", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	writer = &sessionExportWriter{ctx: ctx, dst: &dst, remaining: 100}
+	writer = &sessionExportWriter{ctx: ctx, dst: &dst}
 	if _, err := writer.Write([]byte("more")); !errors.Is(err, context.Canceled) {
 		t.Fatal("writer ignored cancellation")
 	}
-	for _, err := range []error{errSessionExportTooLarge, context.DeadlineExceeded} {
+	for _, err := range []error{errSessionExportDiskFull, context.DeadlineExceeded} {
 		if !strings.Contains(sessionExportError(err), "No partial file") {
-			t.Fatal("limit error does not explain why no file is downloaded")
+			t.Fatal("failure message does not explain why no file is downloaded")
 		}
 	}
 }

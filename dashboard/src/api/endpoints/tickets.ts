@@ -20,6 +20,7 @@ export const ticketsEndpoints = {
     user_id?: string;
     name?: string;
     session_id?: string;
+    page_url?: string;
   }) => request<Ticket>('/api/tickets', { method: 'POST', body: JSON.stringify(input) }),
   replyToTicket: (id: number, body: string) =>
     request<TicketThread>(`/api/tickets/${id}/messages`, {
