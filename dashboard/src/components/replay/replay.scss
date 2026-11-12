@@ -853,6 +853,15 @@ button.browser-tab__close {
 }
 .meta-oneline { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .meta-copy { width: 22px; height: 22px; flex: none; }
+/* A compact action inside a detail value, sized to the value's line. */
+.btn.meta-inline-action {
+  flex: none;
+  height: 24px;
+  margin-left: 0.25rem;
+  padding: 0 0.55rem;
+  gap: 0.3rem;
+  font-size: 0.74rem;
+}
 
 /* ---- actions feed: search, scrolling, active row ---- */
 .actions-head {
@@ -1057,6 +1066,9 @@ button.browser-tab__close {
      enough to need the room. */
   .replay-meta .meta-grid { grid-template-columns: 1.5fr repeat(3, minmax(0, 1fr)); }
 }
+/* The user's value carries an action; two columns keep the identifier
+   readable beside it. */
+.replay-meta .meta-block:has(.meta-inline-action) { grid-column: span 2; }
 .replay-meta .meta-block__label { font-size: 0.62rem; }
 .replay-meta .meta-block__value { font-size: 0.8rem; }
 .replay-meta .meta-clamp2 {

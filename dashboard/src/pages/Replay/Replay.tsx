@@ -171,29 +171,30 @@ export default function Replay() {
             rebuildToken={rebuildToken}
             windowStartMs={windowStartMs}
           />
-          <MetaCard session={session} />
+          <MetaCard
+            session={session}
+            // Only identified visitors can be ticketed, so the action sits on
+            // the user it is for and does not exist without one.
+            userAction={
+              <Button
+                variant="secondary"
+                size="sm"
+                className="meta-inline-action"
+                disabled={ticket.looking || deleting}
+                title={`Open a ticket with ${session.user_id}`}
+                onClick={() => void ticket.open()}
+              >
+                <Icon name="lifebuoy" size={12} />
+                {ticket.looking ? 'Opening…' : 'Open ticket'}
+              </Button>
+            }
+          />
         </div>
         <aside className="replay-side-col">
           <PagesPanel
             session={session}
             actions={
               <>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  // Only an identified visitor (a user_id from the site) can
-                  // be ticketed: otherwise nobody knows who to follow up with.
-                  disabled={!session.user_id || ticket.looking || deleting}
-                  title={
-                    session.user_id
-                      ? `Open a ticket with ${session.user_id}`
-                      : 'Only identified visitors can get a ticket. This visitor was never identified.'
-                  }
-                  onClick={() => void ticket.open()}
-                >
-                  <Icon name="lifebuoy" size={13} />
-                  {ticket.looking ? 'Opening…' : 'Open ticket'}
-                </Button>
                 <ExportForAIButton
                   state={exporting ? 'preparing' : downloading ? 'saving' : 'idle'}
                   disabled={exporting || downloading || deleting}

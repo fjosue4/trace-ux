@@ -12,7 +12,7 @@ import '../replay.scss';
 // player as a compact two-row strip rather than in the sidebar, so the actions
 // feed gets the full column height — and it collapses away entirely when the
 // viewer wants more room for the recording.
-export default function MetaCard({ session }: MetaCardProps) {
+export default function MetaCard({ session, userAction }: MetaCardProps) {
   const s = session;
   const utm = [s.utm_source, s.utm_medium, s.utm_campaign].filter(Boolean).join(' / ');
   const { collapsed, setCollapsed } = useMetaCard();
@@ -78,7 +78,14 @@ export default function MetaCard({ session }: MetaCardProps) {
           {s.screen_w}×{s.screen_h}
         </MetaBlock>
         {utm && <MetaBlock label="UTM">{utm}</MetaBlock>}
-        {s.user_id && <MetaBlock label="User">{s.user_id}</MetaBlock>}
+        {s.user_id && (
+          <MetaBlock label="User">
+            <span className="meta-value-row">
+              <span className="meta-oneline" title={s.user_id}>{s.user_id}</span>
+              {userAction}
+            </span>
+          </MetaBlock>
+        )}
         {s.client_id && <MetaBlock label="Client">{s.client_id}</MetaBlock>}
         {s.remote_id && <MetaBlock label="Remote">{s.remote_id}</MetaBlock>}
       </div>
