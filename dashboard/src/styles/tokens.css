@@ -1,9 +1,11 @@
 /*
  * Design tokens — the single source of truth for the visual language.
  *
- * Direction: restrained operations dashboard (compact geometry, flat panels,
- * crisp borders, and limited elevation). Light theme uses neutral grays; dark
- * theme uses soft charcoal surfaces with the green brand accent. Themes switch via
+ * Direction: quiet operations dashboard. The sidebar sits on the page colour
+ * and every page is drawn on one inset panel. Structure comes from hairlines,
+ * not from cards. Ink (near-black, near-white in dark) is the action colour;
+ * the green brand accent is reserved for live state, positive change and the
+ * logo, so it keeps meaning something. Themes switch via
  * <html data-theme="light|dark">; index.html sets it before first paint.
  *
  * Change the look of the whole app here — components only reference tokens.
@@ -12,96 +14,106 @@
 :root[data-theme='light'] {
   color-scheme: light;
 
-  /* surfaces & text — quiet neutrals, separated with borders rather than glow */
-  --page-bg: #f5f5f3;
-  --bg: #fafaf9;
+  /* surfaces & text — warm neutrals; the page sits one step below the panel */
+  --page-bg: #f1f1ef;
+  --bg: #f1f1ef;
   --surface: #ffffff;
-  --surface-2: #f3f3f1;
-  --surface-3: #e8e8e5;
-  --ink: #18181a;
-  --ink-2: #3f3f43;
-  --muted: #707074;
-  --line: rgba(24, 24, 26, 0.1);
-  --line-strong: rgba(24, 24, 26, 0.18);
+  --surface-2: #f5f5f3;
+  --surface-3: #ebebe8;
+  --hover: #f7f7f5;
+  --ink: #141414;
+  --ink-2: #3d3d3b;
+  --muted: #76766f;
+  --faint: #b5b5ae;
+  --line: #ecebe7;
+  --line-strong: #dddcd7;
 
-  /* form fields & popovers — fields stay filled when focused, and popovers sit
-     above the panel they open from */
-  --field-bg: #f3f3f1;
+  /* form fields & popovers — fields are white with a visible border */
+  --field-bg: #ffffff;
   --field-bg-focus: #ffffff;
-  --filter-field-bg: #ffffff; /* white with a strong border in filter bars */
+  --filter-field-bg: #ffffff;
   --popover-bg: #ffffff;
+  --focus-ring: rgba(20, 20, 20, 0.12);
 
-  /* brand & feedback — grounded green, never neon */
-  --accent: #2f7d4a;
-  --accent-strong: #24663b;
-  --accent-soft: rgba(47, 125, 74, 0.12);
-  --accent-glow: rgba(47, 125, 74, 0.22);
+  /* actions — ink, not green */
+  --primary-bg: #141414;
+  --primary-bg-hover: #2c2c2b;
+  --primary-fg: #ffffff;
+
+  /* brand & feedback — green means live / positive, nothing else */
+  --accent: #1f7a45;
+  --accent-strong: #19653a;
+  --accent-soft: rgba(31, 122, 69, 0.1);
+  --accent-glow: rgba(31, 122, 69, 0.2);
   --on-accent: #ffffff;
-  --danger: #b3261e;
-  --danger-soft: rgba(179, 38, 30, 0.1);
-  --success: #237a45;
-  --success-soft: rgba(35, 122, 69, 0.12);
+  --danger: #b42318;
+  --danger-soft: rgba(180, 35, 24, 0.08);
+  --success: #1f7a45;
+  --success-soft: rgba(31, 122, 69, 0.1);
   --info: #1f6f8b;
-  --info-soft: rgba(31, 111, 139, 0.13);
-  --warn: #9a6410;
-  --warn-soft: rgba(154, 100, 16, 0.14);
+  --info-soft: rgba(31, 111, 139, 0.1);
+  --warn: #a16207;
+  --warn-soft: rgba(161, 98, 7, 0.1);
 
   /* portfolio-native aliases */
   --paper: #f0eee6;
   --charcoal: #141915;
-  --signal: #2f7d4a;
+  --signal: #1f7a45;
   --olive: #668154;
 
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.04);
-  --shadow-md: 0 18px 48px -20px rgb(0 0 0 / 0.28);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 16px 40px -18px rgb(0 0 0 / 0.28);
   --shadow-accent: none;
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  /* surfaces & text — soft charcoal with a faint green-gray cast, lifted off
-     black so long sessions stay comfortable; text is off-white, not pure white */
-  --page-bg: #1a1c1b;
-  --bg: #1d1f1e;
-  --surface: #232625;
-  --surface-2: #2a2d2c;
-  --surface-3: #343837;
-  --ink: #ecedeb;
-  --ink-2: #c3c6c2;
-  --muted: #979b97;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.16);
+  /* surfaces & text — neutral charcoal, off-white text */
+  --page-bg: #0b0b0c;
+  --bg: #0b0b0c;
+  --surface: #151516;
+  --surface-2: #1c1c1e;
+  --surface-3: #262628;
+  --hover: #1a1a1c;
+  --ink: #ededea;
+  --ink-2: #c6c6c1;
+  --muted: #8a8a84;
+  --faint: #4a4a47;
+  --line: #232325;
+  --line-strong: #303033;
 
-  /* form fields & popovers — focus lifts the field instead of dropping it to
-     the panel colour, and popovers are one step above the panel */
-  --field-bg: #2a2d2c;
-  --field-bg-focus: #303433;
-  --filter-field-bg: #2a2d2c;
-  --popover-bg: #2c2f2e;
+  --field-bg: #151516;
+  --field-bg-focus: #1a1a1c;
+  --filter-field-bg: #151516;
+  --popover-bg: #1e1e20;
+  --focus-ring: rgba(237, 237, 234, 0.14);
 
-  /* brand & feedback — luminous botanical green */
-  --accent: #66c983;
-  --accent-strong: #7bdb96;
-  --accent-soft: rgba(102, 201, 131, 0.14);
-  --accent-glow: rgba(102, 201, 131, 0.24);
+  --primary-bg: #ededea;
+  --primary-bg-hover: #ffffff;
+  --primary-fg: #111111;
+
+  --accent: #5fcb86;
+  --accent-strong: #7bdb9b;
+  --accent-soft: rgba(95, 203, 134, 0.12);
+  --accent-glow: rgba(95, 203, 134, 0.22);
   --on-accent: #08140c;
-  --danger: #ff6369;
-  --danger-soft: rgba(255, 99, 105, 0.12);
-  --success: #72d58e;
-  --success-soft: rgba(114, 213, 142, 0.13);
+  --danger: #f97066;
+  --danger-soft: rgba(249, 112, 102, 0.12);
+  --success: #5fcb86;
+  --success-soft: rgba(95, 203, 134, 0.12);
   --info: #5eb0d6;
-  --info-soft: rgba(94, 176, 214, 0.15);
+  --info-soft: rgba(94, 176, 214, 0.13);
   --warn: #d9a441;
-  --warn-soft: rgba(217, 164, 65, 0.15);
+  --warn-soft: rgba(217, 164, 65, 0.12);
 
   --paper: #f0eee6;
   --charcoal: #141915;
-  --signal: #66c983;
+  --signal: #5fcb86;
   --olive: #7e8b5b;
 
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.25);
-  --shadow-md: 0 20px 50px -20px rgb(0 0 0 / 0.55);
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 18px 44px -18px rgb(0 0 0 / 0.6);
   --shadow-accent: none;
 }
 
@@ -113,7 +125,7 @@
   --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
 
-  /* geometry — deliberately compact; pills are reserved for status/toggles */
+  /* geometry — compact; pills are reserved for toggles */
   --radius-sm: 7px;
   --radius: 10px;
   --radius-lg: 12px;

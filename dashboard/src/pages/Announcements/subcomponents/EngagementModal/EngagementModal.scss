@@ -67,11 +67,10 @@
   width: 1.95rem;
   height: 1.95rem;
   border-radius: 50%;
-  background: $accent-soft;
-  color: $accent;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  background: $surface-2;
+  color: $ink-2;
+  font-size: 0.72rem;
+  font-weight: 600;
 
   &.is-anonymous {
     background: $surface-3;
@@ -134,7 +133,7 @@
   border-radius: $radius-pill;
   background: $info-soft;
   color: $info;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 600;
 
   &--like {
@@ -177,7 +176,7 @@
 }
 
 @media (max-width: 860px) {
-  .engagement-panes { grid-template-columns: 1fr; }
+  .engagement-panes { grid-template-columns: minmax(0, 1fr); }
   .engagement-box { min-height: 140px; max-height: 40vh; }
 }
 

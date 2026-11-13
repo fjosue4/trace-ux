@@ -27,7 +27,7 @@ export default function Settings() {
         <h3>Profile</h3>
         <div className="settings__profile">
           <span className="mono settings__username">{user.username}</span>
-          <Badge tone={user.role === 'admin' ? 'accent' : 'neutral'}>{user.role}</Badge>
+          <Badge tone="neutral">{user.role}</Badge>
         </div>
         <p className="muted small">
           {user.role === 'admin'

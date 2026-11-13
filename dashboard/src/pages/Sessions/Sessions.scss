@@ -1,5 +1,5 @@
-// Sessions use one continuous list surface: compact headers, quiet dividers,
-// and stacked facts inside each row, like a modern data table.
+// Sessions: one flush table on the page panel, grouped by day. Each row
+// stacks a primary fact over a quieter detail; played rows recede.
 @use 'abstracts' as *;
 
 .sessions-load-more {
@@ -12,173 +12,136 @@
   padding: 0.75rem;
   text-align: center;
 
-  .loading { padding: 0; }
+  .loading { padding: 0; min-height: 0; }
 }
 
-.sessions-table.table-wrap {
-  background: $surface;
-  border: 1px solid $line;
-  border-radius: $radius-lg;
-  box-shadow: $shadow-sm;
-  overflow-x: auto;
-}
 .sessions-table .table {
-  border-collapse: collapse;
-  border-spacing: 0;
-
-  thead { background: transparent; }
-
-  th {
-    padding-top: 0.82rem;
-    padding-bottom: 0.72rem;
-    &:last-child { text-align: center; }
-  }
-  td {
-    padding-top: 0.86rem;
-    padding-bottom: 0.86rem;
-    vertical-align: middle;
-    background: $surface;
-    border-bottom: 1px solid $line;
-    &:last-child { text-align: center; }
-  }
-  tbody tr {
-    &:last-child td { border-bottom: 0; }
-    &:hover td { background: $surface-2; }
-
-    &.is-viewed td {
-      background: color-mix(in srgb, #{$surface-2} 48%, #{$surface});
-    }
-    &.is-viewed .session-cell__primary { color: $ink-2; }
-    &.is-viewed:hover td { background: $surface-2; }
-  }
+  td { padding-top: 0.6rem; padding-bottom: 0.6rem; }
+  tbody tr.sessions-day:hover td { background: transparent; }
 }
 
-// Dark mode needs a full surface step to make played rows easy to scan.
-:root[data-theme='dark'] .sessions-table .table tbody tr.is-viewed {
-  td { background: $page-bg; }
-  &:hover td { background: $bg; }
-  .session-cell__primary { color: $muted; }
+// Day header row: "Today  Friday, 13 November ··· 9 sessions"
+.sessions-day td {
+  padding: 1.1rem 0.6rem 0.45rem !important;
+  font-size: 0.82rem;
+  color: $muted;
+
+  strong { color: $ink; font-weight: 600; margin-right: 0.5rem; }
 }
-.session-cell {
-  display: grid;
-  gap: 0.12rem;
-  min-width: 0;
-  line-height: 1.25;
-  white-space: normal;
+.sessions-day__count { float: right; }
 
-  &__primary,
-  &__meta {
-    display: block;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  &__primary { color: $ink; font-size: 0.88rem; font-weight: 650; }
-  &__meta {
-    color: $muted;
-    font-size: 0.76rem;
-    strong { color: $ink-2; font-weight: 650; }
-  }
+.session-row {
+  &__visitor { width: 30%; }
+  &__journey { width: 36%; }
 
-  &--visit {
-    .badge { width: fit-content; }
-    .session-cell__status { margin-top: 0.24rem; }
-    .session-cell__meta { font-variant-numeric: tabular-nums; }
-  }
-  &--country {
-    .session-cell__primary { font-weight: 650; }
-    .session-cell__meta { letter-spacing: 0.04em; }
-  }
-  &--actions {
-    justify-items: start;
-
-    // justify-items: start sizes each line to its content, which let a long
-    // "Length 1h 2m" run past the column; cap it so the ellipsis applies.
-    .session-cell__primary,
-    .session-cell__meta { max-width: 100%; }
-
-    .session-cell__primary { display: block; font-variant-numeric: tabular-nums; }
-    .session-cell__primary--plain { color: $ink; }
-  }
-}
-
-.play-btn {
-  width: 36px;
-  min-width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
-  display: inline-grid;
-  place-items: center;
-  box-sizing: border-box;
-  padding: 0;
-  overflow: hidden;
-  line-height: 0;
-  border-radius: 50%;
-
-  svg { display: block; width: 18px; height: 18px; flex: 0 0 auto; margin: 0; }
-
-  &.play-btn--viewed {
-    background: $accent-soft;
-    color: $accent;
-    border-color: $accent-glow;
-
-    &:hover:not(:disabled) {
-      background: $accent-glow;
-      border-color: $accent;
-    }
-  }
-}
-
-:root[data-theme='dark'] .play-btn.play-btn--viewed {
-  background: var(--charcoal);
-  color: var(--on-charcoal);
-  border-color: color-mix(in srgb, var(--on-charcoal) 35%, var(--charcoal));
-
-  &:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--on-charcoal) 12%, var(--charcoal));
-    border-color: var(--on-charcoal);
-  }
-}
-
-.session-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin-bottom: 1.2rem; }
-.session-stat {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  padding: 0.85rem 1.3rem;
-
-  &__label {
-    display: inline-flex;
+  &__visitor .cell-stack__main {
+    display: flex;
     align-items: center;
     gap: 0.45rem;
-    font-size: 0.82rem;
-    color: $muted;
-  }
-  &__dot {
-    width: 8px;
-    height: 8px;
-    border-radius: $radius-pill;
 
-    &--live { background: $accent; box-shadow: 0 0 0 4px $accent-soft; animation: stat-pulse 2s ease-in-out infinite; }
-    &--done { background: $muted; }
+    > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .badge { flex: none; }
   }
-  &__num { font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  &__anon { color: $muted; font-weight: 400; }
+
+  &__journey .cell-stack__main { font-weight: 400; }
+  &__journey .cell-stack__sub svg { vertical-align: -1px; }
+
+  &__plain { font-weight: 400 !important; display: inline-flex; align-items: center; gap: 0.35rem; }
+  &__plain svg { color: $muted; }
+  &__num { font-variant-numeric: tabular-nums; }
+
+  &__play svg { flex: none; }
+
+  // Hovering a row turns its play button into the primary action.
+  &:hover .session-row__play {
+    background: $primary-bg;
+    color: $primary-fg;
+    border-color: $primary-bg;
+  }
+
+  // Already played: the text steps back so the unwatched rows stand out.
+  &.is-viewed .cell-stack__main { color: $ink-2; }
+  &.is-viewed .session-row__visitor .mono { font-weight: 400; }
+  &.is-viewed .session-row__play { color: $muted; }
 }
-@keyframes stat-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+
+// Narrow screens: each session becomes a stacked block instead of a row that
+// would scroll sideways.
+//   visitor ........................ [Play]
+//   /entry → /exit · pages · actions
+//   Chrome · 6m 42s · 14:30 · United States
+@media (max-width: 1000px) {
+  .sessions-table .table {
+    min-width: 0 !important; // beats the dense-table minimum in Table.scss
+
+    thead { display: none; }
+    &, tbody { display: block; }
+
+    tr.sessions-day,
+    tr.sessions-day td { display: block; }
+    tr.sessions-day td { padding-left: 0.25rem !important; padding-right: 0.25rem !important; }
+  }
+
+  .sessions-table .table tr.session-row {
+    display: grid;
+    grid-template-columns: max-content max-content max-content minmax(0, 1fr) auto;
+    grid-template-areas:
+      'visitor visitor visitor visitor action'
+      'journey journey journey journey journey'
+      'device length started location location';
+    align-items: center;
+    column-gap: 0.85rem;
+    row-gap: 0.3rem;
+    padding: 0.7rem 0.25rem;
+    border-bottom: 1px solid $line;
+
+    &:last-child { border-bottom: 0; }
+    &:hover { background: $hover; }
+
+    td {
+      display: block;
+      width: auto !important;
+      max-width: none;
+      min-width: 0;
+      padding: 0 !important;
+      border: 0;
+      background: transparent !important;
+      text-align: left;
+    }
+  }
+
+  .session-row {
+    &__visitor { grid-area: visitor; }
+    &__journey { grid-area: journey; }
+    &__device { grid-area: device; }
+    &__length { grid-area: length; }
+    &__started { grid-area: started; }
+    &__location { grid-area: location; overflow: hidden; }
+    &__action { grid-area: action; }
+
+    // The meta line shows one value per fact; the detail lines would wrap.
+    &__device .cell-stack__sub,
+    &__started .cell-stack__sub { display: none; }
+    &__location .cell-stack__main { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    &__device .cell-stack__main,
+    &__length .cell-stack__main,
+    &__started .cell-stack__main,
+    &__location .cell-stack__main { color: $muted; font-size: 0.8rem; }
+  }
 }
 
 @media (max-width: 640px) {
-  .session-stats {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.7rem;
-    margin-bottom: 1rem;
+  .sessions-day__count { float: none; display: block; margin-top: 2px; }
+}
+
+@media (max-width: 380px) {
+  // Smallest phones: the start time is in the day header's context already.
+  .sessions-table .table tr.session-row {
+    grid-template-areas:
+      'visitor visitor visitor visitor action'
+      'journey journey journey journey journey'
+      'device length location location location';
   }
-  .session-stat { min-width: 0; padding: 0.9rem 1rem; }
-  .session-stat__label { align-items: flex-start; line-height: 1.25; }
-  .session-stat__num { font-size: 1.35rem; }
-  .play-btn { width: 36px; min-width: 36px; }
+  .session-row__started { display: none !important; }
 }

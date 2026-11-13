@@ -1,8 +1,9 @@
 import { Link } from 'react-router-dom';
 import { Session } from '../../../api';
-import { fmtDuration, fmtTime, formatCountry, stripProto, truncate } from '../../../lib/format';
+import { fmtHourMinute, fmtDuration, fmtRelative, formatCountry, stripProto, urlPath } from '../../../lib/format';
 import Badge from '../../../components/ui/Badge';
 import { Icon } from '../../../components/ui/Icon';
+import type { IconName } from '../../../components/ui/Icon';
 import { replayPath } from '../Sessions.helpers';
 
 type SessionRowProps = {
@@ -20,64 +21,83 @@ function visitorOf(s: Session) {
   return s.user_id || s.remote_id || s.client_id || '';
 }
 
+function deviceIcon(device: string): IconName {
+  const d = device.toLowerCase();
+  if (d.includes('mobile') || d.includes('phone')) return 'smartphone';
+  if (d.includes('tablet')) return 'tablet';
+  return 'monitor';
+}
+
+const capitalize = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
+
 export function SessionRow({ session: s, showSite, from, actionFilter, onViewed, onOpen }: SessionRowProps) {
-  const actionCount = s.action_count ?? s.page_count;
+  const visitor = visitorOf(s);
+  const actions = s.action_count ?? s.page_count;
+  const entry = urlPath(s.initial_url) || '/';
+  const exit = urlPath(s.exit_url);
+  const singlePage = s.page_count <= 1 || !exit || exit === entry;
+  const source = s.referrer ? `via ${stripProto(s.referrer).replace(/\/$/, '')}` : 'Direct';
+  const context = [showSite ? s.site_name : null, source].filter(Boolean).join(' · ');
+
   return (
-    <tr className={`is-clickable${s.viewed ? ' is-viewed' : ''}`} onClick={() => { onViewed(); onOpen(); }}>
-      <td>
-        <div className="session-cell session-cell--visit">
-          <span className="session-cell__primary">{fmtTime(s.started_at)}</span>
-          <span className="session-cell__status">
-            <Badge tone={s.active ? 'accent' : 'neutral'}>
-              {s.active ? 'in-progress' : 'completed'}
-            </Badge>
+    <tr className={`session-row is-clickable${s.viewed ? ' is-viewed' : ''}`} onClick={() => { onViewed(); onOpen(); }}>
+      <td className="col-fill session-row__visitor">
+        <div className="cell-stack">
+          <span className="cell-stack__main" title={visitor || 'Anonymous visitor'}>
+            <span className={visitor ? 'mono' : 'session-row__anon'}>{visitor || 'Anonymous visitor'}</span>
+            {s.active && <Badge tone="accent">Live</Badge>}
+          </span>
+          <span className="cell-stack__sub" title={s.referrer || 'Direct'}>{context}</span>
+        </div>
+      </td>
+      <td className="col-fill session-row__journey">
+        <div className="cell-stack">
+          <span className="cell-stack__main mono" title={s.initial_url}>{entry}</span>
+          <span className="cell-stack__sub" title={s.exit_url}>
+            {singlePage ? (
+              'Single page'
+            ) : (
+              <>
+                <Icon name="arrowRight" size={11} /> <span className="mono">{exit}</span> · {s.page_count} pages
+              </>
+            )}
+            {' · '}{actions} {actions === 1 ? 'action' : 'actions'}
           </span>
         </div>
       </td>
-      <td>
-        <div className="session-cell session-cell--context" title={s.referrer || 'direct'}>
-          {showSite && <span className="session-cell__primary">{s.site_name ?? '—'}</span>}
-          <span className={`${showSite ? 'session-cell__meta' : 'session-cell__primary'} mono`} title={visitorOf(s)}>
-            {truncate(visitorOf(s) || 'anonymous', 26)}
+      <td className="col-fit session-row__device">
+        <div className="cell-stack" title={[s.device, s.browser, s.os].filter(Boolean).join(' · ')}>
+          <span className="cell-stack__main session-row__plain">
+            <Icon name={deviceIcon(s.device || '')} size={14} /> {s.browser || '—'}
           </span>
-          <span className="session-cell__meta session-cell__meta--truncate">
-            Referrer {s.referrer ? truncate(stripProto(s.referrer), 28) : 'direct'}
-          </span>
+          <span className="cell-stack__sub">{[capitalize(s.device), s.os].filter(Boolean).join(' · ') || '—'}</span>
         </div>
       </td>
-      <td>
-        <div className="session-cell" title={[s.device, s.browser, s.os].filter(Boolean).join(' · ')}>
-          <span className="session-cell__primary">{s.device || '—'}</span>
-          <span className="session-cell__meta">{s.browser || '—'}</span>
-          <span className="session-cell__meta">{s.os || '—'}</span>
+      <td className="col-fit session-row__location">
+        <span className="cell-stack__main session-row__plain" title={s.country || 'Country unavailable'}>
+          {s.country ? formatCountry(s.country) : '—'}
+        </span>
+      </td>
+      <td className="col-fit col-end session-row__length">
+        <span className="cell-stack__main session-row__plain session-row__num">{fmtDuration(s.duration_ms)}</span>
+      </td>
+      <td className="col-fit session-row__started">
+        <div className="cell-stack">
+          <span className="cell-stack__main session-row__plain session-row__num">{fmtHourMinute(s.started_at)}</span>
+          <span className="cell-stack__sub">{fmtRelative(s.started_at)}</span>
         </div>
       </td>
-      <td>
-        <div className="session-cell session-cell--country" title={s.country || 'Country unavailable'}>
-          <span className="session-cell__primary">{formatCountry(s.country)}</span>
-          {s.country && <span className="session-cell__meta mono">{s.country}</span>}
-        </div>
-      </td>
-      <td>
-        <div className="session-cell session-cell--actions">
-          <span className="session-cell__primary session-cell__primary--plain">
-            {actionCount} {actionCount === 1 ? 'action' : 'actions'}
-          </span>
-          <span className="session-cell__meta">
-            <strong>Length</strong> {fmtDuration(s.duration_ms)}
-          </span>
-        </div>
-      </td>
-      <td onClick={(e) => e.stopPropagation()}>
+      <td className="col-fit col-end session-row__action" onClick={(e) => e.stopPropagation()}>
         <Link
           to={replayPath(s.id, { autoplay: true, action: actionFilter })}
           state={{ from }}
-          className={`btn btn--primary btn--sm play-btn${s.viewed ? ' play-btn--viewed' : ''}`}
+          className="btn btn--secondary btn--sm session-row__play"
           onClick={onViewed}
-          aria-label={`${s.viewed ? 'Replay' : 'Play'} session from ${fmtTime(s.started_at)}${s.viewed ? ', already played' : ''}`}
+          aria-label={`${s.viewed ? 'Replay' : 'Play'} session from ${fmtHourMinute(s.started_at)}${s.viewed ? ', already played' : ''}`}
           title={s.viewed ? 'Replay recording · Already played' : 'Play recording'}
         >
-          <Icon name={s.viewed ? 'replay' : 'play'} size={18} />
+          <Icon name={s.viewed ? 'replay' : 'play'} size={13} />
+          {s.viewed ? 'Replay' : 'Play'}
         </Link>
       </td>
     </tr>

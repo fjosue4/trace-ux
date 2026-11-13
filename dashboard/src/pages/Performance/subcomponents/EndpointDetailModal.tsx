@@ -3,10 +3,10 @@ import Button from '../../../components/ui/Button';
 import Modal from '../../../components/ui/Modal';
 import { DetailMeta, DetailPane } from '../../../components/ui/DetailModal';
 import { rangeLabels } from '../Performance.constants';
-import { fmtLatency, fmtNumber } from '../Performance.helpers';
+import StatStrip from '../../../components/ui/StatStrip';
 import { TimeRange } from '../Performance.types';
 import { LatencyChart } from './LatencyChart';
-import { MetricCard } from './MetricCard';
+import { metricItems } from './MetricCard';
 
 type EndpointDetailModalProps = {
   endpoint: PerformanceEndpoint | null;
@@ -33,13 +33,7 @@ export function EndpointDetailModal({ endpoint, range, onClose }: EndpointDetail
             { label: 'Version', value: endpoint.version, title: endpoint.version },
             { label: 'Time range', value: rangeLabels[range] },
           ]} />
-          <div className="performance-metrics">
-            <MetricCard label="Requests" value={fmtNumber(endpoint.requests)} detail={`${fmtNumber(endpoint.errors)} errors`} />
-            <MetricCard label="p50" value={fmtLatency(endpoint.p50_ms)} detail="Typical request" />
-            <MetricCard label="p95" value={fmtLatency(endpoint.p95_ms)} detail="Slow-tail latency" tone="warm" />
-            <MetricCard label="p99" value={fmtLatency(endpoint.p99_ms)} detail="Worst-tail latency" tone="hot" />
-            <MetricCard label="Error rate" value={`${endpoint.error_rate.toFixed(1)}%`} detail={`Average ${fmtLatency(endpoint.avg_ms)}`} tone={endpoint.error_rate > 0 ? 'hot' : ''} />
-          </div>
+          <StatStrip items={metricItems(endpoint)} />
           <DetailPane label="Latency over time">
             <LatencyChart endpoint={endpoint} range={range} />
           </DetailPane>

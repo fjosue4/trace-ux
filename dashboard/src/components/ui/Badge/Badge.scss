@@ -1,52 +1,51 @@
 // Global utility classes: `.badge`/`.badge--*` are also targeted by other
 // components' stylesheets (e.g. Sessions.css), so kept as plain global CSS
 // (not a CSS module) rather than scoped/hashed.
+//
+// Small square tags with a tinted fill and no border. Green (accent) is for
+// live / positive state only.
 @use 'abstracts' as *;
 
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 0.14rem 0.6rem;
-  border-radius: $radius-pill;
-  font-size: 0.68rem;
-  font-weight: 700;
-  letter-spacing: 0.035em;
-  border: 1px solid transparent;
+  padding: 0.08rem 0.4rem;
+  border-radius: 5px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.45;
+  white-space: nowrap;
 
   &--accent {
     background: $accent-soft;
     color: $accent;
-    border-color: color-mix(in srgb, #{$accent} 15%, transparent);
+    font-weight: 600;
   }
 
   &--neutral {
     background: $surface-2;
-    color: $muted;
-    border-color: $line;
+    color: $ink-2;
   }
 
   &--danger {
     background: $danger-soft;
     color: $danger;
-    border-color: color-mix(in srgb, #{$danger} 15%, transparent);
   }
 
   &--info {
     background: $info-soft;
     color: $info;
-    border-color: color-mix(in srgb, #{$info} 15%, transparent);
   }
 
   &--warn {
     background: $warn-soft;
     color: $warn;
-    border-color: color-mix(in srgb, #{$warn} 18%, transparent);
   }
 
   // No fill: for a state that is done and should recede rather than be read.
   &--quiet {
     background: transparent;
     color: $muted;
-    border-color: $line-strong;
+    box-shadow: inset 0 0 0 1px $line-strong;
   }
 }

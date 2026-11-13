@@ -1,73 +1,98 @@
 @use 'abstracts' as *;
 
 .site-row {
-  display: flex;
-  align-items: center;
-  gap: 1.1rem;
-  min-height: 72px;
-  padding: 0.95rem 1.35rem;
-  transition: background-color $duration-fast $ease-out;
+  &__name {
+    display: block;
+    font-weight: 600;
+    color: $ink;
 
-  &:hover { background: $surface-2; }
-  & + & { border-top: 1px solid $line; }
-
-  &__icon {
-    flex: none;
-    width: 38px;
-    height: 38px;
-    display: grid;
-    place-items: center;
-    place-content: center;
-    padding: 0;
-    line-height: 0;
-    border: 1px solid $line;
-    border-radius: $radius-sm;
-    background: $surface-2;
-    color: $accent;
-
-    > svg { display: block; margin: 0; }
+    &:hover { text-decoration: underline; text-underline-offset: 3px; }
   }
 
-  &__main { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; flex: 1; }
-  &__name { font-weight: 700; font-size: 0.95rem; color: $ink; }
-  &__key {
-    display: inline-flex;
+  &__status--warn { color: $warn !important; }
+  &__status--muted { color: $muted !important; font-weight: 400 !important; }
+  &__live { color: $accent; font-weight: 500; }
+
+  &__num { font-variant-numeric: tabular-nums; }
+  &__plain { font-weight: 400 !important; }
+
+  &__missing { font-weight: 400 !important; }
+  &__complete { margin: 0; }
+
+  &__actions {
+    display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 0.2rem;
-    min-width: 0;
 
-    .mono { font-size: 0.78rem; color: $muted; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .icon-btn { width: 24px; height: 24px; }
+    .btn { margin: 0 0.25rem; }
+  }
+}
+
+// The date added is the least useful column; it goes first when space runs out.
+@media (max-width: 1280px) {
+  .sites-table .site-row__added,
+  .sites-table th:nth-child(5) { display: none !important; }
+}
+
+// Narrow screens: each site becomes a stacked block instead of a row that
+// would scroll sideways.
+//   Site name / url ............. [actions]
+//   Status        Sessions        Setup
+@media (max-width: 1100px) {
+  .sites-table .table {
+    min-width: 0 !important; // beats the dense-table minimum in Table.scss
+
+    thead { display: none; }
+    &, tbody { display: block; }
   }
 
-  &__stats { display: flex; flex-direction: column; gap: 0.22rem; flex: none; min-width: 154px; }
-  &__actions { display: flex; align-items: center; gap: 0.4rem; flex: none; margin-left: auto; }
-}
+  .sites-table .table tr.site-row {
+    display: grid;
+    grid-template-columns: max-content max-content minmax(0, 1fr) auto;
+    grid-template-areas:
+      'site site site action'
+      'status count setup setup';
+    align-items: center;
+    column-gap: 1.25rem;
+    row-gap: 0.5rem;
+    padding: 0.8rem 0.25rem;
+    border-bottom: 1px solid $line;
 
-.site-stat {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.78rem;
-  color: $ink-2;
-  white-space: nowrap;
-}
+    &:last-child { border-bottom: 0; }
+    &:hover { background: $hover; }
 
-@media (max-width: 760px) {
+    td {
+      display: block;
+      width: auto !important;
+      min-width: 0;
+      padding: 0 !important;
+      border: 0;
+      background: transparent !important;
+      text-align: left;
+    }
+  }
+
   .site-row {
-    flex-wrap: wrap;
-    &__stats { min-width: 0; flex-direction: row; gap: 0.9rem; }
-    &__actions { margin-left: 52px; }
+    &__site { grid-area: site; overflow: hidden; }
+    &__name,
+    &__url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    &__status { grid-area: status; }
+    &__count { grid-area: count; }
+    &__setup { grid-area: setup; overflow: hidden; }
+    &__setup .cell-stack__main { overflow: hidden; text-overflow: ellipsis; }
+    &__action-cell { grid-area: action; }
   }
 }
 
-@media (max-width: 520px) {
-  .site-row {
-    align-items: flex-start;
-    gap: 0.75rem;
-    padding: 1rem;
-    &__main { width: calc(100% - 52px); }
-    &__stats { width: 100%; margin-left: 0; justify-content: space-between; }
-    &__actions { width: 100%; margin-left: 0; justify-content: flex-end; }
+@media (max-width: 480px) {
+  // Phones: status, count and setup each get their own line under the name.
+  .sites-table .table tr.site-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'site action'
+      'status count'
+      'setup setup';
   }
+  .site-row__count { text-align: right; }
 }

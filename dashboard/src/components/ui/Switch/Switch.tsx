@@ -16,10 +16,10 @@ export default function Switch({ checked, onChange, label, disabled }: SwitchPro
       <motion.span
         className="switch__track"
         aria-hidden
-        animate={{ backgroundColor: checked ? 'var(--accent)' : 'var(--line-strong)' }}
+        animate={{ backgroundColor: checked ? 'var(--primary-bg)' : 'var(--line-strong)' }}
         transition={{ duration: 0.18 }}
       >
-        <motion.span className="switch__knob" animate={{ x: checked ? 16 : 0 }} transition={spring} />
+        <motion.span className="switch__knob" animate={{ x: checked ? 14 : 0 }} transition={spring} />
       </motion.span>
       {label && <span className="switch__label">{label}</span>}
     </motion.label>

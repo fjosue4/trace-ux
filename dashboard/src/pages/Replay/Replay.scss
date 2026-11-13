@@ -24,7 +24,7 @@
     border-radius: $radius-pill;
     background: $surface-2;
 
-    > span { display: block; height: 100%; border-radius: inherit; background: $accent; transition: width $duration-fast $ease-out; }
+    > span { display: block; height: 100%; border-radius: inherit; background: $ink-2; transition: width $duration-fast $ease-out; }
     &.is-indeterminate > span { position: absolute; width: 35%; animation: session-export-indeterminate 1.2s ease-in-out infinite; }
   }
 }
@@ -43,10 +43,18 @@
   .session-export__head { align-items: flex-start; flex-direction: column; }
 }
 
-/* Public token replay keeps the current player, without the authenticated
-   dashboard shell. Keep the intro explicit so it remains readable in either
-   theme and preserve the Trace UX casing. */
-.share-replay-page { color: $ink; }
+/* Public token replay: the same player, drawn on the dashboard's inset
+   panel (there is no sidebar here) under a small branded header. */
+.share-replay-page {
+  color: $ink;
+  width: auto;
+  margin: 8px;
+  min-height: calc(100dvh - 16px);
+  padding: 1.25rem clamp(1rem, 2.5vw, 2rem) 1.5rem;
+  background: $surface;
+  border: 1px solid $line;
+  border-radius: $radius-lg;
+}
 .share-replay-intro,
 .share-replay-layout { width: 100%; margin-inline: auto; }
 .share-replay-player {
@@ -54,22 +62,40 @@
   min-width: 0;
   min-height: 0;
 }
-.share-replay-intro { margin-bottom: 1.25rem; }
-.share-replay-eyebrow {
-  margin: 0 0 0.45rem;
-  color: $accent;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  line-height: 1.35;
+
+.share-replay-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  margin-bottom: 1.25rem;
 }
-.share-replay-intro h1 { color: $ink; }
-.share-replay-intro .muted { color: $muted; }
+.share-replay-brand { display: flex; align-items: center; height: 26px; }
+.share-replay-logo { height: 100%; }
+.share-replay-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.75rem 1.5rem;
+  flex-wrap: wrap;
+
+  h1 { color: $ink; }
+}
+.share-replay-sub { margin: 0.3rem 0 0; color: $muted; font-size: 0.875rem; max-width: 60ch; }
+.share-replay-tag {
+  flex: none;
+  padding: 0.15rem 0.5rem;
+  border-radius: 5px;
+  background: $surface-2;
+  color: $ink-2;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
 
 .share-replay-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(320px, 22vw, 400px);
-  gap: 1.2rem;
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 24vw, 380px);
+  gap: 1rem;
   align-items: stretch;
   flex: 1;
   min-height: 0;
@@ -93,28 +119,30 @@
   }
 }
 
+/* Wide screens: the page is exactly one screen tall and the player fills it. */
 @media (min-width: 961px) {
   .page.page--wide.share-replay-page {
-    width: 100%;
-    height: 100dvh;
-    min-height: 680px;
-    padding: 1.75rem clamp(2rem, 4vw, 5rem) 2rem;
+    height: calc(100dvh - 16px);
+    min-height: 640px;
     overflow: hidden;
   }
 
-  .share-replay-intro {
-    flex: none;
-    margin-bottom: 1rem;
-  }
+  .share-replay-intro { flex: none; }
 }
 
 @media (max-width: 960px) {
   .share-replay-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     flex: none;
   }
 
   .share-replay-player .player-frame { height: auto; }
+}
+
+@media (max-width: 520px) {
+  .share-replay-page { margin: 6px; padding: 1rem 0.85rem 1.25rem; }
+  .share-replay-intro { gap: 0.9rem; margin-bottom: 1rem; }
+  .share-replay-heading { align-items: flex-start; flex-direction: column-reverse; }
 }
 
 /* The replay page uses a slightly tighter bottom edge around the player. */
@@ -197,7 +225,7 @@ $export-ai-fill: #4f46e5, #7c3aed, #2563eb, #0e7490;
     &::before { opacity: 1; animation-play-state: running; }
   }
 
-  &:focus-visible { outline: 2px solid $accent; outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid $ink-2; outline-offset: 2px; }
 
   // Busy or disabled: the ring holds where it is instead of snapping back.
   &:disabled { animation-play-state: paused; }

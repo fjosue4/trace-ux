@@ -41,7 +41,7 @@ export default function UserRow({ user, currentUsername, onEvent, onChanged }: U
         {user.username}
         {user.role === 'admin' && (
           <span className="badge-row">
-            <Badge tone="accent">admin</Badge>
+            <Badge tone="neutral">admin</Badge>
           </span>
         )}
       </td>

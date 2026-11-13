@@ -1,4 +1,5 @@
-// Flat application rail: structure comes from a divider, not a floating card.
+// Application rail on the page colour, beside the inset panel. Groups are
+// labelled in small muted text; the active page is a raised row, not a bar.
 @use 'abstracts' as *;
 
 .sidebar {
@@ -10,50 +11,57 @@
   margin: 0;
   display: flex;
   flex-direction: column;
-  padding: 1.25rem 0.75rem 1rem;
-  background: $bg;
-  border-right: 1px solid $line;
+  padding: 1rem 0.65rem 0.85rem;
+  background: $page-bg;
+  overflow-y: auto;
 
   &__brand {
     display: flex;
     align-items: center;
     color: $ink;
-    padding: 0.15rem 0.65rem 1.1rem;
+    padding: 0.2rem 0.6rem 0.75rem;
   }
-  &__logo { width: 112px; height: auto; }
+  &__logo { width: 104px; height: auto; }
 
-  &__nav { display: flex; flex-direction: column; gap: 0.12rem; }
+  &__nav { display: flex; flex-direction: column; gap: 1px; }
   &__mobile-nav { display: none; }
+
+  &__group {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    margin-top: 0.5rem;
+  }
+  &__group-label {
+    padding: 0.55rem 0.65rem 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: $muted;
+  }
 
   &__link {
     display: flex;
     align-items: center;
     gap: 0.6rem;
     position: relative;
-    min-height: 38px;
-    padding: 0.55rem 0.75rem;
+    min-height: 32px;
+    padding: 0.35rem 0.65rem;
     border-radius: $radius-sm;
-    color: $muted;
-    font-weight: 600;
-    font-size: 0.92rem;
+    color: $ink-2;
+    font-weight: 500;
+    font-size: 0.88rem;
     transition: background-color $duration-fast $ease-out,
-      color $duration-fast $ease-out;
+      color $duration-fast $ease-out, box-shadow $duration-fast $ease-out;
 
-    &:hover { background: $surface-2; color: $ink; }
+    svg { color: $muted; transition: color $duration-fast $ease-out; }
+
+    &:hover { background: color-mix(in srgb, #{$ink} 5%, transparent); color: $ink; }
     &.is-active {
-      background: $surface-2;
+      background: $surface;
       color: $ink;
+      box-shadow: 0 0 0 1px $line, $shadow-sm;
 
-      &::before {
-        content: '';
-        position: absolute;
-        left: -0.75rem;
-        top: 8px;
-        bottom: 8px;
-        width: 2px;
-        border-radius: 0 2px 2px 0;
-        background: $accent;
-      }
+      svg { color: $ink; }
     }
   }
 
@@ -61,9 +69,9 @@
     margin-top: auto;
     display: flex;
     flex-direction: column;
-    gap: 0.65rem;
-    padding-top: 0.9rem;
-    border-top: 1px solid $line;
+    gap: 0.6rem;
+    padding-top: 0.8rem;
+    border-top: 1px solid $line-strong;
   }
 
   &__theme-control {
@@ -71,9 +79,9 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.55rem;
-    font-size: 0.88rem;
+    font-size: 0.82rem;
     color: $muted;
-    padding: 0 0.7rem;
+    padding: 0 0.6rem;
   }
 
   &__user {
@@ -81,12 +89,19 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
-    padding: 0 0.7rem;
-    font-size: 0.88rem;
+    padding: 0 0.25rem 0 0.6rem;
     min-width: 0;
-
-    .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   }
+  &__user-text { display: flex; flex-direction: column; min-width: 0; }
+  &__user-name {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: $ink;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  &__user-role { font-size: 0.75rem; color: $muted; }
 }
 
 /* Narrow screens: the panel docks as a horizontal strip on top. */
@@ -200,7 +215,7 @@
       font-weight: 600;
 
       &:hover { background: $surface-3; }
-      &.is-active { color: $accent; background: $accent-soft; }
+      &.is-active { color: $ink; background: $surface-3; }
     }
     &__footer { margin-left: auto; padding: 0; }
     &__theme-control {

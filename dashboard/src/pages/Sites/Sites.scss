@@ -1,4 +1,3 @@
-// Sites list: one row per project inside a single card.
-// No padding + overflow clip so row hover backgrounds fill the full card
-// height and stay inside the rounded corners.
-.card.site-list { padding: 0; overflow: hidden; }
+// Sites list: a flush table on the page panel; rows size their columns to
+// content and the Setup column takes what is left.
+.sites-table .table td { padding-top: 0.75rem; padding-bottom: 0.75rem; }

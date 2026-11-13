@@ -18,7 +18,7 @@
   align-items: start;
 }
 @media (max-width: 960px) {
-  .replay-grid { grid-template-columns: 1fr; }
+  .replay-grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (min-width: 961px) {
@@ -48,37 +48,37 @@
 }
 
 .player-frame {
-  --player-shell: #edf3ee;
+  --player-shell: #f4f4f2;
   --player-panel: #ffffff;
-  --player-panel-strong: #f2f6f3;
-  --player-ink: #17251c;
-  --player-muted: #6e7d73;
-  --player-line: rgba(23, 37, 28, 0.12);
-  --player-line-strong: rgba(23, 37, 28, 0.2);
-  --player-track: #d8e3db;
-  --player-inactive: rgba(116, 132, 121, 0.38);
-  --player-accent: #{$accent};
+  --player-panel-strong: #efefec;
+  --player-ink: #141414;
+  --player-muted: #76766f;
+  --player-line: rgba(20, 20, 20, 0.09);
+  --player-line-strong: rgba(20, 20, 20, 0.16);
+  --player-track: #e2e2de;
+  --player-inactive: rgba(120, 120, 114, 0.32);
+  --player-accent: var(--primary-bg);
   position: relative;
   isolation: isolate;
   overflow: hidden;
   background: var(--player-shell);
   border: 1px solid var(--player-line-strong);
   border-radius: 22px;
-  box-shadow: 0 22px 55px -38px rgb(20 48 29 / 0.58);
+  box-shadow: 0 22px 55px -38px rgb(0 0 0 / 0.4);
   transition: border-color $duration-fast $ease-out, box-shadow $duration-fast $ease-out;
 }
-.player-frame:hover { border-color: $accent; box-shadow: 0 26px 64px -38px $accent-glow; }
+.player-frame:hover { border-color: $faint; box-shadow: 0 26px 64px -38px rgb(0 0 0 / 0.45); }
 
 :root[data-theme='dark'] .player-frame {
-  --player-shell: #18291f;
-  --player-panel: #1d3025;
-  --player-panel-strong: #263c2e;
-  --player-ink: #f1f8f2;
-  --player-muted: #adbdaf;
-  --player-line: rgba(225, 245, 229, 0.12);
-  --player-line-strong: rgba(225, 245, 229, 0.22);
-  --player-track: #3d5747;
-  --player-inactive: rgba(196, 214, 200, 0.32);
+  --player-shell: #161617;
+  --player-panel: #1d1d1f;
+  --player-panel-strong: #28282a;
+  --player-ink: #ededea;
+  --player-muted: #9a9a94;
+  --player-line: rgba(255, 255, 255, 0.08);
+  --player-line-strong: rgba(255, 255, 255, 0.15);
+  --player-track: #3a3a3d;
+  --player-inactive: rgba(200, 200, 194, 0.26);
   box-shadow: 0 26px 64px -36px rgb(0 0 0 / 0.95);
 }
 
@@ -228,7 +228,7 @@ button.browser-bar__light {
   display: grid;
   flex-shrink: 0;
   place-items: center;
-  color: var(--player-accent);
+  color: var(--player-muted);
 }
 
 .browser-tab__title {
@@ -447,11 +447,11 @@ button.browser-tab__close {
   place-items: center;
   border-radius: 50%;
   background: var(--player-accent);
-  color: $on-accent;
-  box-shadow: 0 10px 24px -8px $accent-glow, 0 0 0 10px $accent-soft;
+  color: $primary-fg;
+  box-shadow: 0 10px 24px -8px rgb(0 0 0 / 0.2), 0 0 0 10px $focus-ring;
   transition: box-shadow $duration-fast $ease-out;
 }
-.player-cover:hover .player-cover__btn { box-shadow: 0 14px 30px -8px $accent-glow, 0 0 0 12px $accent-soft; }
+.player-cover:hover .player-cover__btn { box-shadow: 0 14px 30px -8px rgb(0 0 0 / 0.2), 0 0 0 12px $focus-ring; }
 .player-cover__label { font-size: 0.85rem; font-weight: 700; letter-spacing: 0; }
 
 /* Custom chrome keeps the skip-inactive action interactive while rrweb is
@@ -542,7 +542,7 @@ button.browser-tab__close {
   background: var(--player-accent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--player-accent) 58%, transparent), 0 3px 8px rgb(0 0 0 / 0.24);
 }
-.replay-timeline__input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px $accent-soft, 0 3px 8px rgb(0 0 0 / 0.24); }
+.replay-timeline__input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px $focus-ring, 0 3px 8px rgb(0 0 0 / 0.24); }
 
 .replay-controls__toolbar {
   display: flex;
@@ -570,8 +570,8 @@ button.browser-tab__close {
   cursor: wait;
   transform: none;
 }
-.replay-control-btn--play { color: $on-accent; background: var(--player-accent); box-shadow: 0 6px 14px -8px $accent-glow; }
-.replay-control-btn--play:hover { color: $on-accent; background: $accent-strong; border-color: transparent; }
+.replay-control-btn--play { color: $primary-fg; background: var(--player-accent); box-shadow: 0 6px 14px -8px rgb(0 0 0 / 0.2); }
+.replay-control-btn--play:hover { color: $primary-fg; background: $primary-bg-hover; border-color: transparent; }
 .replay-control-btn--utility { margin-left: auto; }
 .replay-controls__group { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
 .replay-controls__label {
@@ -605,7 +605,7 @@ button.browser-tab__close {
   transition: background-color $duration-fast $ease-out, color $duration-fast $ease-out, box-shadow $duration-fast $ease-out;
 }
 .replay-speed__option:hover { color: var(--player-ink); }
-.replay-speed__option.is-active { color: $on-accent; background: var(--player-accent); box-shadow: 0 2px 8px -5px $accent-glow; }
+.replay-speed__option.is-active { color: $primary-fg; background: var(--player-accent); box-shadow: 0 2px 8px -5px rgb(0 0 0 / 0.2); }
 
 .replay-skip {
   display: inline-flex;
@@ -625,7 +625,7 @@ button.browser-tab__close {
 .replay-skip.is-active { color: var(--player-ink); border-color: color-mix(in srgb, var(--player-accent) 42%, var(--player-line)); }
 .replay-skip.is-skipping { border-color: var(--player-accent); }
 .replay-skip__icon { width: 1.35rem; height: 1.35rem; display: grid; place-items: center; color: var(--player-muted); background: var(--player-panel-strong); border-radius: 0.45rem; }
-.replay-skip.is-active .replay-skip__icon { color: $on-accent; background: var(--player-accent); }
+.replay-skip.is-active .replay-skip__icon { color: $primary-fg; background: var(--player-accent); }
 .replay-skip__copy { display: flex; align-items: baseline; gap: 0.35rem; min-width: 0; }
 .replay-skip__label { font-size: 0.76rem; font-weight: 650; white-space: nowrap; }
 .replay-skip__state { color: var(--player-muted); font-size: 0.68rem; white-space: nowrap; }
@@ -679,7 +679,7 @@ button.browser-tab__close {
   color: $muted;
 }
 .meta-block__value { font-size: 0.92rem; font-weight: 600; word-break: break-all; }
-.meta-block__value a { color: $accent; }
+.meta-block__value a { color: $ink; }
 .meta-block__value a:hover { text-decoration: underline; }
 
 /* clickable action timeline */
@@ -702,7 +702,7 @@ button.browser-tab__close {
     border-color $duration-fast $ease-out;
 }
 .page-row:hover { background: $surface-2; }
-.page-row.is-active { background: $accent-soft; border-color: color-mix(in srgb, #{$accent} 35%, transparent); }
+.page-row.is-active { background: $surface-3; border-color: color-mix(in srgb, #{$ink} 35%, transparent); }
 
 .page-row__num {
   flex: none;
@@ -717,7 +717,7 @@ button.browser-tab__close {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.page-row.is-active .page-row__num { background: $accent; color: $on-accent; }
+.page-row.is-active .page-row__num { background: $ink; color: $primary-fg; }
 
 .page-row__body { display: flex; flex-direction: column; gap: 0.05rem; min-width: 0; }
 .page-row__url {
@@ -785,20 +785,20 @@ button.browser-tab__close {
   transition: color $duration-fast $ease-out, background-color $duration-fast $ease-out, border-color $duration-fast $ease-out;
 }
 .action-row__button:hover { color: $ink; background: $surface-2; border-color: $line; }
-.action-row__button--seek { color: $accent; }
-.action-row__button--seek:hover { color: $on-accent; background: $accent; border-color: $accent; }
+.action-row__button--seek { color: $ink; }
+.action-row__button--seek:hover { color: $primary-fg; background: $ink; border-color: $ink; }
 .action-row__num {
   align-self: center;
   margin-top: 0;
-  background: $accent-soft;
-  color: $accent;
+  background: $surface-3;
+  color: $ink;
 }
 .action-row__num > svg { display: block; }
 .action-row--log .action-row__num { background: $surface-2; color: $muted; }
 .action-row__num--error { color: $danger !important; background: $danger-soft !important; }
-.action-row__num--warn { color: $accent-strong !important; background: $accent-soft !important; }
+.action-row__num--warn { color: $warn !important; background: $warn-soft !important; }
 .action-row.is-active .action-row__num,
-.action-row:hover .action-row__num { background: $accent; color: $on-accent; }
+.action-row:hover .action-row__num { background: $ink; color: $primary-fg; }
 .action-row--log-error.is-active .action-row__num,
 .action-row--log-error:hover .action-row__num { background: $danger; color: #fff; }
 .action-row__title { display: flex; align-items: flex-start; gap: 0.38rem; }
@@ -816,9 +816,9 @@ button.browser-tab__close {
   text-transform: uppercase;
 }
 .action-row__severity--error { color: $danger; background: $danger-soft; }
-.action-row__severity--warn { color: $accent-strong; background: $accent-soft; }
+.action-row__severity--warn { color: $warn; background: $warn-soft; }
 .action-row__meta { display: flex; align-items: center; gap: 0.12rem; }
-.action-row__offset { flex: none; color: $accent; font-variant-numeric: tabular-nums; font-weight: 700; }
+.action-row__offset { flex: none; color: $ink; font-variant-numeric: tabular-nums; font-weight: 700; }
 .action-row__local-time { flex: none; }
 
 .action-log-detail__meta { display: flex; align-items: center; gap: 0.6rem; }
@@ -829,7 +829,7 @@ button.browser-tab__close {
   overflow: auto;
   word-break: break-word;
 }
-.action-log-detail__url { display: block; color: $accent; word-break: break-all; }
+.action-log-detail__url { display: block; color: $ink; word-break: break-all; }
 
 @media (min-width: 961px) {
   .actions-list { max-height: min(18rem, 25vh); }
@@ -911,8 +911,8 @@ button.browser-tab__close {
   &:hover:not(:focus) { border-color: $line-strong; }
   &:focus {
     outline: none;
-    border-color: $accent;
-    box-shadow: 0 0 0 3px $accent-soft;
+    border-color: $ink;
+    box-shadow: 0 0 0 3px $focus-ring;
   }
   // Replaced by .actions-search__clear, which sits flush with the field's
   // right edge and shares its spot with the pending spinner.
@@ -937,7 +937,7 @@ button.browser-tab__close {
   transition: background-color $duration-fast $ease-out, color $duration-fast $ease-out;
 
   &:hover { background: $surface-2; color: $ink; }
-  &:focus-visible { outline: 2px solid $accent; outline-offset: 1px; }
+  &:focus-visible { outline: 2px solid $ink; outline-offset: 1px; }
 }
 
 .actions-empty.is-stale { opacity: 0.5; }
@@ -961,24 +961,24 @@ button.browser-tab__close {
 }
 .action-row:hover { background: $surface-2; }
 .action-row:focus-visible {
-  outline: 2px solid $accent;
+  outline: 2px solid $ink;
   outline-offset: -2px;
 }
 /* The playhead's current action: a full 1px accent border so the row reads as
    one object while the feed scrolls past it. */
 .action-row.is-active {
-  background: $accent-soft;
-  border: 1px solid $accent;
+  background: $surface-3;
+  border: 1px solid $ink;
 }
 .action-row__button { cursor: pointer; }
 
 .action-row__severity--page {
-  color: $accent;
-  background: color-mix(in srgb, #{$accent} 14%, transparent);
+  color: $ink;
+  background: color-mix(in srgb, #{$ink} 14%, transparent);
 }
 .action-row--page .action-row__num {
-  color: $accent;
-  background: color-mix(in srgb, #{$accent} 14%, transparent);
+  color: $ink;
+  background: color-mix(in srgb, #{$ink} 14%, transparent);
 }
 .action-row--page .action-row__message { font-weight: 600; }
 
@@ -1039,7 +1039,7 @@ button.browser-tab__close {
   background: $surface-2;
   border-color: $line-strong;
 }
-.replay-meta-show:focus-visible { outline: 2px solid $accent; outline-offset: 2px; }
+.replay-meta-show:focus-visible { outline: 2px solid $ink; outline-offset: 2px; }
 
 /* Row 1: entry + referrer. Row 2: the six short device/geometry facts.
    Keyed to the strip's own width, not the viewport's: this column is narrow

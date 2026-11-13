@@ -1,6 +1,17 @@
 .app { display: flex; min-height: 100vh; background: var(--page-bg); }
-.app__main { flex: 1; min-width: 0; overflow: clip; }
+/* The inset panel: one surface with a hairline edge, beside the sidebar. */
+.app__main {
+  flex: 1;
+  min-width: 0;
+  margin: 8px 8px 8px 0;
+  min-height: calc(100vh - 16px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  overflow: clip;
+}
 
 @media (max-width: 860px) {
   .app { flex-direction: column; }
+  .app__main { margin: 8px; }
 }

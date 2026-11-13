@@ -1,46 +1,50 @@
 // Global utility classes: `.btn`/`.btn--*` are also applied directly to
 // plain <Link> elements across the app, not only through <Button>. Kept as
 // plain global CSS (not a CSS module) so those class names keep resolving.
+//
+// Primary is ink, not green: one dark button per view says "this is the
+// action", and green stays free to mean live / positive.
 @use 'abstracts' as *;
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
+  gap: 0.4rem;
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
   border-radius: $radius-sm;
   border: 1px solid transparent;
   cursor: pointer;
   white-space: nowrap;
   transition: background-color $duration-fast $ease-out,
     border-color $duration-fast $ease-out, color $duration-fast $ease-out,
-    box-shadow $duration-fast $ease-out;
+    box-shadow $duration-fast $ease-out, transform $duration-fast $ease-out;
 
+  &:active:not(:disabled) { transform: scale(0.98); }
   &:disabled { opacity: 0.55; cursor: default; }
 
-  &--md { height: 40px; padding: 0 1.1rem; font-size: 0.9rem; }
-  &--sm { height: 32px; padding: 0 0.85rem; font-size: 0.82rem; }
+  &--md { height: 34px; padding: 0 0.85rem; font-size: 0.875rem; }
+  &--sm { height: 28px; padding: 0 0.65rem; font-size: 0.82rem; }
   &--block { width: 100%; }
 
   &--primary {
-    background: $accent;
-    color: $on-accent;
-    &:hover:not(:disabled) { background: $accent-strong; }
+    background: $primary-bg;
+    color: $primary-fg;
+    &:hover:not(:disabled) { background: $primary-bg-hover; }
   }
 
   &--secondary {
     background: $surface;
-    border-color: $line;
+    border-color: $line-strong;
     color: $ink;
-    &:hover:not(:disabled) { background: $surface-2; border-color: $line-strong; }
+    &:hover:not(:disabled) { background: $hover; border-color: $faint; }
   }
 
   &--ghost {
     background: transparent;
-    color: $muted;
-    &:hover:not(:disabled) { background: $surface-2; color: $ink; }
+    color: $ink-2;
+    &:hover:not(:disabled) { background: $surface-3; color: $ink; }
   }
 
   &--danger {

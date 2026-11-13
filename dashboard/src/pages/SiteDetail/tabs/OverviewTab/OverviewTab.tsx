@@ -2,8 +2,8 @@ import { CSSProperties, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { FrequentError } from '../../../../api';
 import { fmtDuration, fmtTime, stripProto, truncate } from '../../../../lib/format';
-import Card from '../../../../components/ui/Card';
 import EmptyState from '../../../../components/ui/EmptyState';
+import StatStrip from '../../../../components/ui/StatStrip';
 import { Icon } from '../../../../components/ui/Icon';
 import { OverviewTabProps } from './OverviewTab.types';
 import { FrequentErrorModal } from './FrequentErrorModal';
@@ -14,23 +14,23 @@ export function OverviewTab({ site, sessions, feedback, stats, frequentErrors, f
 
   return (
     <>
-      <div className="hub-stats">
-        <Card className="hub-stat">
-          <span className="hub-stat__label">Recordings</span>
-          <strong className="hub-stat__num">{site.session_count}</strong>
-        </Card>
-        <Card className="hub-stat">
-          <span className="hub-stat__label">Feedback responses</span>
-          <strong className="hub-stat__num">{stats.feedback_count}</strong>
-        </Card>
-        <Card className="hub-stat">
-          <span className="hub-stat__label">Positive feedback</span>
-          <strong className="hub-stat__num">{stats.feedback_count > 0 ? `${Math.round(stats.positive_pct)}%` : '—'}</strong>
-          <span className="muted small">
-            {stats.feedback_count > 0 ? `avg ${stats.avg_rating.toFixed(1)}` : 'no responses yet'}
-          </span>
-        </Card>
-      </div>
+      <StatStrip
+        items={[
+          { label: 'Recordings', value: site.session_count.toLocaleString(), detail: 'recorded sessions' },
+          { label: 'Feedback responses', value: stats.feedback_count.toLocaleString(), detail: 'from the widget' },
+          {
+            label: 'Positive feedback',
+            value: stats.feedback_count > 0 ? `${Math.round(stats.positive_pct)}%` : '—',
+            detail: stats.feedback_count > 0 ? `average ${stats.avg_rating.toFixed(1)}` : 'No responses yet',
+          },
+          {
+            label: 'Top errors · 7 days',
+            value: frequentErrors.reduce((n, e) => n + e.count, 0).toLocaleString(),
+            detail: frequentErrors.length > 0 ? `${frequentErrors.length} distinct messages` : 'No errors captured',
+            tone: frequentErrors.length > 0 ? 'danger' : undefined,
+          },
+        ]}
+      />
 
       <div className="hub-grid">
         <div className="hub-col">

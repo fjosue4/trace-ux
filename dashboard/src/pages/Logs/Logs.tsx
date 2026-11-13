@@ -89,10 +89,6 @@ export default function Logs() {
         subtitle="Monitor browser and service logs in one searchable stream."
         actions={
           <div className="logs-live-control">
-            <span className={`logs-live-state${live ? ' is-live' : ''}`}>
-              <span className="logs-live-dot" />
-              {live ? 'Live' : 'Paused'}
-            </span>
             <Switch checked={live} onChange={setLive} label="Auto-refresh" />
           </div>
         }
@@ -120,14 +116,18 @@ export default function Logs() {
               {logs ? `${logs.length.toLocaleString()} loaded` : 'Loading'} · {LOG_PAGE_SIZE.toLocaleString()} per request
               {lastUpdated > 0 && ` · updated ${fmtClock(Math.floor(lastUpdated / 1000))}`}
             </span>
-            {summary.length > 0 && <LogsSummary summary={summary} />}
-            <Button variant="ghost" size="sm" onClick={copyLink}>
-              <Icon name={linkCopied ? 'check' : 'copy'} size={13} />
-              {linkCopied ? 'Copied' : 'Copy link'}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => setRefreshNonce((value) => value + 1)}>
-              Refresh
-            </Button>
+            <div className="logs-foot-end">
+              {summary.length > 0 && <LogsSummary summary={summary} />}
+              <div className="logs-foot-actions">
+                <Button variant="ghost" size="sm" onClick={copyLink}>
+                  <Icon name={linkCopied ? 'check' : 'copy'} size={13} />
+                  {linkCopied ? 'Copied' : 'Copy link'}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setRefreshNonce((value) => value + 1)}>
+                  Refresh
+                </Button>
+              </div>
+            </div>
           </>
         )}
       >

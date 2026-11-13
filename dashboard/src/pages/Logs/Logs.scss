@@ -2,8 +2,10 @@
 
 .logs-summary {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
+  row-gap: 0.25rem;
   min-width: 0;
   margin-left: auto;
 
@@ -19,75 +21,62 @@
 
   &__label {
     color: $muted;
-    font-size: 0.68rem;
+    font-size: 0.75rem;
     white-space: nowrap;
   }
 
   &__num {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
+    font-weight: 600;
     letter-spacing: 0;
 
     &--error { color: $danger; }
-    &--warn { color: $accent-strong; }
-    &--info { color: var(--text); }
+    &--warn { color: $warn; }
+    &--info { color: $ink; }
     &--debug { color: $muted; }
   }
 }
 
 .logs-live-control { display: flex; align-items: center; gap: 0.9rem; }
 
-.logs-live-state {
-  display: inline-flex;
+// Footer right side: the counts, then the two actions kept together.
+.logs-foot-end {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.42rem;
-  color: $muted;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-
-  &.is-live { color: var(--text); }
+  justify-content: flex-end;
+  gap: 0.35rem 0.75rem;
+  margin-left: auto;
+  min-width: 0;
 }
-
-.logs-live-dot {
-  width: 0.48rem;
-  height: 0.48rem;
-  border-radius: 50%;
-  background: $line-strong;
-}
-
-.logs-live-state.is-live .logs-live-dot {
-  background: var(--success, #38b27f);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--success, #38b27f) 14%, transparent);
-  animation: logs-pulse 1.8s ease-in-out infinite;
-}
-
-@keyframes logs-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.45; }
-}
+.logs-foot-actions { display: flex; align-items: center; gap: 0.25rem; flex: none; }
 
 .logs-controls {
   min-width: 0;
 }
 
-.logs-query-row {
+// Filters wrap onto new rows instead of scrolling sideways: the search takes
+// two tracks, every select one, and the track count follows the width.
+.filter-panel__controls.logs-query-row {
   display: grid;
-  grid-template-columns: minmax(300px, 1.55fr) repeat(5, minmax(95px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   align-items: center;
-  gap: 0.55rem;
-  overflow-x: auto;
-  // overflow-x also clips vertically, so leave room for the 3px focus ring on
-  // every side; the negative margin keeps the row aligned with the panel.
-  padding: 4px;
-  margin: -4px;
+  gap: 0.4rem;
+
+  > .logs-search { grid-column: span 2; }
+  > .select-wrap { max-width: none !important; width: 100% !important; }
+  > .select-wrap > .field-control { width: 100% !important; min-width: 0 !important; }
+}
+
+@media (max-width: 420px) {
+  .logs-query-row > .logs-search { grid-column: 1 / -1; }
 }
 
 .logs-search {
   position: relative;
   display: flex;
   align-items: center;
-  height: 40px;
+  height: 34px;
   min-width: 0;
   overflow: hidden;
   background: $filter-field-bg;
@@ -100,8 +89,8 @@
 
   &:focus-within {
     background: $field-bg-focus;
-    border-color: $accent;
-    box-shadow: 0 0 0 3px $accent-soft;
+    border-color: $ink-2;
+    box-shadow: 0 0 0 3px $focus-ring;
   }
 
   > svg {
@@ -114,8 +103,8 @@
 
   &__input {
     min-width: 0;
-    height: 38px;
-    padding-left: 2.45rem;
+    height: 32px;
+    padding-left: 2.3rem;
     padding-right: 0.6rem;
     background: transparent;
     border: 0;
@@ -163,10 +152,8 @@
     flex-direction: column;
     gap: 0.35rem;
     color: $muted;
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
+    font-size: 0.78rem;
+    font-weight: 500;
   }
 }
 
@@ -179,8 +166,8 @@
 .logs-row {
   cursor: pointer;
 
-  &:hover td { background: $surface-2; }
-  &:focus-visible { outline: 2px solid $accent; outline-offset: -2px; }
+  &:hover td { background: $hover; }
+  &:focus-visible { outline: 2px solid $ink-2; outline-offset: -2px; }
 }
 
 .logs-extra__preview {
@@ -236,17 +223,14 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  color: $accent;
+  color: $ink;
   font-size: 0.82rem;
-  font-weight: 600;
+  font-weight: 500;
 
   &:hover { text-decoration: underline; }
 }
 
 @media (max-width: 700px) {
-  .logs-query-row {
-    grid-template-columns: minmax(300px, 1.55fr) repeat(5, minmax(95px, 1fr));
-  }
   .logs-live-control {
     align-items: flex-start;
     flex-direction: column;
@@ -264,7 +248,7 @@
 }
 
 @media (max-width: 860px) {
-  .log-detail__panes { grid-template-columns: 1fr; }
+  .log-detail__panes { grid-template-columns: minmax(0, 1fr); }
   .log-detail__message,
   .log-detail__extra { max-height: 40vh; min-height: 140px; }
 }

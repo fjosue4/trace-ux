@@ -9,8 +9,9 @@
 body {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.45;
+  font-feature-settings: 'cv11', 'ss03';
   background: var(--page-bg);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
@@ -23,14 +24,14 @@ body {
 
 h1, h2, h3, h4 { margin: 0; color: var(--ink); }
 h1 {
-  font-size: clamp(1.55rem, 2.2vw, 2rem);
-  font-weight: 700;
-  line-height: 1.18;
-  letter-spacing: 0;
+  font-size: 1.4rem;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.022em;
 }
-h2 { font-size: 1.08rem; }
-h3 { font-size: 1rem; }
-h4 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin: 1.2rem 0 0.5rem; }
+h2 { font-size: 1rem; font-weight: 600; letter-spacing: -0.01em; }
+h3 { font-size: 0.92rem; font-weight: 600; }
+h4 { font-size: 0.78rem; font-weight: 500; color: var(--muted); margin: 1.2rem 0 0.5rem; }
 
 p { margin: 0.4rem 0; }
 
@@ -45,9 +46,9 @@ pre {
   overflow-x: auto; margin: 0.6rem 0;
 }
 
-::selection { background: var(--accent); color: var(--on-accent); }
+::selection { background: var(--ink); color: var(--surface); }
 
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+:focus-visible { outline: 2px solid var(--ink-2); outline-offset: 2px; }
 
 /* subtle scrollbars */
 * { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
@@ -64,8 +65,8 @@ pre {
 .icon-btn {
   display: inline-grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border: none;
   border-radius: var(--radius-sm);
   background: none;
@@ -73,18 +74,24 @@ pre {
   cursor: pointer;
   transition: background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out);
 }
-.icon-btn:hover { background: var(--surface-2); color: var(--ink); }
+.icon-btn:hover { background: var(--surface-3); color: var(--ink); }
+.icon-btn--danger:hover { background: var(--danger-soft); color: var(--danger); }
 .icon-btn.is-success { color: var(--success); }
 
 /* ---- layout primitives ---- */
+/* Every page is drawn on one inset panel beside the sidebar (App.css). */
 .page {
   width: 100%;
-  min-height: 100vh;
+  min-height: calc(100vh - 18px);
   margin: 0;
-  padding: 2rem clamp(1rem, 2.5vw, 2.5rem) 4rem;
+  padding: 1.75rem clamp(1rem, 2.2vw, 2rem) 3rem;
   display: flex;
   flex-direction: column;
 }
+
+/* Nothing on a page may be wider than the page: wide content (tables, code)
+   scrolls inside its own box instead of pushing the panel off-screen. */
+.page > * { min-width: 0; max-width: 100%; }
 
 /* Direct page-level empty states consume the remaining viewport after headers,
    filters and notices. Nested empty states center within their own panel. */

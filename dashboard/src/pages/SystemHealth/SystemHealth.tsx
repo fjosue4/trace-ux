@@ -95,7 +95,7 @@ export default function SystemHealth() {
           <Row label="Available" value={ram.total_bytes > 0 ? fmtBytes(ram.available_bytes) : 'n/a'} />
           <div className="health-row">
             <span className="muted small">TraceUX (RSS)</span>
-            <Badge tone="accent">{fmtBytes(ram.trace_ux_bytes)}</Badge>
+            <Badge tone="neutral">{fmtBytes(ram.trace_ux_bytes)}</Badge>
           </div>
           {ram.mem_limit_bytes > 0 && (
             <Row label="Soft memory cap" value={fmtBytes(ram.mem_limit_bytes)} />
@@ -111,7 +111,7 @@ export default function SystemHealth() {
           <CoreMeter cores={cores} coresUsed={cpuCoresUsed} hot={cpuMachinePct >= 80} />
           <div className="health-row">
             <span className="muted small">TraceUX</span>
-            <Badge tone="accent">{cpuCoresUsed.toFixed(1)} of {cpu.cores} cores</Badge>
+            <Badge tone="neutral">{cpuCoresUsed.toFixed(1)} of {cpu.cores} cores</Badge>
           </div>
           <Row label="Load (1m)" value={cpu.load1.toFixed(2)} />
           <Row label="Load (5m)" value={cpu.load5.toFixed(2)} />
@@ -130,7 +130,7 @@ export default function SystemHealth() {
           <Row label="Free" value={disk.total_bytes > 0 ? fmtBytes(disk.free_bytes) : 'n/a'} />
           <div className="health-row">
             <span className="muted small">TraceUX data</span>
-            <Badge tone="accent">{fmtBytes(disk.trace_ux_bytes)}</Badge>
+            <Badge tone="neutral">{fmtBytes(disk.trace_ux_bytes)}</Badge>
           </div>
           <Row label="Data dir" value={disk.data_dir} mono={false} truncate="start" />
         </Card>

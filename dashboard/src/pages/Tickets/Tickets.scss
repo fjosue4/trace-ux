@@ -80,7 +80,7 @@
     transition: color $duration-fast $ease-out, border-color $duration-fast $ease-out;
 
     &:hover { color: $ink; }
-    &:focus-visible { outline: 2px solid $accent; outline-offset: 2px; border-radius: 2px; }
+    &:focus-visible { outline: 2px solid $ink-2; outline-offset: 2px; border-radius: 2px; }
     &.is-active { color: $ink; border-bottom-color: $ink; }
   }
 
@@ -108,8 +108,6 @@
     color: $muted;
     font-size: 0.7rem;
     font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
 
     span { font-weight: 500; letter-spacing: 0; font-variant-numeric: tabular-nums; }
     &.is-attention { color: $warn; }
@@ -132,7 +130,7 @@
   transition: background-color $duration-fast $ease-out;
 
   &:hover { background: $surface-2; }
-  &:focus-visible { outline: 2px solid $accent; outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid $ink-2; outline-offset: -2px; }
   // Selection is a quiet fill with a neutral edge, not a second accent.
   &.is-selected { background: $surface-2; box-shadow: inset 2px 0 0 $ink; }
 
@@ -143,16 +141,7 @@
     min-width: 0;
 
     .badge { flex: none; margin-left: auto; white-space: nowrap; }
-  }
-
-  // Amber, and a dot rather than a stripe: "someone is waiting" is a fact
-  // about the ticket, separate from which row is selected.
-  &__flag {
-    flex: none;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: $warn;
+    .badge + .badge { margin-left: 0; }
   }
 
   &__subject {
@@ -254,7 +243,7 @@
     cursor: pointer;
 
     &:hover { background: $surface-2; color: $ink; }
-    &:focus-visible { outline: 2px solid $accent; outline-offset: 1px; }
+    &:focus-visible { outline: 2px solid $ink-2; outline-offset: 1px; }
   }
 }
 

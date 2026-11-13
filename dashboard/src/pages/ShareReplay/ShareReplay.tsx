@@ -1,5 +1,6 @@
 import Loading from '../../components/ui/Loading';
-import Notice from '../../components/ui/Notice';
+import EmptyState from '../../components/ui/EmptyState';
+import Logo from '../../components/ui/Logo';
 import PagesPanel from '../../components/replay/PagesPanel';
 import ReplayPlayer from '../../components/replay/ReplayPlayer';
 import { useShareReplay } from './hooks/useShareReplay';
@@ -13,13 +14,20 @@ export default function ShareReplay() {
 
   return (
     <main className="page page--wide share-replay-page">
-      <div className="share-replay-intro">
-        <p className="share-replay-eyebrow">Temporary Trace UX demo replay</p>
-        <h1>Your visit</h1>
-        <p className="muted">This private demo link is limited to this recording and expires automatically.</p>
-      </div>
+      <header className="share-replay-intro">
+        <div className="share-replay-brand">
+          <Logo className="share-replay-logo" title="TraceUX" />
+        </div>
+        <div className="share-replay-heading">
+          <div>
+            <h1>Your visit</h1>
+            <p className="share-replay-sub">This private demo link is limited to this recording and expires automatically.</p>
+          </div>
+          <span className="share-replay-tag">Temporary demo replay</span>
+        </div>
+      </header>
       {error ? (
-        <Notice tone="error">{error}</Notice>
+        <EmptyState title="This replay isn't available" description={error} />
       ) : !session ? (
         <Loading label={progress} />
       ) : (
