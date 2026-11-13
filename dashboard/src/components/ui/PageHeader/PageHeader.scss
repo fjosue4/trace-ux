@@ -4,14 +4,14 @@
 
 .page-head {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
   flex-wrap: wrap;
 
-  &__sub { margin: 0.35rem 0 0; color: $muted; font-size: 0.9rem; max-width: 72ch; }
-  &__actions { display: flex; gap: 0.6rem; align-items: center; }
+  &__sub { margin: 0.3rem 0 0; color: $muted; font-size: 0.875rem; max-width: 72ch; }
+  &__actions { display: flex; gap: 0.5rem; align-items: center; }
   &__lead { display: flex; align-items: center; gap: 0.75rem; min-width: 0; }
 }
 

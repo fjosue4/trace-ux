@@ -1,42 +1,39 @@
 // Kept as plain global CSS (not a CSS module): `.table-wrap`/`.table` are
 // targeted by other pages' stylesheets (Sessions.css) as descendant selectors.
+//
+// Tables sit flush on the page panel: hairline rows, sentence-case headers,
+// no outer box. Column helpers let a table size each column to its content:
+//   .col-fit  shrinks to its content and never wraps
+//   .col-nowrap never wraps, but shares any spare width with its neighbours
+//   .col-fill takes the remaining width and truncates inside
+//   .col-end  right-aligns (numbers, actions)
 @use 'abstracts' as *;
 
 .table-wrap {
-  background: $surface;
-  border: 1px solid $line;
-  border-radius: $radius-lg;
   overflow-x: auto;
   overflow-y: hidden;
-  transition: border-color $duration-fast $ease-out;
-
-  &:hover { border-color: $line-strong; }
 }
 
 .table {
   width: 100%;
-  border-collapse: separate;
+  border-collapse: collapse;
   border-spacing: 0;
   font-size: 0.875rem;
 
   &--fixed {
     table-layout: fixed;
 
-    th, td { padding-left: 0.8rem; padding-right: 0.8rem; }
     // A header wider than its column truncates instead of spilling into the
     // next one; Table.tsx puts the full label in its title.
     th, td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-    th:last-child, td:last-child { padding-left: 0.3rem; padding-right: 0.6rem; }
   }
 
   th {
     text-align: left;
-    padding: 0.78rem 1.1rem;
-    font-size: 0.65rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
+    height: 36px;
+    padding: 0 0.75rem;
+    font-size: 0.78rem;
+    font-weight: 500;
     color: $muted;
     border-bottom: 1px solid $line;
     white-space: nowrap;
@@ -44,36 +41,63 @@
   }
 
   td {
-    padding: 1rem 1.1rem;
+    padding: 0.65rem 0.75rem;
     border-bottom: 1px solid $line;
     vertical-align: middle;
     line-height: 1.35;
+    transition: background-color $duration-fast $ease-out;
   }
 
+  th:first-child, td:first-child { padding-left: 0.6rem; }
+  th:last-child, td:last-child { padding-right: 0.6rem; }
+
   tbody tr {
-    transition: background-color $duration-fast $ease-out;
     &:last-child td { border-bottom: none; }
-    &:hover { background: $surface-2; }
+    &:hover td { background: $hover; }
   }
 
   tr.is-clickable { cursor: pointer; }
 
+  .col-fit { width: 1%; white-space: nowrap; }
+  .col-nowrap { white-space: nowrap; }
+  .col-fill { max-width: 0; }
+  .col-end { text-align: right; }
+
   .chip {
     display: inline-block;
-    padding: 0.18rem 0.7rem;
-    border-radius: $radius-pill;
+    padding: 0.1rem 0.45rem;
+    border-radius: 5px;
     background: $surface-2;
-    font-size: 0.8rem;
-    font-weight: 700;
+    font-size: 0.78rem;
+    font-weight: 600;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
 }
 
+// Two-line cell: a primary value with quieter detail under it.
+.cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+
+  &__main,
+  &__sub {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  &__main { color: $ink; font-weight: 500; }
+  &__sub { color: $muted; font-size: 0.8rem; }
+}
+
+// Phones: dense tables (six or more columns) keep a readable width and scroll
+// sideways inside their own box; smaller tables simply fit the screen.
 @media (max-width: 640px) {
-  .table-wrap { border-radius: $radius; }
-  .table {
-    min-width: 760px;
-    th, td { padding-top: 0.78rem; padding-bottom: 0.78rem; }
+  .table:has(thead th:nth-child(6)) {
+    min-width: 720px;
   }
 }

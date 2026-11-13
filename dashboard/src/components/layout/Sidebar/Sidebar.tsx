@@ -1,16 +1,50 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
-import Badge from '../../ui/Badge';
-import Button from '../../ui/Button';
 import Logo from '../../ui/Logo';
+import { Icon } from '../../ui/Icon';
 import { ThemeToggle } from './subcomponents/ThemeToggle';
 import { NavItem } from './subcomponents/NavItem';
 import { MobileNavMenu, pathMatches } from './subcomponents/MobileNavMenu';
 import { SidebarNavItem, SidebarProps } from './Sidebar.types';
 import './Sidebar.scss';
 
+type NavGroup = { label: string; items: SidebarNavItem[] };
+
 export default function Sidebar({ user, onLogout }: SidebarProps) {
   const location = useLocation();
+  const isAdmin = user.role === 'admin';
+
+  // Grouped by what you are doing: watching visitors, talking to them, or
+  // configuring TraceUX itself.
+  const groups: NavGroup[] = [
+    {
+      label: 'Observe',
+      items: [
+        { to: '/sessions', icon: 'film', label: 'Sessions' },
+        { to: '/performance', icon: 'activity', label: 'Performance' },
+        { to: '/logs', icon: 'code', label: 'Logs' },
+        { to: '/analyze', icon: 'chart', label: 'Analyze' },
+      ],
+    },
+    {
+      label: 'Engage',
+      items: [
+        { to: '/feedback', icon: 'message', label: 'Feedback' },
+        { to: '/tickets', icon: 'lifebuoy', label: 'Tickets' },
+        { to: '/announcements', icon: 'megaphone', label: 'Announcements' },
+      ],
+    },
+    {
+      label: 'Configure',
+      items: [
+        { to: '/sites', icon: 'globe', label: 'Sites' },
+        ...(isAdmin ? [{ to: '/system-health', icon: 'bolt' as const, label: 'System health' }] : []),
+        { to: '/settings', icon: 'settings', label: 'Settings' },
+      ],
+    },
+  ];
+
+  // The mobile strip keeps its own order: the four most-used pages first.
   const navItems: SidebarNavItem[] = [
     { to: '/sites', icon: 'globe', label: 'Sites' },
     { to: '/sessions', icon: 'film', label: 'Sessions' },
@@ -20,7 +54,7 @@ export default function Sidebar({ user, onLogout }: SidebarProps) {
     { to: '/tickets', icon: 'lifebuoy', label: 'Tickets' },
     { to: '/announcements', icon: 'megaphone', label: 'Announcements' },
     { to: '/logs', icon: 'code', label: 'Logs' },
-    ...(user.role === 'admin' ? [{ to: '/system-health', icon: 'bolt' as const, label: 'System health' }] : []),
+    ...(isAdmin ? [{ to: '/system-health', icon: 'bolt' as const, label: 'System health' }] : []),
     { to: '/settings', icon: 'settings', label: 'Settings' },
   ];
   const primaryMobileItems = navItems.slice(0, 4);
@@ -35,8 +69,13 @@ export default function Sidebar({ user, onLogout }: SidebarProps) {
         <Logo className="sidebar__logo" />
       </NavLink>
 
-      <nav className="sidebar__nav sidebar__nav--desktop">
-        {navItems.map((item) => <NavItem key={item.to} {...item} />)}
+      <nav className="sidebar__nav sidebar__nav--desktop" aria-label="Primary navigation">
+        {groups.map((group) => (
+          <div key={group.label} className="sidebar__group">
+            <span className="sidebar__group-label">{group.label}</span>
+            {group.items.map((item) => <NavItem key={item.to} {...item} />)}
+          </div>
+        ))}
       </nav>
 
       <nav className="sidebar__mobile-nav" aria-label="Primary navigation">
@@ -56,12 +95,14 @@ export default function Sidebar({ user, onLogout }: SidebarProps) {
         )}
         <ThemeToggle />
         <div className="sidebar__user">
-          <span className="mono">{user.username}</span>
-          <Badge tone={user.role === 'admin' ? 'accent' : 'neutral'}>{user.role}</Badge>
+          <div className="sidebar__user-text">
+            <span className="sidebar__user-name mono">{user.username}</span>
+            <span className="sidebar__user-role">{user.role === 'admin' ? 'Administrator' : user.role.charAt(0).toUpperCase() + user.role.slice(1)}</span>
+          </div>
+          <button type="button" className="icon-btn" onClick={onLogout} aria-label="Log out" title="Log out">
+            <Icon name="logout" size={16} />
+          </button>
         </div>
-        <Button variant="secondary" size="sm" block onClick={onLogout}>
-          Log out
-        </Button>
       </div>
     </motion.aside>
   );

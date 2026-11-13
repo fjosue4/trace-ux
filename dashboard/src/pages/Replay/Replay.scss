@@ -24,7 +24,7 @@
     border-radius: $radius-pill;
     background: $surface-2;
 
-    > span { display: block; height: 100%; border-radius: inherit; background: $accent; transition: width $duration-fast $ease-out; }
+    > span { display: block; height: 100%; border-radius: inherit; background: $ink-2; transition: width $duration-fast $ease-out; }
     &.is-indeterminate > span { position: absolute; width: 35%; animation: session-export-indeterminate 1.2s ease-in-out infinite; }
   }
 }
@@ -57,9 +57,9 @@
 .share-replay-intro { margin-bottom: 1.25rem; }
 .share-replay-eyebrow {
   margin: 0 0 0.45rem;
-  color: $accent;
-  font-size: 0.72rem;
-  font-weight: 800;
+  color: $muted;
+  font-size: 0.75rem;
+  font-weight: 500;
   letter-spacing: 0.1em;
   line-height: 1.35;
 }
@@ -110,7 +110,7 @@
 
 @media (max-width: 960px) {
   .share-replay-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     flex: none;
   }
 
@@ -197,7 +197,7 @@ $export-ai-fill: #4f46e5, #7c3aed, #2563eb, #0e7490;
     &::before { opacity: 1; animation-play-state: running; }
   }
 
-  &:focus-visible { outline: 2px solid $accent; outline-offset: 2px; }
+  &:focus-visible { outline: 2px solid $ink-2; outline-offset: 2px; }
 
   // Busy or disabled: the ring holds where it is instead of snapping back.
   &:disabled { animation-play-state: paused; }

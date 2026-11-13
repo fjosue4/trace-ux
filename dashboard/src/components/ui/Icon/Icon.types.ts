@@ -41,6 +41,10 @@ export type IconName =
   | 'arrowRight'
   | 'rotateCw'
   | 'lock'
-  | 'eye';
+  | 'eye'
+  | 'logout'
+  | 'monitor'
+  | 'smartphone'
+  | 'tablet';
 
 export type IconProps = { name: IconName; size?: number };

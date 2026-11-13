@@ -44,7 +44,7 @@
   &:hover:not(:disabled) { background: $surface-2; color: $ink; }
   &:disabled { cursor: default; }
   &:disabled:not(.is-current) { opacity: 0.55; }
-  &:focus-visible { outline: 2px solid $accent; outline-offset: -2px; }
+  &:focus-visible { outline: 2px solid $ink-2; outline-offset: -2px; }
 
   &.is-current { background: $surface-2; color: $ink; }
   &.is-done { color: $ink-2; }
@@ -61,7 +61,7 @@
   color: $muted;
   font-size: 0.72rem;
 
-  .is-current & { border-color: $accent; color: $accent; }
+  .is-current & { border-color: $ink; color: $ink; }
   .is-done & { border-color: $accent; background: $accent; color: $on-accent; }
   .is-skipped & { border-style: dashed; }
 }
@@ -107,11 +107,9 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  color: $accent;
-  font-size: 0.7rem;
-  font-weight: 750;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  color: $muted;
+  font-size: 0.75rem;
+  font-weight: 500;
 }
 
 .onboarding__body { min-width: 0; }
@@ -165,8 +163,8 @@
   width: 0.85rem;
   height: 0.85rem;
   flex: none;
-  border: 2px solid $accent-soft;
-  border-top-color: $accent;
+  border: 2px solid $line-strong;
+  border-top-color: $ink-2;
   border-radius: 50%;
   animation: onboarding-spin 0.8s linear infinite;
 }
@@ -255,12 +253,12 @@
 /* ---------------------------------------------------------------- narrow */
 
 @media (max-width: 900px) {
-  .onboarding__layout { grid-template-columns: 1fr; }
+  .onboarding__layout { grid-template-columns: minmax(0, 1fr); }
 
   .onboarding__rail {
     position: static;
 
-    ol { flex-direction: row; overflow-x: auto; gap: 0.3rem; padding-bottom: 0.2rem; }
+    ol { flex-direction: row; flex-wrap: wrap; gap: 0.3rem; padding-bottom: 0.2rem; }
   }
 
   .onboarding__rail-step { flex: none; width: auto; }
@@ -270,6 +268,6 @@
 @media (max-width: 640px) {
   .onboarding__step { padding: 1.1rem 1rem 0; }
   .onboarding__footer { margin: 0.4rem -1rem 0; padding: 0.85rem 1rem; }
-  .onboarding__create-fields { grid-template-columns: 1fr; }
+  .onboarding__create-fields { grid-template-columns: minmax(0, 1fr); }
   .onboarding__rail-label { display: none; }
 }

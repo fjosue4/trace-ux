@@ -83,7 +83,7 @@ export default function SiteDetail() {
         title={site.name}
         subtitle={`Site key ${site.site_key} · tracking since ${fmtTime(site.created_at)}`}
         actions={
-          <>
+          <div className="site-head-actions">
             {isAdmin && (
               <Switch
                 checked={recordingOn}
@@ -95,7 +95,7 @@ export default function SiteDetail() {
               <Icon name="film" size={13} />
               All sessions
             </Link>
-          </>
+          </div>
         }
       />
 

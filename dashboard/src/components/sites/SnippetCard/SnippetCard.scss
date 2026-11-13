@@ -2,7 +2,6 @@
 
 .snippet-card {
   margin-bottom: 1rem;
-  border-color: color-mix(in srgb, #{$accent} 35%, #{$line});
 
   &--embedded { margin: 0; }
   pre { white-space: pre-wrap; word-break: break-all; }
@@ -14,8 +13,7 @@
   gap: 4px;
   padding: 4px;
   margin: 0.75rem 0 0.4rem;
-  border: 1px solid $line;
-  border-radius: $radius-pill;
+  border-radius: $radius-sm;
   background: $surface-2;
 }
 
@@ -25,15 +23,15 @@
   color: $muted;
   font: inherit;
   font-size: 0.8rem;
-  font-weight: 600;
-  padding: 0.3rem 0.9rem;
-  border-radius: $radius-pill;
+  font-weight: 500;
+  padding: 0.25rem 0.75rem;
+  border-radius: 5px;
   cursor: pointer;
 
   &.is-active {
-    background: $accent;
-    color: $on-accent;
-    box-shadow: $shadow-accent;
+    background: $surface;
+    color: $ink;
+    box-shadow: $shadow-sm;
   }
 }
 

@@ -16,7 +16,7 @@
 
 @media (max-width: 460px) {
   .add-user-modal__fields {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     .field:last-child { grid-column: auto; }
   }
 }

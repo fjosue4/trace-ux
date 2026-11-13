@@ -19,7 +19,7 @@
     transition: color $duration-fast $ease-out;
 
     &:hover { color: $ink; }
-    &:focus-visible { outline: 2px solid $accent; outline-offset: 2px; }
+    &:focus-visible { outline: 2px solid $ink-2; outline-offset: 2px; }
   }
 
   &__sep { color: $line-strong; }

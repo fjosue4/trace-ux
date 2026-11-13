@@ -24,13 +24,12 @@ export function TicketRow({ ticket, isSelected, showSite, showStatus, onOpen }: 
       onClick={() => onOpen(ticket.id)}
     >
       <span className="ticket-row__line">
-        {waiting && <span className="ticket-row__flag" aria-hidden />}
         <strong className="ticket-row__subject">{ticket.subject}</strong>
         <span className="ticket-row__when">{compactTime(ticket.last_message_at)}</span>
       </span>
       <span className="ticket-row__line">
         <span className="ticket-row__sub">{subtitle}</span>
-        {waiting && <span className="visually-hidden">Needs a reply</span>}
+        {waiting && <Badge tone="warn">Needs reply</Badge>}
         {showStatus && <Badge tone={statusTone(ticket.status)}>{statusLabel(ticket.status)}</Badge>}
       </span>
     </button>

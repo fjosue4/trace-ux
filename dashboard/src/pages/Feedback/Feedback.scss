@@ -29,10 +29,8 @@
 
   &__site {
     color: $muted;
-    font-size: 0.66rem;
+    font-size: 0.72rem;
     font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
   }
 
   &__name { margin: 0; font-size: 1.05rem; overflow-wrap: anywhere; }
@@ -72,7 +70,7 @@
     }
 
     strong { font-size: 1.05rem; }
-    span { color: $muted; font-size: 0.64rem; }
+    span { color: $muted; font-size: 0.72rem; }
   }
 
   &__foot { justify-content: flex-end; }
@@ -90,10 +88,8 @@
   gap: 0.35rem;
 
   &__label {
-    font-size: 0.68rem;
+    font-size: 0.72rem;
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
     color: $muted;
   }
   &__row { display: flex; align-items: baseline; gap: 0.4rem; }
@@ -106,7 +102,7 @@
   gap: 1px;
 
   span { color: $line-strong; display: inline-flex; }
-  span.on { color: $accent; }
+  span.on { color: $warn; }
 }
 
 .feedback-comment { max-width: 320px; }
@@ -114,8 +110,8 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  color: $accent;
-  font-weight: 600;
+  color: $ink;
+  font-weight: 500;
   font-size: 0.85rem;
 
   &:hover { text-decoration: underline; }

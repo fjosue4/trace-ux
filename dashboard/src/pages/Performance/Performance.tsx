@@ -5,7 +5,6 @@ import Card from '../../components/ui/Card';
 import Notice from '../../components/ui/Notice';
 import Loading from '../../components/ui/Loading';
 import EmptyState from '../../components/ui/EmptyState';
-import Badge from '../../components/ui/Badge';
 import Switch from '../../components/ui/Switch';
 import Button from '../../components/ui/Button';
 import FilterPanel from '../../components/ui/FilterPanel';
@@ -13,10 +12,11 @@ import { Icon } from '../../components/ui/Icon';
 import { Select } from '../../components/ui/fields';
 import { usePerformance } from './hooks/usePerformance';
 import { LatencyChart } from './subcomponents/LatencyChart';
-import { MetricCard } from './subcomponents/MetricCard';
+import StatStrip from '../../components/ui/StatStrip';
+import { metricItems } from './subcomponents/MetricCard';
 import { EndpointList } from './subcomponents/EndpointList';
 import { EndpointDetailModal } from './subcomponents/EndpointDetailModal';
-import { endpointKey, fmtLatency, fmtNumber } from './Performance.helpers';
+import { endpointKey, fmtLatency } from './Performance.helpers';
 import { timeRangeOptions, rangeLabels } from './Performance.constants';
 import { TimeRange } from './Performance.types';
 import './Performance.scss';
@@ -53,21 +53,12 @@ export default function Performance() {
         subtitle="Backend endpoint latency by environment, service, and version."
         actions={
           <div className="performance-live-control">
-            <Badge tone={live ? 'accent' : 'neutral'}>{live ? 'Live' : 'Paused'}</Badge>
             <Switch checked={live} onChange={setLive} label="Auto-refresh" />
           </div>
         }
       />
 
-      {report && report.endpoints.length > 0 && (
-        <div className="performance-metrics">
-          <MetricCard label="Requests" value={fmtNumber(report.summary.requests)} detail={`${fmtNumber(report.summary.errors)} errors`} />
-          <MetricCard label="p50" value={fmtLatency(report.summary.p50_ms)} detail="Typical request" />
-          <MetricCard label="p95" value={fmtLatency(report.summary.p95_ms)} detail="Slow-tail latency" tone="warm" />
-          <MetricCard label="p99" value={fmtLatency(report.summary.p99_ms)} detail="Worst-tail latency" tone="hot" />
-          <MetricCard label="Error rate" value={`${report.summary.error_rate.toFixed(1)}%`} detail={`Average ${fmtLatency(report.summary.avg_ms)}`} tone={report.summary.error_rate > 0 ? 'hot' : ''} />
-        </div>
-      )}
+      {report && report.endpoints.length > 0 && <StatStrip items={metricItems(report.summary)} />}
 
       <FilterPanel
         title="Filter performance"

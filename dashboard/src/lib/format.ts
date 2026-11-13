@@ -83,3 +83,58 @@ export function fmtBytes(bytes: number): string {
   const precision = v >= 100 || u === 0 ? 0 : 1;
   return `${v.toFixed(precision)} ${units[u]}`;
 }
+
+/** "14:30" in the viewer's locale, without seconds. */
+export function fmtHourMinute(unix: number): string {
+  if (!unix) return '—';
+  return new Date(unix * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
+/** "Nov 13, 2026" in the viewer's locale. */
+export function fmtDate(unix: number): string {
+  if (!unix) return '—';
+  return new Date(unix * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/** "Just now", "5m ago", "3h ago", "2d ago", then a date. */
+export function fmtRelative(unix: number, now: number = Date.now() / 1000): string {
+  if (!unix) return '—';
+  const s = Math.max(0, now - unix);
+  if (s < 60) return 'Just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 7 * 86400) return `${Math.floor(s / 86400)}d ago`;
+  return fmtDate(unix);
+}
+
+/** Local calendar day key, for grouping rows by day. */
+export function dayKey(unix: number): string {
+  const d = new Date(unix * 1000);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+/** { title: "Today" | "Yesterday" | "Monday", detail: "Friday, 13 November" }. */
+export function dayLabel(unix: number, now: Date = new Date()): { title: string; detail: string } {
+  const d = new Date(unix * 1000);
+  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((startOf(now) - startOf(d)) / 86400000);
+  const detail = d.toLocaleDateString(undefined, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    ...(d.getFullYear() !== now.getFullYear() ? { year: 'numeric' as const } : {}),
+  });
+  const title = days === 0 ? 'Today' : days === 1 ? 'Yesterday' : d.toLocaleDateString(undefined, { weekday: 'long' });
+  return { title: days < 7 ? title : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), detail };
+}
+
+/** The path (and query) of a URL, or the input unchanged if it is not one. */
+export function urlPath(url: string): string {
+  if (!url) return '';
+  try {
+    const u = new URL(url);
+    return `${u.pathname}${u.search}` || '/';
+  } catch {
+    return url;
+  }
+}

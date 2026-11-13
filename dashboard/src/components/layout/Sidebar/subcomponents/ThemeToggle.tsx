@@ -20,15 +20,15 @@ export function ThemeToggle() {
         aria-pressed={dark}
       >
         <span className="theme-toggle__option theme-toggle__option--sun" aria-hidden="true">
-          <Icon name="sun" size={14} />
+          <Icon name="sun" size={12} />
         </span>
         <span className="theme-toggle__option theme-toggle__option--moon" aria-hidden="true">
-          <Icon name="moon" size={14} />
+          <Icon name="moon" size={12} />
         </span>
         <motion.span
           className="theme-toggle__thumb"
           initial={false}
-          animate={{ x: dark ? 32 : 0 }}
+          animate={{ x: dark ? 28 : 0 }}
           transition={{ duration: reduceMotion ? 0 : 0.45, ease: [0.22, 1, 0.36, 1] }}
           aria-hidden="true"
         >
@@ -41,7 +41,7 @@ export function ThemeToggle() {
               exit={{ opacity: 0, scale: 0.55, rotate: dark ? 35 : -35 }}
               transition={{ duration: reduceMotion ? 0 : 0.2, ease: 'easeInOut' }}
             >
-              <Icon name={dark ? 'moon' : 'sun'} size={14} />
+              <Icon name={dark ? 'moon' : 'sun'} size={12} />
             </motion.span>
           </AnimatePresence>
         </motion.span>

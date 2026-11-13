@@ -7,23 +7,24 @@
 
 .field-control {
   font: inherit;
+  font-size: 0.875rem;
   color: $ink;
   background: $field-bg;
-  border: 1px solid $line;
+  border: 1px solid $line-strong;
   border-radius: $radius-sm;
-  height: 40px;
-  padding: 0 0.9rem;
+  height: 34px;
+  padding: 0 0.75rem;
   width: 100%;
   transition: border-color $duration-fast $ease-out,
     background-color $duration-fast $ease-out, box-shadow $duration-fast $ease-out;
 
   &::placeholder { color: $muted; }
   &:disabled { opacity: 0.6; }
-  &:hover:not(:disabled):not(:focus) { border-color: $line-strong; }
+  &:hover:not(:disabled):not(:focus) { border-color: $faint; }
   &:focus {
     outline: none;
     background: $field-bg-focus;
-    border-color: $accent;
-    box-shadow: 0 0 0 3px $accent-soft;
+    border-color: $ink-2;
+    box-shadow: 0 0 0 3px $focus-ring;
   }
 }

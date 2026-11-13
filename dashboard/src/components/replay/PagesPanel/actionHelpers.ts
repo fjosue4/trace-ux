@@ -91,6 +91,6 @@ export function logIcon(severity: ReplayLog['severity']): 'code' | 'warn' | 'x' 
   return severity === 'error' ? 'x' : severity === 'warn' ? 'warn' : 'code';
 }
 
-export function logTone(severity: ReplayLog['severity']): 'accent' | 'neutral' | 'danger' {
-  return severity === 'error' ? 'danger' : severity === 'warn' ? 'accent' : 'neutral';
+export function logTone(severity: ReplayLog['severity']): 'warn' | 'neutral' | 'danger' {
+  return severity === 'error' ? 'danger' : severity === 'warn' ? 'warn' : 'neutral';
 }

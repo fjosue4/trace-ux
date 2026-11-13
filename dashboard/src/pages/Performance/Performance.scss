@@ -18,9 +18,9 @@
 }
 
 .performance-controls__hint {
-  color: $accent;
-  font-size: 0.76rem;
-  font-weight: 600;
+  color: $muted;
+  font-size: 0.78rem;
+  font-weight: 500;
 }
 
 .performance-metrics {
@@ -44,19 +44,17 @@
   gap: 0.22rem;
   min-width: 0;
 
-  &__label { color: $muted; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+  &__label { color: $muted; font-size: 0.72rem; font-weight: 500; }
   &__value { font-size: clamp(1.35rem, 2vw, 1.75rem); letter-spacing: 0; font-variant-numeric: tabular-nums; }
 
-  &--warm &__value { color: $accent-strong; }
+  &--warm &__value { color: $warn; }
   &--hot &__value { color: $danger; }
 }
 
 .performance-eyebrow {
   color: $muted;
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .performance-chart-card {
@@ -95,10 +93,10 @@
     padding-left: 0.85rem;
     border-left: 1px solid $line;
 
-    &:last-child strong { color: $danger; }
+    &:last-child strong { color: $warn; }
   }
-  strong { color: $accent-strong; font-size: 1.08rem; font-variant-numeric: tabular-nums; }
-  small { color: $muted; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+  strong { color: $ink; font-size: 1.08rem; font-variant-numeric: tabular-nums; }
+  small { color: $muted; font-size: 0.72rem; font-weight: 500; }
 }
 
 .performance-chart {
@@ -108,9 +106,9 @@
   overflow: hidden;
   border: 1px solid $line;
   border-radius: $radius;
-  background: color-mix(in srgb, #{$surface-2} 54%, transparent);
+  background: $surface;
 
-  &:focus-visible { outline: 2px solid $accent; outline-offset: 3px; }
+  &:focus-visible { outline: 2px solid $ink-2; outline-offset: 3px; }
   &__svg { display: block; width: 100%; height: 260px; }
   &__grid { stroke: $line; stroke-width: 1; }
   &__label { fill: $muted; font-family: #{$font-mono}; font-size: 10px; }
@@ -119,9 +117,9 @@
   &__dot {
     stroke: $surface;
     stroke-width: 2;
-    &--p50 { fill: var(--olive); }
-    &--p95 { fill: $accent-strong; }
-    &--p99 { fill: $danger; }
+    &--p50 { fill: $muted; }
+    &--p95 { fill: $ink; }
+    &--p99 { fill: $warn; }
   }
   &__tooltip {
     position: absolute;
@@ -154,9 +152,9 @@
     stroke-width: 2.5;
     vector-effect: non-scaling-stroke;
 
-    &--p50 { stroke: var(--olive); }
-    &--p95 { stroke: $accent-strong; }
-    &--p99 { stroke: $danger; }
+    &--p50 { stroke: $muted; }
+    &--p95 { stroke: $ink; }
+    &--p99 { stroke: $warn; }
   }
 
   &__legend {
@@ -168,11 +166,11 @@
     gap: 0.85rem;
     padding: 0.35rem 0.55rem;
     border: 1px solid $line;
-    border-radius: $radius-pill;
-    background: color-mix(in srgb, #{$surface} 88%, transparent);
+    border-radius: $radius-sm;
+    background: color-mix(in srgb, #{$surface} 92%, transparent);
     color: $muted;
-    font-size: 0.7rem;
-    font-weight: 700;
+    font-size: 0.75rem;
+    font-weight: 500;
 
     span { display: inline-flex; align-items: center; gap: 0.28rem; }
   }
@@ -191,9 +189,9 @@
   height: 2px;
   border-radius: 2px;
 
-  &--p50 { background: var(--olive); }
-  &--p95 { background: $accent-strong; }
-  &--p99 { background: $danger; }
+  &--p50 { background: $muted; }
+  &--p95 { background: $ink; }
+  &--p99 { background: $warn; }
 }
 
 .performance-table-head { margin: 0 0 0.75rem; p { margin: 0.25rem 0 0; } }
@@ -201,8 +199,8 @@
   margin-bottom: 1rem;
 
   tbody tr { cursor: pointer; }
-  tbody tr:focus-visible { outline: 2px solid $accent; outline-offset: -2px; }
-  tbody tr:hover .performance-endpoint { color: $accent; }
+  tbody tr:focus-visible { outline: 2px solid $ink-2; outline-offset: -2px; }
+  tbody tr:hover .performance-endpoint { text-decoration: underline; text-underline-offset: 3px; }
 }
 .performance-endpoint {
   display: block;
@@ -218,7 +216,7 @@
   white-space: nowrap;
   cursor: pointer;
 
-  &:hover { color: $accent; }
+  &:hover { color: $ink; }
 }
 .performance-dimension {
   display: inline-block;
@@ -227,8 +225,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.performance-latency--p95 { color: $accent-strong; font-weight: 700; }
-.performance-latency--p99 { color: $danger; font-weight: 700; }
+.performance-latency--p95 { color: $ink; font-weight: 600; }
+.performance-latency--p99 { color: $warn; font-weight: 600; }
 .performance-empty-card { min-height: 310px; }
 
 .performance-detail {

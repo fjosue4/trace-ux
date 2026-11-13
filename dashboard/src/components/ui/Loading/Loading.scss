@@ -19,7 +19,7 @@
     width: auto;
     min-height: 0;
     z-index: 2;
-    background: color-mix(in srgb, #{$bg} 70%, transparent);
+    background: color-mix(in srgb, #{$surface} 70%, transparent);
     backdrop-filter: blur(2px);
   }
 
@@ -29,7 +29,7 @@
     flex: none;
     border-radius: 50%;
     border: 2px solid $line-strong;
-    border-top-color: $accent;
+    border-top-color: $ink-2;
 
     &--inline { width: 13px; height: 13px; display: inline-block; vertical-align: -2px; }
   }
