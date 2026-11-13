@@ -293,9 +293,16 @@ export function useReplayPlayer(
     }
 
     const ratio = ratioFor(events, { w: fallbackW, h: fallbackH });
-    const width = stageSize.height
-      ? Math.min(stageSize.width, Math.floor(stageSize.height / ratio))
-      : stageSize.width;
+    // Below 961px the stage has no height of its own (it sizes to the
+    // recording), so its measured height is just the 180px minimum and must
+    // not limit the width. There the recording fills the width, capped at 70%
+    // of the screen height so a tall phone recording stays on screen.
+    const widthDriven = typeof window !== 'undefined' && window.matchMedia('(max-width: 960px)').matches;
+    const width = widthDriven
+      ? Math.min(stageSize.width, Math.floor((window.innerHeight * 0.7) / ratio))
+      : stageSize.height
+        ? Math.min(stageSize.width, Math.floor(stageSize.height / ratio))
+        : stageSize.width;
     const height = Math.round(width * ratio);
     builtStage.current = { width: stageSize.width, height: stageSize.height };
     disposePlayer(previousPlayer);
