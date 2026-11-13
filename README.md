@@ -59,19 +59,38 @@ SQLite and the dashboard embedded. Backups are copying one folder.
 
 ## Screenshots
 
+### Manage Sites
+
+<img width="1600" height="1000" alt="image" src="https://github.com/user-attachments/assets/8af6639f-69d7-424b-9d10-63faf18b1fe3" />
+
+
 ### Sessions dashboard
 
-<img width="1900" height="892" alt="image" src="https://github.com/user-attachments/assets/e3d1a252-c6c7-44dc-b21d-72a3a6bad661" />
+<img width="1600" height="1206" alt="image" src="https://github.com/user-attachments/assets/cae93193-cb49-4a51-a9be-2faa501c7a41" />
+
 
 
 ### Session replay
 
-<img width="1919" height="891" alt="image" src="https://github.com/user-attachments/assets/41632dbe-f558-4196-8eab-f695bc6e2efe" />
+<img width="1901" height="874" alt="image" src="https://github.com/user-attachments/assets/a91dde23-5598-4c52-a964-8f77e1a918be" />
+
+### Feedback
+
+<img width="1600" height="1535" alt="image" src="https://github.com/user-attachments/assets/bdb4a9e8-0c1b-485e-8d66-08e5ccb7750b" />
+
+### Tickets
+
+<img width="1600" height="1030" alt="image" src="https://github.com/user-attachments/assets/e6c54710-28d4-43fb-a5c8-c5307d8fa1ba" />
 
 
 ### Logs view
 
-<img width="1893" height="885" alt="image" src="https://github.com/user-attachments/assets/d51fe1dd-ff0f-409f-9dc3-a59542eed3d7" />
+<img width="1600" height="1000" alt="image" src="https://github.com/user-attachments/assets/693d1be0-2257-43d2-b103-86f7c321175b" />
+
+### Analyze Reports
+
+<img width="1600" height="1000" alt="image" src="https://github.com/user-attachments/assets/4902211f-7a7d-4e6e-8d7e-d3d649d0b907" />
+
 
 
 ## Quickstart
