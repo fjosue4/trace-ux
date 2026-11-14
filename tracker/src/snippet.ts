@@ -37,6 +37,8 @@ if (script?.dataset.site) {
       clientId: script.dataset.clientId,
       remoteId: script.dataset.remoteId,
       widget: true,
+      widgetTheme: script.dataset.widgetTheme === 'light' || script.dataset.widgetTheme === 'dark'
+        ? script.dataset.widgetTheme : undefined,
     });
 
     // The global remains a compatibility adapter only. npm and React users

@@ -50,6 +50,7 @@ effects, and recording starts only when you call `init()`.
 | `clientId` | `string` | no | Tenant/account id, for filtering sessions. |
 | `remoteId` | `string` | no | Any third id you filter on. |
 | `widget` | `boolean` | no | Opt into the announcements / support / feedback widget. |
+| `widgetTheme` | `'light' \| 'dark'` | no | Override the widget theme. Omit to use the saved Site Settings default. |
 | `onAnnouncement` | `(announcement) => void` | no | Called when a newly published or updated announcement reaches the widget. |
 
 ## The handle
@@ -66,6 +67,8 @@ traceux.track('checkout_error', 'checkout-button', {
 }); // also notify Slack when enabled
 traceux.setUserStatus('trialing');                 // lifecycle state as an activity
 traceux.updateUserStatus('active');                // alias, for update-style call sites
+traceux.setWidgetTheme('dark');                    // update an open widget in place
+traceux.setWidgetTheme();                          // restore the site's default theme
 
 traceux.debug('cache miss', { key });              // application logs — sent only when
 traceux.info('order created', { orderId });        // Logs is enabled for the site and
@@ -178,6 +181,31 @@ The announcements / support / feedback widget is loaded through a dynamic
 `import()`, so bundlers split it into its own chunk and fetch it only when
 `widget: true` is passed **and** the server configuration enables at least one
 section.
+
+Pass `widgetTheme` to match the widget to your application's theme:
+
+```ts
+const traceux = init({
+  siteKey: 'YOUR_SITE_KEY',
+  origin: 'https://traceux.example.com',
+  widget: true,
+  widgetTheme: 'dark',
+});
+
+traceux.setWidgetTheme('light'); // for example, after your app's theme changes
+traceux.setWidgetTheme();       // return to the saved Site Settings default
+```
+
+In React, pass `<TraceUXProvider widget widgetTheme={theme} ...>`; prop changes
+update the widget without restarting recording or clearing an open conversation.
+Script/GTM integrations can set `data-widget-theme="dark"` on the tracker script
+and call `window.TraceUX.setWidgetTheme('light')` later.
+
+Existing sites automatically keep their saved theme and panel colors as the
+default. No data migration or integration change is required. An explicit
+`light` or `dark` override replaces the panel's background/text color pair while
+preserving the site's accent, launcher, layout, and enabled sections. Omitting
+the option, or calling `setWidgetTheme()` without a value, uses the saved default.
 
 | | Gzipped |
 | --- | ---: |

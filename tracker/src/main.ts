@@ -10,7 +10,7 @@
  */
 import { record } from '@rrweb/record';
 import type { eventWithTime } from '@rrweb/types';
-import type { Announcement, WidgetCfg, WidgetHandle, WidgetSurvey } from './widget';
+import type { Announcement, WidgetCfg, WidgetHandle, WidgetSurvey, WidgetTheme } from './widget';
 
 type SurveyQuestionCfg = {
   id: string;
@@ -119,6 +119,8 @@ export interface TraceUXFeedbackApi {
   expand(campaignId: string, options?: TraceUXFeedbackExpandOptions): Promise<TraceUXFeedbackExpandResult>;
 }
 
+export type TraceUXWidgetTheme = WidgetTheme;
+
 export interface TraceUXOptions extends TraceUXIdentity {
   /** The site key shown in the TraceUX dashboard. */
   siteKey: string;
@@ -126,6 +128,8 @@ export interface TraceUXOptions extends TraceUXIdentity {
   origin: string;
   /** Load the optional announcements/support/feedback widget when configured. */
   widget?: boolean;
+  /** Override the widget theme; omitted uses the saved Site Settings default. */
+  widgetTheme?: TraceUXWidgetTheme;
   /** Called when a newly published or updated announcement reaches the widget. */
   onAnnouncement?: (announcement: TraceUXAnnouncement) => void;
 }
@@ -153,6 +157,8 @@ export interface TraceUXTrackOptions {
 export interface TraceUXHandle {
   /** Attach/replace visitor identity mid-session (e.g. right after login). */
   identify: (fields: TraceUXIdentity) => void;
+  /** Change widget colors without remounting; omit to restore the site's default. */
+  setWidgetTheme: (theme?: TraceUXWidgetTheme) => void;
   /** Emit a named custom event, visible as seekable activity in the replay. */
   track: (name: string, trackId?: string, options?: TraceUXTrackOptions) => void;
   /** Record a user lifecycle state as a seekable custom activity. */
@@ -290,6 +296,7 @@ function createNoopHandle(): TraceUXHandle {
   );
   return {
     identify: () => {},
+    setWidgetTheme: () => {},
     track: () => {},
     setUserStatus: () => {},
     updateUserStatus: () => {},
@@ -337,6 +344,9 @@ function createQueuedHandle(): QueuedHandle {
   const handle: QueuedHandle = {
     identify(fields) {
       dispatch((next) => next.identify(fields));
+    },
+    setWidgetTheme(theme) {
+      dispatch((next) => next.setWidgetTheme(theme));
     },
     track(name, trackId, options) {
       dispatch((next) => next.track(name, trackId, options));
@@ -965,6 +975,8 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
   document.addEventListener('click', onTrackedClick, { capture: true, passive: true });
 
   let unifiedWidget: WidgetHandle | null = null;
+  let widgetTheme = options.widgetTheme === 'light' || options.widgetTheme === 'dark'
+    ? options.widgetTheme : undefined;
 
   // ---- unified widget (announcements + tickets + feedback) ----
   //
@@ -1086,6 +1098,7 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
         unifiedWidget = mountUnifiedWidget({
           origin,
           siteKey,
+          theme: widgetTheme,
           config: {
             ...widgetCfg,
             feedback_enabled: feedbackAvailable(action),
@@ -1179,6 +1192,7 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
           unifiedWidget = mountUnifiedWidget({
             origin,
             siteKey,
+            theme: widgetTheme,
             config: { ...widgetCfg, enabled: true, feedback_enabled: true },
             survey: configuredSurvey(),
             visitorKey: widgetVisitorKey,
@@ -1246,6 +1260,11 @@ async function start(options: TraceUXOptions, origin: string, siteKey: string, h
 
   const runtime: TraceUXHandle = {
     identify: (fields) => applyIdentity(fields),
+    setWidgetTheme: (theme) => {
+      if (disposed || (theme !== undefined && theme !== 'light' && theme !== 'dark')) return;
+      widgetTheme = theme;
+      unifiedWidget?.setTheme(theme);
+    },
     track: (name, trackId, options) => {
       const normalizedName = String(name || 'event').slice(0, 100);
       sendCustom(

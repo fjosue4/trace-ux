@@ -165,8 +165,8 @@ export function WidgetTab({
       <div className="announcement-customizer">
         <div className="announcement-customizer__controls">
           <h3>Choose a look</h3>
-          <p className="muted small">Theme colors are paired automatically for accessible contrast.</p>
-          <Field label="Theme">
+          <p className="muted small">Preview the widget below. Theme colors are paired automatically for accessible contrast.</p>
+          <Field label="Default theme" hint="Used when your app does not pass a widget theme. Existing sites keep their saved theme.">
             <div className="announcement-themes">
               {(['light', 'dark'] as const).map((theme) => (
                 <button

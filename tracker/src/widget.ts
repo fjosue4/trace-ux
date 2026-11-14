@@ -22,8 +22,10 @@ function isAnnouncementUnread(announcement: Announcement, now = Date.now()): boo
   return !announcement.read && announcement.published_at > 0 && age >= 0 && age < ANNOUNCEMENT_UNREAD_WINDOW_MS;
 }
 
+export type WidgetTheme = 'light' | 'dark';
+
 export type WidgetAppearanceCfg = {
-  theme?: 'light' | 'dark';
+  theme?: WidgetTheme;
   accent?: string;
   button_bg?: string;
   button_text?: string;
@@ -137,6 +139,8 @@ export type WidgetHost = {
   origin: string;
   siteKey: string;
   config: WidgetCfg;
+  /** Override the site's default theme for this widget instance. */
+  theme?: WidgetTheme;
   survey: WidgetSurvey;
   visitorKey?: string;
   /** Routes through the tracker so the response is linked to the recording. */
@@ -168,6 +172,8 @@ export type WidgetHandle = {
   destroy: () => void;
   isOpen: () => boolean;
   showCampaign: (survey: WidgetSurvey) => boolean;
+  /** Omit to restore the site's configured default colors. */
+  setTheme: (theme?: WidgetTheme) => void;
 };
 
 type Section = 'updates' | 'tickets' | 'feedback';
@@ -300,7 +306,6 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
 
   const ap = cfg.appearance || {};
   const accent = ap.accent || '#2f7d4a';
-  const dark = ap.theme === 'dark';
   const position = cfg.position === 'left' ? 'left' : 'right';
   // Sent as its own field, not as extra values in `position`, so a tracker
   // older than side anchors reads the side it understands and ignores this.
@@ -367,8 +372,17 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   root.style.setProperty('--w-accent', accent);
   root.style.setProperty('--w-button-bg', ap.button_bg || accent);
   root.style.setProperty('--w-button-text', ap.button_text || '#ffffff');
-  root.style.setProperty('--w-panel-bg', ap.panel_bg || (dark ? '#121b16' : '#ffffff'));
-  root.style.setProperty('--w-panel-text', ap.panel_text || (dark ? '#eef5f0' : '#142018'));
+  function setTheme(theme?: WidgetTheme) {
+    if (theme !== undefined && theme !== 'light' && theme !== 'dark') return;
+    const dark = (theme ?? ap.theme) === 'dark';
+    // The server resolves the saved panel colors in advance. An explicit host
+    // theme must replace that pair, otherwise a dark override stays white.
+    root.style.setProperty('--w-panel-bg', (theme === undefined && ap.panel_bg) || (dark ? '#121b16' : '#ffffff'));
+    root.style.setProperty('--w-panel-text', (theme === undefined && ap.panel_text) || (dark ? '#eef5f0' : '#142018'));
+    root.style.colorScheme = dark ? 'dark' : 'light';
+    root.dataset.theme = dark ? 'dark' : 'light';
+  }
+  setTheme(host.theme);
   root.style.setProperty('--w-radius', `${ap.radius || 18}px`);
   root.style.setProperty('--w-max-width', `${ap.max_width || 440}px`);
   root.style.setProperty('--w-space', `${ap.spacing || 16}px`);
@@ -2561,6 +2575,7 @@ export function mountUnifiedWidget(host: WidgetHost): WidgetHandle | null {
   if (cfg.tickets_enabled) void loadTickets();
 
   return {
+    setTheme,
     open: (target) => openPanel(target),
     close: () => closePanel(),
     isOpen: () => panelOpen,

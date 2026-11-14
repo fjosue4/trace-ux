@@ -58,6 +58,10 @@ export function TraceUXProvider(props: TraceUXProviderProps) {
     });
   }, [options.clientId, options.remoteId, options.userId, tracker]);
 
+  useEffect(() => {
+    tracker.setWidgetTheme(options.widgetTheme);
+  }, [options.widgetTheme, tracker]);
+
   return createElement(TraceUXContext.Provider, { value: tracker }, children);
 }
 

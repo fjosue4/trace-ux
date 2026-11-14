@@ -647,6 +647,15 @@ radius, width, label, and custom launcher icon from **Widget**. If a site only
 uses one section, the launcher opens directly into that section; when both are
 enabled, visitors get a two-tab **What's new / Feedback** panel.
 
+The theme selected in **Widget → Default theme** remains the default for
+existing integrations. Host applications can override it with
+`init({ siteKey, origin, widget: true, widgetTheme: 'dark' })`, or the React
+provider's `widgetTheme` prop. Call `traceux.setWidgetTheme('light')` to update
+an open widget in place, and `traceux.setWidgetTheme()` to restore the site's
+default. Script/GTM integrations support `data-widget-theme="dark"` and
+`window.TraceUX.setWidgetTheme(...)`. Existing saved themes and panel colors
+remain in effect when no override is passed; no data migration is needed.
+
 This gives TraceUX a simple product-feedback loop:
 
 ```
