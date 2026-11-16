@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { softSpring } from '../../../../lib/motion';
 import { Icon } from '../../../ui/Icon';
 import { SidebarNavItem } from '../Sidebar.types';
+import { NavBadge } from './NavBadge';
 
 export function MobileNavMenu({ items }: { items: SidebarNavItem[] }) {
   const [open, setOpen] = useState(false);
@@ -62,6 +63,7 @@ export function MobileNavMenu({ items }: { items: SidebarNavItem[] }) {
                 >
                   <Icon name={item.icon} size={17} />
                   <span>{item.label}</span>
+                  <NavBadge badge={item.badge} />
                   {active && <Icon name="check" size={14} />}
                 </Link>
               );

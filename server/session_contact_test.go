@@ -93,3 +93,36 @@ func TestSessionContactFindsTheWidgetVisitor(t *testing.T) {
 		t.Fatalf("missing session: %d, want 404", code)
 	}
 }
+
+func TestTicketCountsForNavigation(t *testing.T) {
+	srv, ts := newTestServer(t)
+	admin := login(t, ts.URL, "admin", "pw")
+	site, err := srv.store.CreateSite("Shop", "https://shop.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range []struct {
+		status, author string
+		archived       int
+	}{
+		{"open", "visitor", 0},         // open, needs reply
+		{"in_progress", "staff", 0},    // open, waiting on the visitor
+		{"under_review", "visitor", 0}, // open, needs reply
+		{"closed", "visitor", 0},       // done
+		{"open", "visitor", 1},         // archived
+	} {
+		if _, err := srv.store.DB.Exec(`INSERT INTO tickets (site_id,visitor_key,subject,status,last_message_author,archived_at,created_at,updated_at)
+			VALUES (?,?,?,?,?,?,1,1)`, site.ID, "visitor-key-1", "Help", row.status, row.author, row.archived); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resp := doReq(t, http.MethodGet, ts.URL+"/api/tickets/counts", admin, "")
+	defer resp.Body.Close()
+	var counts store.TicketCounts
+	if err := json.NewDecoder(resp.Body).Decode(&counts); err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatalf("counts: %d %v", resp.StatusCode, err)
+	}
+	if counts.Open != 3 || counts.NeedsReply != 2 {
+		t.Fatalf("counts = %+v, want open 3, needs reply 2", counts)
+	}
+}

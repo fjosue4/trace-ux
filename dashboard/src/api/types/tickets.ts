@@ -17,6 +17,13 @@ export type Ticket = {
   updated_at: number;
   archived_at?: number;
 };
+/** The inbox at a glance, for the navigation badge. */
+export type TicketCounts = {
+  /** Not closed and not archived. */
+  open: number;
+  /** Open, and the visitor wrote last. */
+  needs_reply: number;
+};
 export type TicketMessage = {
   id: number;
   ticket_id: number;

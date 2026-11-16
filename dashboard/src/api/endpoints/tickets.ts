@@ -1,5 +1,5 @@
 import { request } from '../client';
-import { Ticket, TicketStatus, TicketThread } from '../types/tickets';
+import { Ticket, TicketCounts, TicketStatus, TicketThread } from '../types/tickets';
 
 export const ticketsEndpoints = {
   // Support tickets.
@@ -10,6 +10,7 @@ export const ticketsEndpoints = {
     if (limit) q.set('limit', String(limit));
     return request<Ticket[]>(`/api/tickets${q.toString() ? `?${q}` : ''}`);
   },
+  getTicketCounts: () => request<TicketCounts>('/api/tickets/counts'),
   getTicket: (id: number) => request<TicketThread>(`/api/tickets/${id}`),
   createTicket: (input: {
     site_id: number;

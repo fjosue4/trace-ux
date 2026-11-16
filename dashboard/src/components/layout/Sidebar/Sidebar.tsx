@@ -5,7 +5,8 @@ import { Icon } from '../../ui/Icon';
 import { ThemeToggle } from './subcomponents/ThemeToggle';
 import { NavItem } from './subcomponents/NavItem';
 import { MobileNavMenu, pathMatches } from './subcomponents/MobileNavMenu';
-import { SidebarNavItem, SidebarProps } from './Sidebar.types';
+import { SidebarNavBadge, SidebarNavItem, SidebarProps } from './Sidebar.types';
+import { useTicketCounts } from './hooks/useTicketCounts';
 import './Sidebar.scss';
 
 type NavGroup = { label: string; items: SidebarNavItem[] };
@@ -13,6 +14,16 @@ type NavGroup = { label: string; items: SidebarNavItem[] };
 export default function Sidebar({ user, onLogout }: SidebarProps) {
   const location = useLocation();
   const isAdmin = user.role === 'admin';
+  const ticketCounts = useTicketCounts();
+  // Open tickets are the work waiting in the inbox; the badge turns amber
+  // when a visitor is waiting on a reply.
+  const ticketBadge: SidebarNavBadge | undefined = ticketCounts
+    ? {
+        count: ticketCounts.open,
+        attention: ticketCounts.needs_reply > 0,
+        label: `${ticketCounts.open} open${ticketCounts.needs_reply ? `, ${ticketCounts.needs_reply} ${ticketCounts.needs_reply === 1 ? 'needs' : 'need'} a reply` : ''}`,
+      }
+    : undefined;
 
   // Grouped by what you are doing: watching visitors, talking to them, or
   // configuring TraceUX itself.
@@ -30,7 +41,7 @@ export default function Sidebar({ user, onLogout }: SidebarProps) {
       label: 'Engage',
       items: [
         { to: '/feedback', icon: 'message', label: 'Feedback' },
-        { to: '/tickets', icon: 'lifebuoy', label: 'Tickets' },
+        { to: '/tickets', icon: 'lifebuoy', label: 'Tickets', badge: ticketBadge },
         { to: '/announcements', icon: 'megaphone', label: 'Announcements' },
       ],
     },
@@ -51,7 +62,7 @@ export default function Sidebar({ user, onLogout }: SidebarProps) {
     { to: '/performance', icon: 'activity', label: 'Performance' },
     { to: '/analyze', icon: 'chart', label: 'Analyze' },
     { to: '/feedback', icon: 'message', label: 'Feedback' },
-    { to: '/tickets', icon: 'lifebuoy', label: 'Tickets' },
+    { to: '/tickets', icon: 'lifebuoy', label: 'Tickets', badge: ticketBadge },
     { to: '/announcements', icon: 'megaphone', label: 'Announcements' },
     { to: '/logs', icon: 'code', label: 'Logs' },
     ...(isAdmin ? [{ to: '/system-health', icon: 'bolt' as const, label: 'System health' }] : []),

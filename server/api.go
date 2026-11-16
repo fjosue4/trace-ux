@@ -458,6 +458,7 @@ func (s *Server) routes() http.Handler {
 	// Support tickets. Staff can read and reply; only admins can archive.
 	mux.HandleFunc("GET /api/tickets", s.auth(s.handleListTickets))
 	mux.HandleFunc("POST /api/tickets", s.auth(s.handleCreateStaffTicket))
+	mux.HandleFunc("GET /api/tickets/counts", s.auth(s.handleTicketCounts))
 	mux.HandleFunc("GET /api/tickets/socket", s.auth(s.handleDashboardTicketSocket))
 	mux.HandleFunc("GET /api/tickets/{id}", s.auth(s.handleGetTicket))
 	mux.HandleFunc("POST /api/tickets/{id}/messages", s.auth(s.handleStaffTicketReply))

@@ -56,12 +56,35 @@
     svg { color: $muted; transition: color $duration-fast $ease-out; }
 
     &:hover { background: color-mix(in srgb, #{$ink} 5%, transparent); color: $ink; }
+    .sidebar__badge { margin-left: auto; }
     &.is-active {
       background: $surface;
       color: $ink;
       box-shadow: 0 0 0 1px $line, $shadow-sm;
 
       svg { color: $ink; }
+    }
+  }
+
+  // Quiet when tickets are only open; amber when a visitor is waiting.
+  &__badge {
+    display: inline-grid;
+    flex: none;
+    min-width: 20px;
+    height: 18px;
+    padding: 0 0.35rem;
+    place-items: center;
+    border-radius: 999px;
+    background: color-mix(in srgb, #{$ink} 9%, transparent);
+    color: $ink-2;
+    font-size: 0.7rem;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+
+    &.is-attention {
+      background: color-mix(in srgb, #{$warn} 18%, transparent);
+      color: $warn;
     }
   }
 
@@ -162,6 +185,18 @@
 
       svg { width: 18px; height: 18px; }
 
+      // Icons only here, so the count sits on the icon's corner.
+      .sidebar__badge {
+        position: absolute;
+        top: 3px;
+        left: calc(50% + 4px);
+        min-width: 16px;
+        height: 15px;
+        padding: 0 0.25rem;
+        margin: 0;
+        font-size: 0.62rem;
+      }
+
       &.is-active::before {
         left: 10px;
         right: 10px;
@@ -203,8 +238,7 @@
       transform-origin: top right;
     }
     &__mobile-menu-link {
-      display: grid;
-      grid-template-columns: 20px minmax(0, 1fr) 16px;
+      display: flex;
       align-items: center;
       gap: 0.65rem;
       min-height: 40px;
@@ -215,6 +249,8 @@
       font-weight: 600;
 
       &:hover { background: $surface-3; }
+      > svg { flex: none; }
+      > span:not(.sidebar__badge) { flex: 1 1 auto; min-width: 0; }
       &.is-active { color: $ink; background: $surface-3; }
     }
     &__footer { margin-left: auto; padding: 0; }

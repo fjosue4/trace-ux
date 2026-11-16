@@ -440,3 +440,18 @@ func validTicketPageURL(value string) bool {
 	u, err := url.Parse(value)
 	return err == nil && u.Host != "" && (u.Scheme == "http" || u.Scheme == "https")
 }
+
+// TicketCounts is the inbox at a glance, for the dashboard navigation.
+type TicketCounts struct {
+	// Open is every ticket still being worked on: not closed, not archived.
+	Open int `json:"open"`
+	// NeedsReply is the open tickets where the visitor wrote last.
+	NeedsReply int `json:"needs_reply"`
+}
+
+func (s *Store) CountOpenTickets() (TicketCounts, error) {
+	var c TicketCounts
+	err := s.DB.QueryRow(`SELECT COUNT(*), COALESCE(SUM(last_message_author = 'visitor'), 0)
+		FROM tickets WHERE archived_at = 0 AND status NOT IN ('closed', 'archived')`).Scan(&c.Open, &c.NeedsReply)
+	return c, err
+}

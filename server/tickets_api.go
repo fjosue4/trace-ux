@@ -473,3 +473,13 @@ func (s *Server) handleCreateStaffTicket(w http.ResponseWriter, r *http.Request)
 	// widget; notifying here would tell the team about its own action.
 	writeJSON(w, http.StatusCreated, ticket)
 }
+
+// GET /api/tickets/counts — what the navigation badge shows.
+func (s *Server) handleTicketCounts(w http.ResponseWriter, _ *http.Request) {
+	counts, err := s.store.CountOpenTickets()
+	if err != nil {
+		writeErr(w, http.StatusInternalServerError, "could not count tickets")
+		return
+	}
+	writeJSON(w, http.StatusOK, counts)
+}
